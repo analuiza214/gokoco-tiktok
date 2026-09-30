@@ -18,6 +18,11 @@ const digits = (value) => String(value || '').replace(/\D/g, '');
 const BUMPS = { taiff: 39.84, wella: 45.70, siage: 32.63, escovas: 23.58, necessaire: 19.47 };
 const COLORS = { Preta: 69.90, Branca: 69.90, Rosa: 69.90, 'Azul céu': 69.90, Verde: 69.90, Lilás: 69.90, Dourada: 69.90 };
 const SHIPPING = { 'Frete Grátis': 0, JADLOG: 18.47, 'SEDEX 12': 33.40 };
+function normalizeBuyerEmail(value) {
+  const email = String(value || '').trim().toLowerCase();
+  const at = email.lastIndexOf('@');
+  return at > 0 ? `${email.slice(0, at).replace(/\.+$/, '')}@${email.slice(at + 1)}` : email;
+}
 function cartTotal(cart) {
   if (!cart || !Number.isInteger(cart.qty) || cart.qty < 1 || cart.qty > 10) return null;
   let base = 69.90 * cart.qty;
@@ -82,7 +87,7 @@ function validateBuyer(body) {
   const expected = cartTotal(body?.cart);
   if (!Number.isFinite(amount) || expected === null || Math.abs(Math.round(amount * 100) - Math.round(expected * 100)) > 1) return 'Valor do pedido inválido. Atualize a página e tente novamente.';
   if (String(buyer.name || '').trim().length < 3) return 'Informe seu nome completo.';
-  if (!isValidBuyerEmail(buyer.email)) return 'E-mail inválido. Confira o endereço informado e tente novamente.';
+  if (!isValidBuyerEmail(normalizeBuyerEmail(buyer.email))) return 'E-mail inválido. Confira o endereço informado e tente novamente.';
   if (![11, 14].includes(digits(buyer.document).length)) return 'CPF/CNPJ inválido.';
   if (digits(buyer.phone).length < 10) return 'Telefone inválido.';
   return null;
@@ -96,6 +101,7 @@ function isValidBuyerEmail(value) {
 
 async function createPix(request, env) {
   const body = await request.json().catch(() => null);
+  if (body?.client) body.client.email = normalizeBuyerEmail(body.client.email);
   const invalid = validateBuyer(body);
   if (invalid) return json({ message: invalid, code: 'invalid_document' }, 400);
   const checkoutId = String(body.checkoutId || '');
@@ -126,7 +132,7 @@ async function createPix(request, env) {
   const order = {
     checkout_id: checkoutId,
     name: String(body.client.name).trim().slice(0, 150),
-    email: String(body.client.email).trim().toLowerCase(),
+    email: normalizeBuyerEmail(body.client.email),
     phone: digits(body.client.phone),
     document: digits(body.client.document),
     amount: Number(body.amount),
