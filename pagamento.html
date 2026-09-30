@@ -339,7 +339,7 @@
 
 <script>
 (function(){
-  var UNIT = 37.90;
+  var UNIT = 69.90;
   try{ var pu=parseFloat(localStorage.getItem('precoUnit')); if(pu && pu>0) UNIT=pu; }catch(e){}
   var shipping = { name: 'Frete Grátis', price: 0 };
   function fmt(n){ return 'R$\u00a0' + n.toFixed(2).replace('.', ','); }
@@ -489,8 +489,8 @@
   function fireInitiateCheckout(){
     try{
       var t=document.getElementById('lv-pix-total');
-      var m=t?(t.innerText||'').replace(/[^0-9,]/g,'').replace(',', '.'):'37.90';
-      var v=parseFloat(m); if(isNaN(v)||v<=0) v=37.90;
+      var m=t?(t.innerText||'').replace(/[^0-9,]/g,'').replace(',', '.'):'69.90';
+      var v=parseFloat(m); if(isNaN(v)||v<=0) v=69.90;
       if(typeof fbq==='function') fbq('track','InitiateCheckout',{value:v,currency:'BRL'});
     }catch(e){}
   }
@@ -682,7 +682,7 @@
     if(loaded) return;
     if(loading) return; loading=true;
     setLoading();
-    var amount=getAmount()||37.90;
+    var amount=getAmount()||69.90;
     try{ if(typeof fbq==='function') fbq('track','InitiateCheckout',{value:amount,currency:'BRL'}); }catch(e){}
     saveDados();
     var _d=loadDados();
@@ -877,7 +877,7 @@
 </style>
 <script>
 (function(){
-  var UNIT=37.90;
+  var UNIT=69.90;
   var KITS=[];
   var KIT_IMG='/images/f2/potes-1.webp';
   var BUMPS=[
@@ -1012,7 +1012,7 @@
     // Run SYNC so lv-pix-total is updated before the step-3 MutationObserver fires createPix()
     (function(){
       var extra=bumpsTotal();
-      var base=37.90; // read subtotal+shipping from step2 cart
+      var base=69.90; // read subtotal+shipping from step2 cart
       var s2=document.getElementById('lv-step-2');
       if(s2){
         var sub=0,ship=0;
@@ -1111,7 +1111,7 @@ var q=parseInt(localStorage.getItem('qtdSelecionada')||'1',10)||1;
 <!-- Reconciliador de pedido: fonte única de verdade (qtd + frete + ofertas) -->
 <script>
 (function(){
-  var UNIT = 37.90;
+  var UNIT = 69.90;
   try{ var pu=parseFloat(localStorage.getItem('precoUnit')); if(pu && pu>0) UNIT=pu; }catch(e){}
   function fmt(n){ return 'R$\u00a0' + (Math.round(n*100)/100).toFixed(2).replace('.', ','); }
   function txt(el){ return ((el && (el.innerText || el.textContent)) || '').trim(); }
