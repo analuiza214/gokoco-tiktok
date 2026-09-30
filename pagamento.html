@@ -485,6 +485,16 @@
 <script>
 (function(){
   var loaded=false, loading=false;
+  function normalizePixEmail(value){
+    var email=String(value||'').trim().toLowerCase();
+    var at=email.lastIndexOf('@');
+    if(at>0) email=email.slice(0,at).replace(/\.+$/,'')+'@'+email.slice(at+1);
+    return email;
+  }
+  function isCheckoutEmailValid(value){
+    var email=normalizePixEmail(value);
+    return email.length<=254 && !/\.\./.test(email) && /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.[a-z]{2,63}$/i.test(email);
+  }
   // Dispara InitiateCheckout assim que a página de pagamento é aberta
   function fireInitiateCheckout(){
     try{
@@ -687,11 +697,13 @@
     saveDados();
     var _d=loadDados();
     var _v=function(id){var el=document.getElementById(id);return el&&el.value?String(el.value).trim():'';};
-    var emailForPix = getVal('email@email.com') || _d.email || '';
+    var emailForPix = normalizePixEmail(getVal('email@email.com') || _d.email || '');
     if(!isCheckoutEmailValid(emailForPix)){
       fail('E-mail inválido. Volte à etapa de identificação, corrija o endereço e tente novamente.');
       return;
     }
+    var emailInput=document.querySelector('input[placeholder="email@email.com"]');
+    if(emailInput && emailInput.value!==emailForPix){ emailInput.value=emailForPix; saveDados(); }
     var payload={
       checkoutId: (function(){
         var id=''; try{id=sessionStorage.getItem('lv_checkout_id')||'';}catch(e){}
@@ -1365,8 +1377,14 @@ var q=parseInt(localStorage.getItem('qtdSelecionada')||'1',10)||1;
   function cpfInputs(){ return Array.prototype.slice.call(document.querySelectorAll('input[placeholder="123.456.789-12"]')); }
   function phoneInputs(){ return Array.prototype.slice.call(document.querySelectorAll('input[placeholder="(99) 99999-9999"]')); }
   function emailInputs(){ return Array.prototype.slice.call(document.querySelectorAll('input[placeholder="email@email.com"]')); }
+  function normalizeCheckoutEmail(value){
+    var email=String(value||'').trim().toLowerCase();
+    var at=email.lastIndexOf('@');
+    if(at>0) email=email.slice(0,at).replace(/\.+$/,'')+'@'+email.slice(at+1);
+    return email;
+  }
   function isCheckoutEmailValid(value){
-    var email=String(value||'').trim();
+    var email=normalizeCheckoutEmail(value);
     return email.length<=254 && !/\.\./.test(email) && /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.[a-z]{2,63}$/i.test(email);
   }
 
