@@ -1,0 +1,8 @@
+{
+  "name": "gokoco-tiktok",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "build": "node build-worker.mjs && node scripts/prepare-deploy.mjs"
+  }
+}
