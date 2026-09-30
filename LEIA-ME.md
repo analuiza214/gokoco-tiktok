@@ -3,7 +3,7 @@
 Projeto versionado no GitHub e publicado automaticamente no Cloudflare Pages.
 
 - Site: https://gokoco-tiktok.pages.dev/
-- Admin: https://gokoco-tiktok.pages.dev/admin
+- Admin: https://gokoco-tiktok.pages.dev/admins
 - Cloudflare Pages: `gokoco-tiktok`
 - Tabelas exclusivas do Supabase: `gokoco_orders` e `gokoco_gateways`
 
