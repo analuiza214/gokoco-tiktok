@@ -82,10 +82,16 @@ function validateBuyer(body) {
   const expected = cartTotal(body?.cart);
   if (!Number.isFinite(amount) || expected === null || Math.abs(Math.round(amount * 100) - Math.round(expected * 100)) > 1) return 'Valor do pedido inválido. Atualize a página e tente novamente.';
   if (String(buyer.name || '').trim().length < 3) return 'Informe seu nome completo.';
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(buyer.email || ''))) return 'E-mail inválido.';
+  if (!isValidBuyerEmail(buyer.email)) return 'E-mail inválido. Confira o endereço informado e tente novamente.';
   if (![11, 14].includes(digits(buyer.document).length)) return 'CPF/CNPJ inválido.';
   if (digits(buyer.phone).length < 10) return 'Telefone inválido.';
   return null;
+}
+
+function isValidBuyerEmail(value) {
+  const email = String(value || '').trim();
+  if (email.length > 254 || /\.\./.test(email)) return false;
+  return /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.[a-z]{2,63}$/i.test(email);
 }
 
 async function createPix(request, env) {
@@ -120,7 +126,7 @@ async function createPix(request, env) {
   const order = {
     checkout_id: checkoutId,
     name: String(body.client.name).trim().slice(0, 150),
-    email: String(body.client.email).trim().toLowerCase().slice(0, 255),
+    email: String(body.client.email).trim().toLowerCase(),
     phone: digits(body.client.phone),
     document: digits(body.client.document),
     amount: Number(body.amount),
@@ -155,7 +161,13 @@ async function createPix(request, env) {
   const payment = await result.json().catch(() => ({}));
   if (!result.ok || !payment.pixCode || !payment.transactionId) {
     await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(id)}`, 'PATCH', { status: 'failed' });
-    return json({ message: payment.error || 'Não foi possível gerar o PIX.' }, result.status || 502);
+    const providerMessage = Array.isArray(payment.error?.message)
+      ? payment.error.message.join(', ')
+      : typeof payment.error === 'string' ? payment.error
+      : Array.isArray(payment.message) ? payment.message.join(', ')
+      : typeof payment.message === 'string' ? payment.message
+      : 'Não foi possível gerar o PIX. Confira seus dados e tente novamente.';
+    return json({ message: providerMessage }, result.status || 502);
   }
   const qr = payment.qrCodeBase64 || payment.qrCodeImage || null;
   await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(id)}`, 'PATCH', {

@@ -687,6 +687,11 @@
     saveDados();
     var _d=loadDados();
     var _v=function(id){var el=document.getElementById(id);return el&&el.value?String(el.value).trim():'';};
+    var emailForPix = getVal('email@email.com') || _d.email || '';
+    if(!isCheckoutEmailValid(emailForPix)){
+      fail('E-mail inválido. Volte à etapa de identificação, corrija o endereço e tente novamente.');
+      return;
+    }
     var payload={
       checkoutId: (function(){
         var id=''; try{id=sessionStorage.getItem('lv_checkout_id')||'';}catch(e){}
@@ -704,7 +709,7 @@
       })(),
       client: {
         name: getVal('Nome e Sobrenome') || _d.nome || 'Cliente',
-        email: getVal('email@email.com') || _d.email || 'cliente@email.com',
+        email: emailForPix.toLowerCase(),
         document: ((getVal('123.456.789-12')||_d.cpf||'00000000000')+'').replace(/\D/g,''),
         phone: ((getVal('(99) 99999-9999')||_d.telefone||'11999999999')+'').replace(/\D/g,'')
       },
@@ -1360,6 +1365,10 @@ var q=parseInt(localStorage.getItem('qtdSelecionada')||'1',10)||1;
   function cpfInputs(){ return Array.prototype.slice.call(document.querySelectorAll('input[placeholder="123.456.789-12"]')); }
   function phoneInputs(){ return Array.prototype.slice.call(document.querySelectorAll('input[placeholder="(99) 99999-9999"]')); }
   function emailInputs(){ return Array.prototype.slice.call(document.querySelectorAll('input[placeholder="email@email.com"]')); }
+  function isCheckoutEmailValid(value){
+    var email=String(value||'').trim();
+    return email.length<=254 && !/\.\./.test(email) && /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.[a-z]{2,63}$/i.test(email);
+  }
 
   document.addEventListener('input', function(e){
     var t=e.target; if(!t || t.tagName!=='INPUT') return;
@@ -1373,7 +1382,7 @@ var q=parseInt(localStorage.getItem('qtdSelecionada')||'1',10)||1;
       fieldMsg(t, p.length>0 && p.length<10 ? 'Telefone incompleto' : '', false);
     } else if(ph==='email@email.com'){
       var v=(t.value||'').trim();
-      fieldMsg(t, v && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v) ? 'E-mail inválido' : '', false);
+      fieldMsg(t, v && !isCheckoutEmailValid(v) ? 'E-mail inválido' : '', false);
     }
   }, true);
 
@@ -1385,7 +1394,7 @@ var q=parseInt(localStorage.getItem('qtdSelecionada')||'1',10)||1;
     var cpfEl=cpfInputs()[0], telEl=phoneInputs()[0], mailEl=emailInputs()[0];
     var d=onlyDigits(cpfEl&&cpfEl.value);
     var bad=null;
-    if(mailEl && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test((mailEl.value||'').trim())){ bad=mailEl; fieldMsg(mailEl,'E-mail inválido',false); }
+    if(mailEl && !isCheckoutEmailValid(mailEl.value)){ bad=mailEl; fieldMsg(mailEl,'E-mail inválido',false); }
     else if(telEl && onlyDigits(telEl.value).length<10){ bad=telEl; fieldMsg(telEl,'Telefone incompleto',false); }
     else if(!docValid(d)){ bad=cpfEl; fieldMsg(cpfEl,'CPF inválido — confira os números',false); }
     if(bad){

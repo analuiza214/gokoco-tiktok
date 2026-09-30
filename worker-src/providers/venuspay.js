@@ -154,7 +154,15 @@ export async function createPixVenuspay(context, corsHeaders, body) {
     if (!res.ok || data.success === false) {
       return new Response(
         JSON.stringify({
-          error: data.error || "Erro ao gerar PIX. Tente novamente.",
+          error: Array.isArray(data.error?.message)
+            ? data.error.message.join(", ")
+            : typeof data.error === "string"
+              ? data.error
+              : Array.isArray(data.message)
+                ? data.message.join(", ")
+                : typeof data.message === "string"
+                  ? data.message
+                  : "Erro ao gerar PIX. Confira seus dados e tente novamente.",
           details: data,
         }),
         { status: 502, headers: corsHeaders }

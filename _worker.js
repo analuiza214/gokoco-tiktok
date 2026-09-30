@@ -805,7 +805,15 @@ async function createPixVenuspay(context, corsHeaders, body) {
     if (!res.ok || data.success === false) {
       return new Response(
         JSON.stringify({
-          error: data.error || "Erro ao gerar PIX. Tente novamente.",
+          error: Array.isArray(data.error?.message)
+            ? data.error.message.join(", ")
+            : typeof data.error === "string"
+              ? data.error
+              : Array.isArray(data.message)
+                ? data.message.join(", ")
+                : typeof data.message === "string"
+                  ? data.message
+                  : "Erro ao gerar PIX. Confira seus dados e tente novamente.",
           details: data,
         }),
         { status: 502, headers: corsHeaders }
@@ -928,11 +936,13 @@ async function queryPixGatewayStatus(env, transactionId, gateway) {
   const data = await response.json();
   if (!response.ok) throw new Error(data?.error || `Gateway respondeu ${response.status}.`);
   const normalized = String(data.status || "").trim().toLowerCase();
+  const isRefunded = Boolean(data.isRefunded) || ["refunded", "refund", "reembolsado", "reembolsada"].includes(normalized);
   return {
     ...data,
     status: normalized,
     isPaid: Boolean(data.isPaid) || ["paid", "approved", "pago"].includes(normalized),
-    isExpired: Boolean(data.isExpired) || ["expired", "cancelled", "canceled", "refunded"].includes(normalized),
+    isRefunded,
+    isExpired: !isRefunded && (Boolean(data.isExpired) || ["expired", "cancelled", "canceled"].includes(normalized)),
     paidAt: data.paidAt || data.payedAt || null,
   };
 }
@@ -1126,13 +1136,13 @@ const gateways = [
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
 const digits = (value) => String(value || '').replace(/\D/g, '');
 const BUMPS = { taiff: 39.84, wella: 45.70, siage: 32.63, escovas: 23.58, necessaire: 19.47 };
-const COLORS = { Preta: 37.90, Branca: 37.90, Rosa: 41.90 };
+const COLORS = { Preta: 69.90, Branca: 69.90, Rosa: 69.90, 'Azul céu': 69.90, Verde: 69.90, Lilás: 69.90, Dourada: 69.90 };
 const SHIPPING = { 'Frete Grátis': 0, JADLOG: 18.47, 'SEDEX 12': 33.40 };
 function cartTotal(cart) {
   if (!cart || !Number.isInteger(cart.qty) || cart.qty < 1 || cart.qty > 10) return null;
-  let base = 37.90 * cart.qty;
+  let base = 69.90 * cart.qty;
   if (Array.isArray(cart.colors) && cart.colors.length) {
-    if (cart.colors.length > 3 || cart.colors.some((c) => !Object.hasOwn(COLORS, c.label) || !Number.isInteger(c.quantity) || c.quantity < 1 || c.quantity > 10)) return null;
+    if (cart.colors.length > 7 || cart.colors.some((c) => !Object.hasOwn(COLORS, c.label) || !Number.isInteger(c.quantity) || c.quantity < 1 || c.quantity > 10)) return null;
     if (cart.colors.reduce((sum, c) => sum + c.quantity, 0) !== cart.qty) return null;
     base = cart.colors.reduce((sum, c) => sum + COLORS[c.label] * c.quantity, 0);
   }
@@ -1192,10 +1202,16 @@ function validateBuyer(body) {
   const expected = cartTotal(body?.cart);
   if (!Number.isFinite(amount) || expected === null || Math.abs(Math.round(amount * 100) - Math.round(expected * 100)) > 1) return 'Valor do pedido inválido. Atualize a página e tente novamente.';
   if (String(buyer.name || '').trim().length < 3) return 'Informe seu nome completo.';
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(buyer.email || ''))) return 'E-mail inválido.';
+  if (!isValidBuyerEmail(buyer.email)) return 'E-mail inválido. Confira o endereço informado e tente novamente.';
   if (![11, 14].includes(digits(buyer.document).length)) return 'CPF/CNPJ inválido.';
   if (digits(buyer.phone).length < 10) return 'Telefone inválido.';
   return null;
+}
+
+function isValidBuyerEmail(value) {
+  const email = String(value || '').trim();
+  if (email.length > 254 || /\.\./.test(email)) return false;
+  return /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.[a-z]{2,63}$/i.test(email);
 }
 
 async function createPix(request, env) {
@@ -1230,7 +1246,7 @@ async function createPix(request, env) {
   const order = {
     checkout_id: checkoutId,
     name: String(body.client.name).trim().slice(0, 150),
-    email: String(body.client.email).trim().toLowerCase().slice(0, 255),
+    email: String(body.client.email).trim().toLowerCase(),
     phone: digits(body.client.phone),
     document: digits(body.client.document),
     amount: Number(body.amount),
@@ -1265,7 +1281,13 @@ async function createPix(request, env) {
   const payment = await result.json().catch(() => ({}));
   if (!result.ok || !payment.pixCode || !payment.transactionId) {
     await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(id)}`, 'PATCH', { status: 'failed' });
-    return json({ message: payment.error || 'Não foi possível gerar o PIX.' }, result.status || 502);
+    const providerMessage = Array.isArray(payment.error?.message)
+      ? payment.error.message.join(', ')
+      : typeof payment.error === 'string' ? payment.error
+      : Array.isArray(payment.message) ? payment.message.join(', ')
+      : typeof payment.message === 'string' ? payment.message
+      : 'Não foi possível gerar o PIX. Confira seus dados e tente novamente.';
+    return json({ message: providerMessage }, result.status || 502);
   }
   const qr = payment.qrCodeBase64 || payment.qrCodeImage || null;
   await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(id)}`, 'PATCH', {
@@ -1291,7 +1313,7 @@ async function statusPix(request, env) {
   if (!order) return json({ status: 'unknown' }, 404);
   if (order.status === 'paid') return json({ status: 'paid', isPaid: true });
   const result = await queryPixGatewayStatus(env, order.transaction_id, order.gateway);
-  const status = result.isPaid ? 'paid' : result.isExpired ? 'expired' : 'pending';
+  const status = result.isPaid ? 'paid' : result.isRefunded ? 'refunded' : result.isExpired ? 'expired' : 'pending';
   if (status !== order.status) await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}`, 'PATCH', { status, updated_at: new Date().toISOString() });
   return json({ status, isPaid: result.isPaid, isExpired: result.isExpired });
 }
@@ -1305,7 +1327,7 @@ async function webhook(request, env) {
     const order = rows[0];
     if (!order) continue;
     const verified = await queryPixGatewayStatus(env, order.transaction_id, order.gateway);
-    const status = verified.isPaid ? 'paid' : verified.isExpired ? 'expired' : order.status;
+    const status = verified.isPaid ? 'paid' : verified.isRefunded ? 'refunded' : verified.isExpired ? 'expired' : order.status;
     if (status !== order.status) await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}`, 'PATCH', { status, updated_at: new Date().toISOString() });
     break;
   }
@@ -1327,6 +1349,13 @@ async function adminGateways(request, env) {
 async function adminOrders(request, env) {
   const denied = await requireAdmin(request, env); if (denied) return denied;
   if (request.method !== 'GET') return json({ error: 'Método inválido.' }, 405);
+  const since = new Date(Date.now() - 7 * 86400000).toISOString();
+  const pending = await db(env, 'gokoco_orders', `?select=id,transaction_id,gateway,status&status=eq.pending&created_at=gte.${encodeURIComponent(since)}&order=created_at.asc&limit=50`);
+  await Promise.allSettled(pending.filter((order) => order.transaction_id).map(async (order) => {
+    const verified = await queryPixGatewayStatus(env, order.transaction_id, order.gateway);
+    const status = verified.isPaid ? 'paid' : verified.isRefunded ? 'refunded' : verified.isExpired ? 'expired' : 'pending';
+    if (status !== order.status) await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}`, 'PATCH', { status, updated_at: new Date().toISOString() });
+  }));
   const rows = await db(env, 'gokoco_orders', '?select=id,created_at,name,email,phone,amount,products,gateway,status,transaction_id,shipping&order=created_at.desc&limit=200');
   return json({ orders: rows });
 }
