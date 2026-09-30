@@ -15,11 +15,13 @@ export async function queryPixGatewayStatus(env, transactionId, gateway) {
   const data = await response.json();
   if (!response.ok) throw new Error(data?.error || `Gateway respondeu ${response.status}.`);
   const normalized = String(data.status || "").trim().toLowerCase();
+  const isRefunded = Boolean(data.isRefunded) || ["refunded", "refund", "reembolsado", "reembolsada"].includes(normalized);
   return {
     ...data,
     status: normalized,
     isPaid: Boolean(data.isPaid) || ["paid", "approved", "pago"].includes(normalized),
-    isExpired: Boolean(data.isExpired) || ["expired", "cancelled", "canceled", "refunded"].includes(normalized),
+    isRefunded,
+    isExpired: !isRefunded && (Boolean(data.isExpired) || ["expired", "cancelled", "canceled"].includes(normalized)),
     paidAt: data.paidAt || data.payedAt || null,
   };
 }

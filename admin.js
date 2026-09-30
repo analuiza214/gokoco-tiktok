@@ -14,6 +14,7 @@ const statusInfo = {
   creating: { label: 'Criando PIX', fg: '#92400e', bg: '#fef3c7' },
   pending: { label: 'PIX gerado', fg: '#1d4ed8', bg: '#dbeafe' },
   paid: { label: 'Pago ✓', fg: '#166534', bg: '#dcfce7' },
+  refunded: { label: 'Reembolsado', fg: '#7e22ce', bg: '#f3e8ff' },
   expired: { label: 'Expirado', fg: '#6b7280', bg: '#f3f4f6' },
   failed: { label: 'Falha ao gerar PIX', fg: '#b91c1c', bg: '#fee2e2' },
 };
@@ -89,6 +90,7 @@ function renderStats() {
   $('tab-all').textContent = orders.length;
   $('tab-pending').textContent = count('pending') + count('creating');
   $('tab-paid').textContent = count('paid');
+  $('tab-refunded').textContent = count('refunded');
   $('tab-expired').textContent = count('expired');
   $('tab-failed').textContent = count('failed');
 }

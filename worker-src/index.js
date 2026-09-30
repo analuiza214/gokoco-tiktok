@@ -181,7 +181,7 @@ async function statusPix(request, env) {
   if (!order) return json({ status: 'unknown' }, 404);
   if (order.status === 'paid') return json({ status: 'paid', isPaid: true });
   const result = await queryPixGatewayStatus(env, order.transaction_id, order.gateway);
-  const status = result.isPaid ? 'paid' : result.isExpired ? 'expired' : 'pending';
+  const status = result.isPaid ? 'paid' : result.isRefunded ? 'refunded' : result.isExpired ? 'expired' : 'pending';
   if (status !== order.status) await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}`, 'PATCH', { status, updated_at: new Date().toISOString() });
   return json({ status, isPaid: result.isPaid, isExpired: result.isExpired });
 }
@@ -195,7 +195,7 @@ async function webhook(request, env) {
     const order = rows[0];
     if (!order) continue;
     const verified = await queryPixGatewayStatus(env, order.transaction_id, order.gateway);
-    const status = verified.isPaid ? 'paid' : verified.isExpired ? 'expired' : order.status;
+    const status = verified.isPaid ? 'paid' : verified.isRefunded ? 'refunded' : verified.isExpired ? 'expired' : order.status;
     if (status !== order.status) await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}`, 'PATCH', { status, updated_at: new Date().toISOString() });
     break;
   }
@@ -217,6 +217,13 @@ async function adminGateways(request, env) {
 async function adminOrders(request, env) {
   const denied = await requireAdmin(request, env); if (denied) return denied;
   if (request.method !== 'GET') return json({ error: 'Método inválido.' }, 405);
+  const since = new Date(Date.now() - 7 * 86400000).toISOString();
+  const pending = await db(env, 'gokoco_orders', `?select=id,transaction_id,gateway,status&status=eq.pending&created_at=gte.${encodeURIComponent(since)}&order=created_at.asc&limit=50`);
+  await Promise.allSettled(pending.filter((order) => order.transaction_id).map(async (order) => {
+    const verified = await queryPixGatewayStatus(env, order.transaction_id, order.gateway);
+    const status = verified.isPaid ? 'paid' : verified.isRefunded ? 'refunded' : verified.isExpired ? 'expired' : 'pending';
+    if (status !== order.status) await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}`, 'PATCH', { status, updated_at: new Date().toISOString() });
+  }));
   const rows = await db(env, 'gokoco_orders', '?select=id,created_at,name,email,phone,amount,products,gateway,status,transaction_id,shipping&order=created_at.desc&limit=200');
   return json({ orders: rows });
 }
