@@ -1135,8 +1135,8 @@ const gateways = [
 ];
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
 const digits = (value) => String(value || '').replace(/\D/g, '');
-const BUMPS = { taiff: 39.84, wella: 45.70, siage: 32.63, escovas: 23.58, necessaire: 19.47 };
-const COLORS = { Preta: 69.90, Branca: 69.90, Rosa: 69.90, 'Azul céu': 69.90, Verde: 69.90, Lilás: 69.90, Dourada: 69.90 };
+const BUMPS = {};
+const COLORS = { Preta: 37.90, Branca: 37.90, Rosa: 37.90 };
 const SHIPPING = { 'Frete Grátis': 0, JADLOG: 18.47, 'SEDEX 12': 33.40 };
 function normalizeBuyerEmail(value) {
   const email = String(value || '').trim().toLowerCase();
@@ -1145,9 +1145,9 @@ function normalizeBuyerEmail(value) {
 }
 function cartTotal(cart) {
   if (!cart || !Number.isInteger(cart.qty) || cart.qty < 1 || cart.qty > 10) return null;
-  let base = 69.90 * cart.qty;
+  let base = 37.90 * cart.qty;
   if (Array.isArray(cart.colors) && cart.colors.length) {
-    if (cart.colors.length > 7 || cart.colors.some((c) => !Object.hasOwn(COLORS, c.label) || !Number.isInteger(c.quantity) || c.quantity < 1 || c.quantity > 10)) return null;
+    if (cart.colors.length > 3 || cart.colors.some((c) => !Object.hasOwn(COLORS, c.label) || !Number.isInteger(c.quantity) || c.quantity < 1 || c.quantity > 10)) return null;
     if (cart.colors.reduce((sum, c) => sum + c.quantity, 0) !== cart.qty) return null;
     base = cart.colors.reduce((sum, c) => sum + COLORS[c.label] * c.quantity, 0);
   }

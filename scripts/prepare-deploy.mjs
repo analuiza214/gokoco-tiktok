@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const output = path.join(root, 'dist');
-const files = ['index.html', 'pagamento.html', 'admin.html', 'admin.css', 'admin.js', 'favicon.png', '_worker.js'];
+const files = ['index.html', 'loja.html', 'pagamento.html', 'admin.html', 'admin.css', 'admin.js', 'favicon.png', '_worker.js'];
 const directories = ['assets', 'css', 'images', 'js', 'videos'];
 
 fs.rmSync(output, { recursive: true, force: true });
