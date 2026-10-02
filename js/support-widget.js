@@ -3,7 +3,7 @@
   window.__supportWidgetLoaded = true;
 
   var GREETING =
-    'Olá! 👋 Sou o assistente da Bella Hair Beauty. Posso te ajudar com prazo de entrega, rastreio, pagamento via PIX, cores e trocas. Qual é a sua dúvida?';
+    'Olá! 👋 Sou o assistente da Bella Mix. Posso te ajudar com prazo de entrega, rastreio, pagamento via PIX, cores e trocas. Qual é a sua dúvida?';
   var SUGGESTIONS = ['Quando chega meu pedido?', 'Como recebo o rastreio?', 'Quais cores disponíveis?'];
   var history = [];
   var busy = false;
@@ -49,7 +49,7 @@
   var panel = document.createElement('div');
   panel.id = 'sup-panel';
   panel.innerHTML =
-    '<div id="sup-head"><div><b>Suporte Bella Hair</b><span>Respostas na hora · 24h</span></div><button type="button" id="sup-close" aria-label="Fechar">×</button></div>' +
+    '<div id="sup-head"><div><b>Suporte Bella Mix</b><span>Respostas na hora · 24h</span></div><button type="button" id="sup-close" aria-label="Fechar">×</button></div>' +
     '<div id="sup-msgs"></div><div class="sup-sug" id="sup-sug"></div>' +
     '<form id="sup-form"><input id="sup-in" autocomplete="off" placeholder="Escreva sua dúvida…" /><button id="sup-send" type="submit">Enviar</button></form>';
 
