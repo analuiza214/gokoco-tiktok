@@ -257,6 +257,17 @@ fbq('track','PageView');
 </div>
 <script>
 (function(){
+  var initiateCheckoutSent=false;
+  function trackDeliveryEntry(){
+    if(initiateCheckoutSent || typeof fbq!=='function') return;
+    try{
+      var t=document.getElementById('lv-pix-total');
+      var v=parseFloat((t ? t.innerText : '').replace(/[^0-9,]/g,'').replace(',','.'));
+      if(!isFinite(v)||v<=0) v=37.90;
+      fbq('track','InitiateCheckout',{value:v,currency:'BRL'});
+      initiateCheckoutSent=true;
+    }catch(e){}
+  }
   function show(n){
     for(var i=1;i<=3;i++){ var el=document.getElementById('lv-step-'+i); if(el) el.style.display = (i===n?'':'none'); }
     window.scrollTo(0,0);
@@ -321,6 +332,7 @@ fbq('track','PageView');
         }
         try{ localStorage.setItem('dadosPessoais', JSON.stringify({nome:nome.trim(),email:email.trim(),cpf:cpf,telefone:tel})); }catch(_e){}
         show(2);
+        trackDeliveryEntry();
       }); }
       if(t==='IR PARA O PAGAMENTO' && !b.dataset.lvw){ b.dataset.lvw='1'; b.addEventListener('click', function(e){
         e.preventDefault();
@@ -510,20 +522,6 @@ fbq('track','PageView');
     var email=normalizePixEmail(value);
     return email.length<=254 && !/\.\./.test(email) && /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.[a-z]{2,63}$/i.test(email);
   }
-  // Dispara InitiateCheckout assim que a página de pagamento é aberta
-  function fireInitiateCheckout(){
-    try{
-      var t=document.getElementById('lv-pix-total');
-      var m=t?(t.innerText||'').replace(/[^0-9,]/g,'').replace(',', '.'):'37.90';
-      var v=parseFloat(m); if(isNaN(v)||v<=0) v=37.90;
-      if(typeof fbq==='function') fbq('track','InitiateCheckout',{value:v,currency:'BRL'});
-    }catch(e){}
-  }
-  if(document.readyState==='loading'){
-    document.addEventListener('DOMContentLoaded', function(){ setTimeout(fireInitiateCheckout, 300); });
-  } else {
-    setTimeout(fireInitiateCheckout, 300);
-  }
   function setLoading(){
     var code=document.getElementById('lv-pix-code');
     var qr=document.getElementById('lv-pix-qr');
@@ -708,7 +706,7 @@ fbq('track','PageView');
     if(loading) return; loading=true;
     setLoading();
     var amount=getAmount()||37.90;
-    try{ if(typeof fbq==='function') fbq('track','InitiateCheckout',{value:amount,currency:'BRL'}); }catch(e){}
+
     saveDados();
     var _d=loadDados();
     var _v=function(id){var el=document.getElementById(id);return el&&el.value?String(el.value).trim():'';};

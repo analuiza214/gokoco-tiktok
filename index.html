@@ -266,7 +266,7 @@ fbq('track','PageView');
         return {name:x.o.n,label:nice(x.o.l),quantity:x.q,price:x.o.p,img:x.o.i};
       })));
     }catch(e){}
-    try{ if(typeof fbq==='function') fbq('track','InitiateCheckout',{value:total,currency:'BRL'}); }catch(e){}
+
     cta.disabled=true; cta.innerHTML='Redirecionando...'; cta.style.opacity='.85';
     setTimeout(go,60);
   });
