@@ -10,6 +10,7 @@ s.parentNode.insertBefore(t,s)}(window,document,'script',
 fbq('init','1542362403143695');
 fbq('track','PageView');
 </script>
+<script src="/js/purchase-attribution.js"></script>
 <!-- UTMify: equivalente ao script fornecido, com os mesmos atributos. -->
 <script src="https://cdn.utmify.com.br/scripts/utms/latest.js" data-utmify-prevent-xcod-sck data-utmify-prevent-subids async defer></script>
 <meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/><link rel="preload" as="image" href="/images/f2/potes-1.webp"/><link rel="preload" as="image" href="/assets/pix-logo-EQU-5l0k.webp"/><link rel="stylesheet" href="/assets/styles-B-ObPJ9h.css" data-precedence="default"/><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" media="print" onload="this.media='all'"/><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap"/></noscript><title>Pagamento | Escova Modeladora GOKOCO</title><meta name="format-detection" content="telephone=no"/><meta property="og:title" content="Lovable App"/><meta property="og:description" content="Project Mirror replicates a web application, enabling users to view and interact with its content."/><meta property="og:type" content="website"/><meta name="twitter:card" content="summary_large_image"/><meta name="twitter:title" content="Lovable App"/><meta name="description" content="Project Mirror replicates a web application, enabling users to view and interact with its content."/><meta name="twitter:description" content="Project Mirror replicates a web application, enabling users to view and interact with its content."/><meta property="og:image" content="/images/id-preview-807c3067--04de2700-f792-4574-8810-835d1e24753e.lovable.app-1783021361018.png"/><meta name="twitter:image" content="https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/88a80387-ce81-4127-8ce7-395b2c7b84e3/id-preview-807c3067--04de2700-f792-4574-8810-835d1e24753e.lovable.app-1783021361018.png"/><link rel="icon" type="image/png" sizes="96x96" href="/images/favicon-tiktok.png?v=1"><link rel="preconnect" href="https://api.qrserver.com"/><link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"/><style id="lv-zoom-fix">input,select,textarea{font-size:16px !important;}@supports(-webkit-touch-callout:none){input,select,textarea{font-size:16px !important;}}</style><link rel="stylesheet" href="/css/ttk-buttons.css"></head><body>
@@ -616,12 +617,22 @@ fbq('track','PageView');
           if(!j || j.status!=='paid') return;
           redirected=true;
           if(pollTimer){ clearInterval(pollTimer); pollTimer=null; }
-          var _amt=getAmount();
+          var _amt=Number(j.amount)||getAmount();
           // Mesmo orderId do PIX -> eventID do Pixel (dedup) e uma única vez.
           var _order=null; try{ _order=localStorage.getItem('lastPixOrder'); }catch(e){}
           var _eid=_order||txId||String(Date.now());
-          if(window.lvTrackPurchase){ window.lvTrackPurchase(_eid,_amt); }
-          else { try{ if(typeof fbq==='function') fbq('track','Purchase',{value:_amt,currency:'BRL'},{eventID:'pix_'+_eid}); }catch(e){} }
+          // O envio pela UTMify usa sua própria identificação de evento.
+          // No modo Meta direto, servidor e navegador usam o mesmo eventID.
+          if(j.purchaseDestination!=='utmify'){
+            try{
+              var eventId=j.eventId||('pix_'+_eid);
+              var sentKey='gokoco_purchase_'+eventId;
+              if(!localStorage.getItem(sentKey) && typeof fbq==='function'){
+                fbq('track','Purchase',{value:_amt,currency:'BRL'},{eventID:eventId});
+                localStorage.setItem(sentKey,'1');
+              }
+            }catch(e){}
+          }
           try{ localStorage.setItem('lv_last_purchase', JSON.stringify({eid:_eid,amount:_amt})); }catch(e){}
           try{ localStorage.setItem('pixPaid_'+txId,'1'); localStorage.removeItem('lv_pix_cache'); }catch(e){}
           // Analytics: funnel step — confirm redirect to upsell2

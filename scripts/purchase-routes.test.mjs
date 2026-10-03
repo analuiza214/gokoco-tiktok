@@ -1,0 +1,98 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import { createHmac } from 'node:crypto';
+const code = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
+const { default: worker } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+const copy = (v) => JSON.parse(JSON.stringify(v));
+function setup() {
+  const state = { order: { id: 'order-id', transaction_id: 'tx-id', gateway: 'ironpay', status: 'pending', name: 'Cliente', email: 'cliente@example.com', phone: '85999999999', document: '52998224725', amount: 37.90, products: [], tracking: {}, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, gatewayPaid: true, sent: [] };
+  const env = { SUPABASE_URL: 'https://db.example', SUPABASE_SERVICE_ROLE_KEY: 'test', IRONPAY_API_TOKEN: 'test', UTMIFY_API_TOKEN: 'test', ADMIN_SESSION_SECRET: 'test-admin' };
+  const fetch = async (input, options = {}) => {
+    const url = new URL(input);
+    if (url.hostname === 'api.ironpayapp.com.br') return Response.json({ payment_status: state.gatewayPaid ? 'PAID' : 'PENDING', paid_at: new Date().toISOString() });
+    if (url.hostname === 'api.utmify.com.br') { state.sent.push(JSON.parse(options.body)); return Response.json({ ok: true }); }
+    assert.equal(url.hostname, 'db.example');
+    const params = url.searchParams;
+    if (params.has('transaction_id') && params.get('transaction_id') !== 'eq.' + state.order.transaction_id) return Response.json([]);
+    if (params.has('status') && params.get('status') !== 'eq.' + state.order.status) return Response.json([]);
+    if (params.has('or') && state.order.tracking._purchase?.utmify?.state === 'sent') return Response.json([]);
+    if (options.method === 'PATCH') {
+      if (params.has('tracking') && JSON.stringify(JSON.parse(params.get('tracking').slice(3))) !== JSON.stringify(state.order.tracking)) return Response.json([]);
+      Object.assign(state.order, JSON.parse(options.body));
+    }
+    return Response.json([copy(state.order)]);
+  };
+  const call = (path, options) => worker.fetch(new Request('https://store.example' + path, options), env);
+  return { state, env, fetch, call };
+}
+async function using(f, fn) { const original = globalThis.fetch; globalThis.fetch = f.fetch; try { await fn(); } finally { globalThis.fetch = original; } }
+
+test('consulta de status confirma no gateway e envia sem depender do cliente', async () => {
+  const f = setup();
+  await using(f, async () => {
+    const data = await (await f.call('/api/public/pix/status?id=tx-id')).json();
+    assert.equal(data.status, 'paid'); assert.equal(data.amount, 37.9); assert.equal(data.eventId, 'pix_order-id');
+    assert.equal(data.purchaseDestination, 'utmify'); assert.equal(f.state.sent.length, 1);
+    assert.equal(data.email, undefined); assert.equal(data.tracking, undefined);
+    await f.call('/api/public/pix/status?id=tx-id'); assert.equal(f.state.sent.length, 1);
+  });
+});
+
+test('webhook público alegando pagamento não prevalece sobre o gateway', async () => {
+  const f = setup(); f.state.gatewayPaid = false;
+  await using(f, async () => {
+    await f.call('/api/pix/webhook', { method: 'POST', body: JSON.stringify({ transactionId: 'tx-id', status: 'paid' }) });
+    assert.equal(f.state.order.status, 'pending'); assert.equal(f.state.sent.length, 0);
+  });
+});
+
+test('webhook confirmado envia compra uma vez mesmo quando repetido', async () => {
+  const f = setup();
+  await using(f, async () => {
+    for (let i = 0; i < 3; i++) assert.equal((await f.call('/api/pix/webhook', { method: 'POST', body: JSON.stringify({ transactionId: 'tx-id' }) })).status, 200);
+    assert.equal(f.state.order.status, 'paid'); assert.equal(f.state.sent.length, 1);
+  });
+});
+
+test('admin recupera pedido pago ainda não enviado e informa resultado', async () => {
+  const f = setup(); f.state.order.status = 'paid';
+  const payload = Buffer.from(JSON.stringify({ exp: Date.now() + 60000 })).toString('base64');
+  const token = payload + '.' + createHmac('sha256', f.env.ADMIN_SESSION_SECRET).update(payload).digest('hex');
+  await using(f, async () => {
+    assert.equal((await f.call('/api/admin/orders')).status, 401);
+    const response = await f.call('/api/admin/orders', { headers: { Authorization: 'Bearer ' + token } });
+    assert.equal(response.status, 200);
+    const data = await response.json(); assert.equal(data.orders[0].purchase.state, 'sent');
+    assert.equal(data.orders[0].tracking, undefined); assert.equal(f.state.sent.length, 1);
+  });
+});
+
+test('fila exige segredo e modo sem credencial não quebra confirmação paga', async () => {
+  const f = setup(); delete f.env.UTMIFY_API_TOKEN;
+  await using(f, async () => {
+    assert.equal((await f.call('/api/process-purchase-queue', { method: 'POST' })).status, 401);
+    const data = await (await f.call('/api/public/pix/status?id=tx-id')).json();
+    assert.equal(data.status, 'paid'); assert.equal(data.purchaseDestination, null); assert.equal(f.state.sent.length, 0);
+  });
+});
+
+test('InitiateCheckout permanece apenas após dados preenchidos e transição à entrega', () => {
+  const html = fs.readFileSync(new URL('../pagamento.html', import.meta.url), 'utf8');
+  const scripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+  scripts.forEach((s) => new vm.Script(s));
+  const script = scripts.find((s) => s.includes('function trackDeliveryEntry'));
+  let handler; const events = [], fields = {};
+  for (const placeholder of ['Nome e Sobrenome', 'email@email.com', '123.456.789-12', '(99) 99999-9999']) fields['input[placeholder="' + placeholder + '"]'] = { value: '' };
+  const elements = { 'lv-step-1': { style: {} }, 'lv-step-2': { style: { display: 'none' } }, 'lv-step-3': { style: { display: 'none' } }, 'lv-pix-total': { innerText: 'R$ 37,90' } };
+  const button = { innerText: 'IR PARA A ENTREGA', dataset: {}, addEventListener: (_, fn) => { handler = fn; } };
+  const context = { document: { querySelectorAll: () => [button], querySelector: (s) => fields[s], getElementById: (id) => elements[id], body: {} }, window: { scrollTo() {} }, localStorage: { getItem: () => null, setItem() {} }, MutationObserver: function () { this.observe = () => {}; }, fbq: (...args) => events.push(args), alert() {} };
+  vm.runInNewContext(script, context); assert.equal(events.length, 0);
+  handler({ preventDefault() {} }); assert.equal(events.length, 0);
+  Object.values(fields).forEach((field, i) => { field.value = ['Cliente', 'cliente@example.com', '52998224725', '85999999999'][i]; });
+  handler({ preventDefault() {} }); handler({ preventDefault() {} }); assert.equal(events.length, 1);
+  assert.equal(elements['lv-step-2'].style.display, ''); assert.equal(events[0][1], 'InitiateCheckout');
+  assert.equal((html.match(/fbq\('track','InitiateCheckout'/g) || []).length, 1);
+  assert.ok(!fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8').includes('InitiateCheckout'));
+});

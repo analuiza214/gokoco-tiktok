@@ -14,6 +14,7 @@ output += wrap('providers/umbrellapag.js', ['createPixUmbrellapag', 'statusPixUm
 output += wrap('providers/venuspay.js', ['createPixVenuspay', 'statusPixVenuspay']);
 output += wrap('pix-gateway-status.js', ['queryPixGatewayStatus']);
 output += wrap('admin-auth.js', ['verifyAdminToken']);
+output += wrap('purchase-tracking.js', ['capturePurchaseTracking', 'purchaseDestination', 'purchaseSummary', 'deliverPaidPurchase']);
 output += `\nconst adminLogin = (() => {\n${read('admin-login.js')}\nreturn onRequest;\n})();\n`;
 output += read('index.js');
 fs.writeFileSync(path.join(root, '_worker.js'), output);

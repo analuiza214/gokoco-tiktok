@@ -5,6 +5,7 @@ import { createPixMasterfy } from './providers/masterfy.js';
 import { createPixUmbrellapag } from './providers/umbrellapag.js';
 import { createPixVenuspay } from './providers/venuspay.js';
 import { queryPixGatewayStatus } from './pix-gateway-status.js';
+import { capturePurchaseTracking, purchaseDestination, purchaseSummary, deliverPaidPurchase } from './purchase-tracking.js';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
 const gateways = [
@@ -138,7 +139,7 @@ async function createPix(request, env) {
     amount: Number(body.amount),
     products: Array.isArray(body.products) ? body.products.slice(0, 10) : [],
     shipping,
-    tracking: body.tracking && typeof body.tracking === 'object' ? body.tracking : {},
+    tracking: capturePurchaseTracking(request, body),
     gateway: active[0].id,
     client_ip_hash: ipHash,
     status: 'creating',
@@ -193,15 +194,19 @@ async function statusPix(request, env) {
   const ids = id.split(',').slice(0, 2);
   let order = null;
   for (const candidate of ids) {
-    const rows = await db(env, 'gokoco_orders', `?transaction_id=eq.${encodeURIComponent(candidate)}&select=id,transaction_id,gateway,status&limit=1`);
+    const rows = await db(env, 'gokoco_orders', `?transaction_id=eq.${encodeURIComponent(candidate)}&select=*&limit=1`);
     if (rows[0]) { order = rows[0]; break; }
   }
   if (!order) return json({ status: 'unknown' }, 404);
-  if (order.status === 'paid') return json({ status: 'paid', isPaid: true });
+  if (order.status === 'paid') {
+    await deliverPaidPurchase(env, db, order.id).catch((error) => console.error('[purchase/status]', error.message));
+    return json({ status: 'paid', isPaid: true, amount: Number(order.amount), eventId: `pix_${order.id}`, purchaseDestination: purchaseDestination(env) });
+  }
   const result = await queryPixGatewayStatus(env, order.transaction_id, order.gateway);
   const status = result.isPaid ? 'paid' : result.isRefunded ? 'refunded' : result.isExpired ? 'expired' : 'pending';
   if (status !== order.status) await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}`, 'PATCH', { status, updated_at: new Date().toISOString() });
-  return json({ status, isPaid: result.isPaid, isExpired: result.isExpired });
+  if (status === 'paid') await deliverPaidPurchase(env, db, order.id, result.paidAt || new Date().toISOString()).catch((error) => console.error('[purchase/status]', error.message));
+  return json({ status, isPaid: status === 'paid', isExpired: result.isExpired, amount: Number(order.amount), eventId: `pix_${order.id}`, purchaseDestination: purchaseDestination(env) });
 }
 
 async function webhook(request, env) {
@@ -215,6 +220,10 @@ async function webhook(request, env) {
     const verified = await queryPixGatewayStatus(env, order.transaction_id, order.gateway);
     const status = verified.isPaid ? 'paid' : verified.isRefunded ? 'refunded' : verified.isExpired ? 'expired' : order.status;
     if (status !== order.status) await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}`, 'PATCH', { status, updated_at: new Date().toISOString() });
+    if (status === 'paid') {
+      const delivery = await deliverPaidPurchase(env, db, order.id, verified.paidAt || (order.status === 'paid' ? undefined : new Date().toISOString()));
+      if (delivery.state === 'failed' || delivery.state === 'retry_pending' || delivery.state === 'busy') return json({ received: true, retryRequired: true }, 503);
+    }
     break;
   }
   return json({ received: true });
@@ -241,9 +250,21 @@ async function adminOrders(request, env) {
     const verified = await queryPixGatewayStatus(env, order.transaction_id, order.gateway);
     const status = verified.isPaid ? 'paid' : verified.isRefunded ? 'refunded' : verified.isExpired ? 'expired' : 'pending';
     if (status !== order.status) await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}`, 'PATCH', { status, updated_at: new Date().toISOString() });
+    if (status === 'paid') await deliverPaidPurchase(env, db, order.id, verified.paidAt || new Date().toISOString());
   }));
-  const rows = await db(env, 'gokoco_orders', '?select=id,created_at,name,email,phone,amount,products,gateway,status,transaction_id,shipping&order=created_at.desc&limit=200');
-  return json({ orders: rows });
+  await retryPaidPurchases(env);
+  const rows = await db(env, 'gokoco_orders', '?select=id,created_at,name,email,phone,amount,products,gateway,status,transaction_id,shipping,tracking&order=created_at.desc&limit=200');
+  return json({ orders: rows.map(({ tracking, ...order }) => ({ ...order, purchase: purchaseSummary(env, { ...order, tracking }) })) });
+}
+
+async function retryPaidPurchases(env) {
+  const destination = purchaseDestination(env);
+  if (!destination) return { configured: false, processed: 0 };
+  const since = new Date(Date.now() - 7 * 86400000).toISOString();
+  const path = `tracking->_purchase->${destination}->>state`;
+  const rows = await db(env, 'gokoco_orders', `?status=eq.paid&updated_at=gte.${encodeURIComponent(since)}&or=(${path}.is.null,${path}.neq.sent)&select=id&order=created_at.asc&limit=10`);
+  const results = await Promise.allSettled(rows.map((order) => deliverPaidPurchase(env, db, order.id)));
+  return { configured: true, processed: rows.length, sent: results.filter((r) => r.status === 'fulfilled' && r.value.state === 'sent').length, failed: results.filter((r) => r.status === 'rejected' || r.value?.state === 'failed').length };
 }
 
 export default {
@@ -255,6 +276,11 @@ export default {
       if (path === '/api/admin/verify') return json({ valid: (await verifyAdminToken(request, env)).valid });
       if (path === '/api/admin/gateways') return await adminGateways(request, env);
       if (path === '/api/admin/orders') return await adminOrders(request, env);
+      if (path === '/api/process-purchase-queue' && request.method === 'POST') {
+        const secret = String(env.CRON_SECRET || '');
+        if (!secret || request.headers.get('x-cron-secret') !== secret) return json({ error: 'Não autorizado.' }, 401);
+        return json(await retryPaidPurchases(env));
+      }
       if (path === '/api/public/pix/create' && request.method === 'POST') return await createPix(request, env);
       if (path === '/api/public/pix/status' && request.method === 'GET') return await statusPix(request, env);
       if (path === '/api/pix/webhook' && request.method === 'POST') return await webhook(request, env);
