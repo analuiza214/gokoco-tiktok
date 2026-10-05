@@ -36,7 +36,7 @@ const whatsapp = (order) => {
   const digits = String(order.phone || '').replace(/\D/g, '');
   const number = digits.startsWith('55') ? digits : `55${digits}`;
   const firstName = String(order.name || '').trim().split(/\s+/)[0] || 'tudo bem';
-  return `https://wa.me/${number}?text=${encodeURIComponent(`Olá ${firstName}! Vi seu pedido na GOKOCO. Posso ajudar com alguma dúvida?`)}`;
+  return `https://wa.me/${number}?text=${encodeURIComponent(`Olá ${firstName}! Vi que você iniciou uma compra da escova GOKOCO mas não finalizou. Posso te ajudar? 😊`)}`;
 };
 
 async function api(path, options = {}) {
