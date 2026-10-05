@@ -4,18 +4,21 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
-  <meta name="theme-color" content="#b91c1c">
+  <meta name="theme-color" content="#15803d">
   <title>Contatos GOKOCO | Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/admin.css">
 </head>
 <body>
   <section class="login" id="login">
     <form class="login-card" id="login-form">
-      <div class="login-brand-icon">G</div>
+      <div class="login-brand-icon" data-icon="lock"></div>
       <h1>Admin GOKOCO</h1>
       <p>Entre com suas credenciais de administrador</p>
-      <label>Usuário<input id="user" autocomplete="username" required autofocus></label>
-      <label>Senha<input id="pass" type="password" autocomplete="current-password" required></label>
+      <label class="sr-only" for="user">Usuário</label><input id="user" placeholder="Usuário" autocomplete="username" required autofocus>
+      <label class="sr-only" for="pass">Senha</label><input id="pass" placeholder="Senha" type="password" autocomplete="current-password" required>
       <div class="login-error" id="login-error" role="alert"></div>
       <button class="button primary login-submit" type="submit">Entrar</button>
     </form>
@@ -24,32 +27,31 @@
   <div class="shell" id="shell" hidden>
     <header class="topbar">
       <div class="topbar-inner">
-        <div class="brand-lockup"><span class="brand-mark">G</span><div><h1>Contatos GOKOCO</h1><p>Pedidos e clientes da loja</p></div></div>
+        <div class="brand-lockup"><span class="brand-mark" data-icon="bag"></span><div><h1>Contatos GOKOCO</h1><p>Pedidos e clientes da loja</p></div></div>
         <div class="top-actions">
-          <button class="button gateway-open" id="gateway-open"><span>▤</span> Gateways</button>
-          <button class="button outline" id="refresh"><span class="refresh-icon">↻</span> Atualizar</button>
-          <button class="button outline logout" id="logout">⇥ <span>Sair</span></button>
+          <button class="button gateway-open" id="gateway-open"><span data-icon="card"></span> Gateways</button>
+          <button class="button outline" id="refresh"><span class="refresh-icon" data-icon="refresh"></span> Atualizar</button>
+          <button class="button outline logout" id="logout"><span data-icon="logout"></span> <span>Sair</span></button>
         </div>
       </div>
     </header>
 
     <main class="content">
-      <div class="intro-row"><div><h2>Pedidos</h2><p>Clientes que geraram um pedido ou iniciaram o pagamento</p></div><span class="live-indicator"><i></i> Atualiza automaticamente</span></div>
       <div class="alert" id="page-error" role="alert" hidden></div>
 
       <section class="stats" aria-label="Resumo dos pedidos">
-        <article class="stat-card"><span class="stat-label">Pedidos</span><strong id="count-all">—</strong></article>
-        <article class="stat-card"><span class="stat-label">PIX pendentes</span><strong class="stat-blue" id="count-pending">—</strong></article>
-        <article class="stat-card"><span class="stat-label">Pagaram</span><strong class="stat-green" id="count-paid">—</strong></article>
+        <article class="stat-card"><strong id="count-all">—</strong><span class="stat-label">Pedidos</span></article>
+        <article class="stat-card"><strong class="stat-blue" id="count-pending">—</strong><span class="stat-label">PIX gerado</span></article>
+        <article class="stat-card"><strong class="stat-green" id="count-paid">—</strong><span class="stat-label">Pagaram</span></article>
       </section>
 
-      <label class="search-box"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Buscar por nome, email ou telefone..."><button id="clear-search" aria-label="Limpar busca" hidden>×</button></label>
+      <label class="search-box"><span data-icon="search"></span><input id="search" type="search" placeholder="Buscar por nome, email ou telefone..."><button id="clear-search" aria-label="Limpar busca" hidden><span data-icon="x"></span></button></label>
 
       <div class="filter-row">
-        <div class="period-filters"><span class="filter-caption">◷ &nbsp;Período:</span>
+        <div class="period-filters"><span class="filter-caption"><span data-icon="calendar"></span> Período:</span>
           <button data-period="hoje">Hoje</button><button data-period="ontem">Ontem</button><button data-period="7dias">7 dias</button><button data-period="30dias">30 dias</button><button data-period="todos" class="selected">Todos</button>
         </div>
-        <label class="sort-select"><span>↕</span><select id="sort"><option value="recentes">Mais recentes</option><option value="antigos">Mais antigos</option><option value="nome_az">Nome A → Z</option><option value="nome_za">Nome Z → A</option><option value="valor_maior">Maior valor</option><option value="valor_menor">Menor valor</option></select></label>
+        <label class="sort-select"><span data-icon="sort"></span><select id="sort"><option value="recentes">Mais recentes</option><option value="antigos">Mais antigos</option><option value="nome_az">Nome A → Z</option><option value="nome_za">Nome Z → A</option><option value="valor_maior">Maior valor</option><option value="valor_menor">Menor valor</option></select></label>
       </div>
 
       <nav class="status-filters" id="status-filters" aria-label="Filtrar pedidos">
@@ -70,7 +72,7 @@
 
   <div class="modal-backdrop" id="gateway-modal" hidden>
     <section class="gateway-modal" role="dialog" aria-modal="true" aria-labelledby="gateway-title">
-      <div class="modal-heading"><div class="modal-icon">▤</div><div class="modal-title"><h2 id="gateway-title">Gateways de Pagamento</h2><p>Apenas um gateway PIX pode ficar ativo por vez.</p></div><div class="modal-actions"><button class="button outline" id="gateway-refresh">↻ &nbsp;Atualizar</button><button class="close-button" id="gateway-close" aria-label="Fechar">×</button></div></div>
+      <div class="modal-heading"><div class="modal-icon" data-icon="card"></div><div class="modal-title"><h2 id="gateway-title">Gateways de Pagamento</h2><p>Apenas um gateway PIX pode ficar ativo por vez.</p></div><div class="modal-actions"><button class="button outline" id="gateway-refresh"><span data-icon="refresh"></span> Atualizar</button><button class="close-button" id="gateway-close" aria-label="Fechar"><span data-icon="x"></span></button></div></div>
       <div class="alert" id="gateway-error" role="alert" hidden></div>
       <div class="gateway-list" id="gateways"></div>
     </section>
