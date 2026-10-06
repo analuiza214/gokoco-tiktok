@@ -254,6 +254,42 @@ async function webhook(request, env) {
   return json({ received: true });
 }
 
+function publicTrackingProducts(products) {
+  const brushImages = {
+    preta: '/images/f2/cores/preta.webp',
+    branca: '/images/f2/cores/branca.webp',
+    rosa: '/images/f2/cores/rosa.webp',
+  };
+  const accessoryImages = [
+    ['wella', '/images/bump-wella.webp'], ['taiff', '/images/bump-taiff.webp'],
+    ['siage', '/images/bump-siage.webp'], ['necessaire', '/images/bump-necessaire.webp'],
+    ['escovas', '/images/bump-escovas.webp'],
+  ];
+  const result = [];
+  for (const product of Array.isArray(products) ? products.slice(0, 10) : []) {
+    const name = String(product?.name || '').slice(0, 150);
+    if (!name || /frete|envio/i.test(name)) continue;
+    const quantity = Math.max(1, Math.min(20, Number.parseInt(product.quantity, 10) || 1));
+    if (/escova\s+modeladora\s+gokoco/i.test(name)) {
+      const variants = [...name.matchAll(/\b(preta|branca|rosa)\s*x\s*(\d{1,2})\b/gi)];
+      const voltage = name.match(/·\s*(bivolt|110\s*v|220\s*v)\b/i)?.[1] || '';
+      if (variants.length) {
+        for (const variant of variants) {
+          const color = variant[1].toLowerCase();
+          result.push({ name: `Escova Modeladora GOKOCO - ${color[0].toUpperCase()}${color.slice(1)}${voltage ? ` · ${voltage}` : ''}`, quantity: Math.max(1, Number(variant[2])), image: brushImages[color] });
+        }
+      } else {
+        const color = name.match(/\b(preta|branca|rosa)\b/i)?.[1]?.toLowerCase();
+        result.push({ name, quantity, image: color ? brushImages[color] : null });
+      }
+      continue;
+    }
+    const image = accessoryImages.find(([key]) => name.toLowerCase().includes(key))?.[1] || null;
+    result.push({ name, quantity, image });
+  }
+  return result;
+}
+
 async function publicOrderTracking(request, env) {
   const code = new URL(request.url).searchParams.get('code')?.trim().toUpperCase() || '';
   if (!/^GK[A-HJ-NP-Z2-9]{10}$/.test(code)) return json({ error: 'Código inválido ou não encontrado.' }, 404);
@@ -262,8 +298,9 @@ async function publicOrderTracking(request, env) {
   if (!order || order.status !== 'paid') return json({ error: 'Código inválido ou não encontrado.' }, 404);
   return json({
     code,
+    buyerName: String(order.name || '').trim().split(/\s+/)[0].slice(0, 60),
     createdAt: order.tracking.shipping.created_at || order.created_at,
-    products: Array.isArray(order.products) ? order.products.map(({ name, quantity }) => ({ name: String(name || 'Escova Modeladora GOKOCO').slice(0, 100), quantity: Number(quantity) || 1 })) : [],
+    products: publicTrackingProducts(order.products),
     destination: { city: String(order.shipping?.cidade || '').slice(0, 80), state: String(order.shipping?.uf || '').slice(0, 2) },
     shipping: order.tracking.shipping,
   });

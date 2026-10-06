@@ -7,7 +7,7 @@ const code = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
 const { default: worker } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 const copy = (v) => JSON.parse(JSON.stringify(v));
 function setup() {
-  const state = { order: { id: '11111111-2222-4333-8444-555555555555', transaction_id: 'tx-id', gateway: 'ironpay', status: 'pending', name: 'Cliente', email: 'cliente@example.com', phone: '85999999999', document: '52998224725', amount: 37.90, products: [{ name: 'Escova GOKOCO', quantity: 1 }], shipping: { cidade: 'Campina Grande', uf: 'PB', cep: '58400000' }, tracking: {}, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, gatewayPaid: true, sent: [] };
+  const state = { order: { id: '11111111-2222-4333-8444-555555555555', transaction_id: 'tx-id', gateway: 'ironpay', status: 'pending', name: 'Maria Silva', email: 'cliente@example.com', phone: '85999999999', document: '52998224725', amount: 37.90, products: [{ name: 'Escova Modeladora GOKOCO - Preta x1 + Rosa x1 · Bivolt', quantity: 1 }], shipping: { cidade: 'Campina Grande', uf: 'PB', cep: '58400000' }, tracking: {}, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, gatewayPaid: true, sent: [] };
   const env = { SUPABASE_URL: 'https://db.example', SUPABASE_SERVICE_ROLE_KEY: 'test', IRONPAY_API_TOKEN: 'test', UTMIFY_API_TOKEN: 'test', ADMIN_SESSION_SECRET: 'test-admin' };
   const fetch = async (input, options = {}) => {
     const url = new URL(input);
@@ -66,6 +66,11 @@ test('rastreio público usa código secreto, oculta endereço e avança etapa pe
     const publicResponse = await f.call('/api/public/order-tracking?code=GKABCDEFGHJK');
     assert.equal(publicResponse.status, 200);
     const publicData = await publicResponse.json();
+    assert.equal(publicData.buyerName, 'Maria');
+    assert.equal(publicData.products.length, 2);
+    assert.equal(publicData.products[0].image, '/images/f2/cores/preta.webp');
+    assert.equal(publicData.products[1].image, '/images/f2/cores/rosa.webp');
+    assert.equal(publicData.products[0].quantity, 1);
     assert.equal(publicData.destination.city, 'Campina Grande');
     assert.equal(publicData.destination.cep, undefined);
     assert.equal(publicData.email, undefined);
@@ -77,6 +82,20 @@ test('rastreio público usa código secreto, oculta endereço e avança etapa pe
 
     const invalidCode = await f.call('/api/public/order-tracking?code=GKAAAAAAAAAA');
     assert.equal(invalidCode.status, 404);
+  });
+});
+
+test('rastreio mostra a quantidade comprada da mesma cor com sua imagem', async () => {
+  const f = setup(); f.state.order.status = 'paid';
+  f.state.order.products = [{ name: 'Escova Modeladora GOKOCO - Preta x2 · Bivolt', quantity: 1 }];
+  f.state.order.tracking.shipping = { code: 'GKABCDEFGHJK', created_at: f.state.order.created_at, status: 'confirmed', events: [] };
+  await using(f, async () => {
+    const response = await f.call('/api/public/order-tracking?code=GKABCDEFGHJK');
+    const data = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(data.products.length, 1);
+    assert.equal(data.products[0].quantity, 2);
+    assert.equal(data.products[0].image, '/images/f2/cores/preta.webp');
   });
 });
 
@@ -154,4 +173,7 @@ test('InitiateCheckout permanece apenas após dados preenchidos e transição à
   assert.ok(paidPage.includes('Acompanhar meu pedido'));
   const trackingPage = fs.readFileSync(new URL('../rastreio.html', import.meta.url), 'utf8');
   assert.ok(trackingPage.includes('As previsões são estimativas'));
+  assert.ok(trackingPage.includes('data.buyerName'));
+  assert.ok(trackingPage.includes('product-image'));
+  [...trackingPage.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].forEach((match) => new vm.Script(match[1]));
 });
