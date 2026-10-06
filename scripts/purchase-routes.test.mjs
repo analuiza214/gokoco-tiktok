@@ -21,6 +21,8 @@ function setup() {
     if (params.has('tracking->shipping->>code')) {
       const expected = params.get('tracking->shipping->>code').slice(3);
       if (expected !== state.order.tracking?.shipping?.code) return Response.json([]);
+      const selected = String(params.get('select') || '').split(',');
+      return Response.json([Object.fromEntries(selected.map((field) => [field, state.order[field]]))]);
     }
     if (url.pathname.endsWith('/api/public/order-tracking') && url.searchParams.has('code') && options.method !== 'PATCH') {
       const code = url.searchParams.get('code');
@@ -172,7 +174,7 @@ test('InitiateCheckout permanece apenas após dados preenchidos e transição à
   assert.ok(paidPage.includes('j.trackingCode'));
   assert.ok(paidPage.includes('Acompanhar meu pedido'));
   const trackingPage = fs.readFileSync(new URL('../rastreio.html', import.meta.url), 'utf8');
-  assert.ok(trackingPage.includes('Etapas estimadas a partir da confirmação; podem mudar.'));
+  assert.ok(trackingPage.includes('Etapas futuras são estimativas.'));
   assert.ok(trackingPage.includes('data.buyerName'));
   assert.ok(trackingPage.includes('Código de rastreio para o pedido de'));
   assert.ok(trackingPage.includes('@media(max-width:380px)'));
@@ -200,7 +202,7 @@ test('rastreio calcula a projeção de embalagem após 40 minutos sem chamá-la 
   await new Promise((resolve) => setImmediate(resolve));
   const timeline = element('timeline').innerHTML;
   assert.match(element('order').innerHTML, /Código de rastreio para o pedido de Ana Paula &amp; Silva/);
-  assert.match(timeline, /Previsão atual:<\/strong> Em embalagem/);
-  assert.match(timeline, /Etapas estimadas a partir da confirmação; podem mudar/);
-  assert.match(timeline, /Estimativa · 06 de out\. de 2026, 09:40/);
+  assert.match(timeline, /forecast-current/);
+  assert.match(timeline, /<strong>Em embalagem<\/strong>/);
+  assert.match(timeline, /<span>09:40<\/span>/);
 });

@@ -293,7 +293,7 @@ function publicTrackingProducts(products) {
 async function publicOrderTracking(request, env) {
   const code = new URL(request.url).searchParams.get('code')?.trim().toUpperCase() || '';
   if (!/^GK[A-HJ-NP-Z2-9]{10}$/.test(code)) return json({ error: 'Código inválido ou não encontrado.' }, 404);
-  const rows = await db(env, 'gokoco_orders', `?tracking->shipping->>code=eq.${encodeURIComponent(code)}&select=id,status,created_at,updated_at,products,shipping,tracking&limit=1`);
+  const rows = await db(env, 'gokoco_orders', `?tracking->shipping->>code=eq.${encodeURIComponent(code)}&select=id,name,status,created_at,updated_at,products,shipping,tracking&limit=1`);
   const order = rows[0];
   if (!order || order.status !== 'paid') return json({ error: 'Código inválido ou não encontrado.' }, 404);
   return json({
