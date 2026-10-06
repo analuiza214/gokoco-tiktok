@@ -172,8 +172,32 @@ test('InitiateCheckout permanece apenas após dados preenchidos e transição à
   assert.ok(paidPage.includes('j.trackingCode'));
   assert.ok(paidPage.includes('Acompanhar meu pedido'));
   const trackingPage = fs.readFileSync(new URL('../rastreio.html', import.meta.url), 'utf8');
-  assert.ok(trackingPage.includes('As previsões são estimativas'));
+  assert.ok(trackingPage.includes('As etapas previstas avançam conforme o tempo'));
   assert.ok(trackingPage.includes('data.buyerName'));
   assert.ok(trackingPage.includes('product-image'));
   [...trackingPage.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].forEach((match) => new vm.Script(match[1]));
+});
+
+test('rastreio calcula a projeção de embalagem após 40 minutos sem chamá-la de confirmação real', async () => {
+  const html = fs.readFileSync(new URL('../rastreio.html', import.meta.url), 'utf8');
+  const script = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map((match) => match[1])[0];
+  const elements = new Map();
+  const element = (id) => {
+    if (!elements.has(id)) elements.set(id, { hidden: true, innerHTML: '', value: '', handlers: {}, addEventListener(type, handler) { this.handlers[type] = handler; }, querySelector() { return { disabled: false }; } });
+    return elements.get(id);
+  };
+  const fixedNow = Date.parse('2026-10-06T12:45:00Z');
+  class FixedDate extends Date { constructor(...args) { super(...(args.length ? args : [fixedNow])); } static now() { return fixedNow; } }
+  vm.runInNewContext(script, {
+    document: { getElementById: element },
+    location: { search: '?codigo=GKABCDEFGHJK' },
+    history: { replaceState() {} },
+    fetch: async () => new Response(JSON.stringify({ code: 'GKABCDEFGHJK', buyerName: 'Cliente', createdAt: '2026-10-06T12:00:00Z', products: [{ name: 'Escova GOKOCO', quantity: 1 }], shipping: { status: 'confirmed', created_at: '2026-10-06T12:00:00Z', events: [] } })),
+    URLSearchParams, Intl, Date: FixedDate, Response,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  const timeline = element('timeline').innerHTML;
+  assert.match(timeline, /Projeção estimada para este momento:<\/strong> pedido embalado/);
+  assert.match(timeline, /Esta é uma estimativa da loja, não uma confirmação da transportadora/);
+  assert.match(timeline, /Estimativa · 06 de out\. de 2026, 09:40/);
 });
