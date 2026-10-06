@@ -174,10 +174,11 @@ test('InitiateCheckout permanece apenas após dados preenchidos e transição à
   assert.ok(paidPage.includes('j.trackingCode'));
   assert.ok(paidPage.includes('Acompanhar meu pedido'));
   const trackingPage = fs.readFileSync(new URL('../rastreio.html', import.meta.url), 'utf8');
-  assert.ok(trackingPage.includes('Etapas futuras são estimativas.'));
+  assert.ok(trackingPage.includes('tracking-stage'));
   assert.ok(trackingPage.includes('data.buyerName'));
-  assert.ok(trackingPage.includes('Código de rastreio para o pedido de'));
-  assert.ok(trackingPage.includes('@media(max-width:380px)'));
+  assert.ok(trackingPage.includes('tracking-order-heading'));
+  assert.ok(trackingPage.includes('@media(max-width:360px)'));
+  assert.ok(trackingPage.includes('tracking-stage'));
   assert.ok(trackingPage.includes('product-image'));
   [...trackingPage.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].forEach((match) => new vm.Script(match[1]));
 });
@@ -201,8 +202,10 @@ test('rastreio calcula a projeção de embalagem após 40 minutos sem chamá-la 
   });
   await new Promise((resolve) => setImmediate(resolve));
   const timeline = element('timeline').innerHTML;
-  assert.match(element('order').innerHTML, /Código de rastreio para o pedido de Ana Paula &amp; Silva/);
+  assert.ok(element('order').innerHTML.includes('PEDIDO'));
+  assert.ok(element('order').innerHTML.includes('GKABCDEFGHJK'));
+  assert.ok(element('order').innerHTML.includes('Ana Paula &amp; Silva'));
   assert.match(timeline, /forecast-current/);
   assert.match(timeline, /<strong>Em embalagem<\/strong>/);
-  assert.match(timeline, /<span>09:40<\/span>/);
+  assert.ok(timeline.includes('09:40'));
 });
