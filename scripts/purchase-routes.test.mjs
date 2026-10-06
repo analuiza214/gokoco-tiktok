@@ -197,7 +197,7 @@ test('rastreio calcula a projeção de embalagem após 40 minutos sem chamá-la 
   });
   await new Promise((resolve) => setImmediate(resolve));
   const timeline = element('timeline').innerHTML;
-  assert.match(timeline, /Projeção estimada para este momento:<\/strong> pedido embalado/);
-  assert.match(timeline, /Esta é uma estimativa da loja, não uma confirmação da transportadora/);
+  assert.match(timeline, /Projeção estimada neste momento:<\/strong> Em embalagem/);
+  assert.match(timeline, /Os horários são aproximados e não confirmados pela transportadora/);
   assert.match(timeline, /Estimativa · 06 de out\. de 2026, 09:40/);
 });
