@@ -183,7 +183,7 @@ test('InitiateCheckout permanece apenas após dados preenchidos e transição à
   [...trackingPage.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].forEach((match) => new vm.Script(match[1]));
 });
 
-test('rastreio calcula a projeção de embalagem após 40 minutos sem chamá-la de confirmação real', async () => {
+test('rastreio avança a simulação no minuto previsto sem chamá-la de confirmação real', async () => {
   const html = fs.readFileSync(new URL('../rastreio.html', import.meta.url), 'utf8');
   const script = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map((match) => match[1])[0];
   const elements = new Map();
@@ -191,7 +191,8 @@ test('rastreio calcula a projeção de embalagem após 40 minutos sem chamá-la 
     if (!elements.has(id)) elements.set(id, { hidden: true, innerHTML: '', value: '', handlers: {}, addEventListener(type, handler) { this.handlers[type] = handler; }, querySelector() { return { disabled: false }; } });
     return elements.get(id);
   };
-  const fixedNow = Date.parse('2026-10-06T12:45:00Z');
+  let fixedNow = Date.parse('2026-10-06T12:45:00Z');
+  let refreshTimeline;
   class FixedDate extends Date { constructor(...args) { super(...(args.length ? args : [fixedNow])); } static now() { return fixedNow; } }
   vm.runInNewContext(script, {
     document: { getElementById: element },
@@ -199,13 +200,18 @@ test('rastreio calcula a projeção de embalagem após 40 minutos sem chamá-la 
     history: { replaceState() {} },
     fetch: async () => new Response(JSON.stringify({ code: 'GKABCDEFGHJK', buyerName: 'Ana Paula & Silva', createdAt: '2026-10-06T12:00:00Z', products: [{ name: 'Escova GOKOCO', quantity: 1, image: '/images/escova.png' }], destination: { city: 'Presidente Prudente', state: 'SP' }, shipping: { status: 'confirmed', created_at: '2026-10-06T12:00:00Z', events: [] } })),
     URLSearchParams, Intl, Date: FixedDate, Response,
+    setInterval: (handler) => { refreshTimeline = handler; },
   });
   await new Promise((resolve) => setImmediate(resolve));
   const timeline = element('timeline').innerHTML;
   assert.ok(element('order').innerHTML.includes('PEDIDO'));
   assert.ok(element('order').innerHTML.includes('GKABCDEFGHJK'));
   assert.ok(element('order').innerHTML.includes('Ana Paula &amp; Silva'));
-  assert.match(timeline, /forecast-current/);
+  assert.match(timeline, /<strong>Em embalagem<\/strong><span class="stage-badge">Previsão<\/span>/);
   assert.match(timeline, /<strong>Em embalagem<\/strong>/);
-  assert.ok(timeline.includes('09:40'));
+  assert.ok(timeline.includes('09:47'));
+  fixedNow = Date.parse('2026-10-06T12:48:00Z');
+  refreshTimeline();
+  assert.match(element('timeline').innerHTML, /<strong>Em embalagem<\/strong><span class="stage-badge">Etapa simulada<\/span>/);
+  assert.match(element('timeline').innerHTML, /tracking-stage[^"<]*forecast simulated/);
 });
