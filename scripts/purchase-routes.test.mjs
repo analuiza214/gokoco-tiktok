@@ -177,3 +177,31 @@ test('InitiateCheckout permanece apenas após dados preenchidos e transição à
   assert.ok(trackingPage.includes('product-image'));
   [...trackingPage.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].forEach((match) => new vm.Script(match[1]));
 });
+
+test('demo de falha e Pix é isolada e nunca chama a rota de pagamento', () => {
+  const html = fs.readFileSync(new URL('../rastreio.html', import.meta.url), 'utf8');
+  const script = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map((match) => match[1])[0];
+  const elements = new Map();
+  const element = (id) => {
+    if (!elements.has(id)) elements.set(id, { hidden: true, innerHTML: '', value: '', handlers: {}, addEventListener(type, handler) { this.handlers[type] = handler; }, querySelector() { return { disabled: false }; } });
+    return elements.get(id);
+  };
+  let fetchCalls = 0;
+  vm.runInNewContext(script, {
+    document: { getElementById: element },
+    location: { search: '?demo=1' },
+    history: { replaceState() {} },
+    fetch: async () => { fetchCalls++; throw new Error('A demo não deve chamar a rede.'); },
+    URLSearchParams, Intl, Date,
+  });
+  assert.match(element('order').innerHTML, /MODO DE DEMONSTRAÇÃO/);
+  assert.match(element('order').innerHTML, /DEMO-GK2026/);
+  assert.doesNotMatch(element('order').innerHTML, /DEMO-PIX-SEM-VALOR-GOKOCO/);
+  assert.match(element('timeline').innerHTML, /Falha na Tentativa de Entrega/);
+  element('demo-generate-pix').handlers.click();
+  assert.match(element('order').innerHTML, /DEMO-PIX-SEM-VALOR-GOKOCO/);
+  element('demo-confirm-pix').handlers.click();
+  assert.match(element('order').innerHTML, /Pagamento simulado confirmado/);
+  assert.match(element('timeline').innerHTML, /Reenvio liberado \(simulação\)/);
+  assert.equal(fetchCalls, 0);
+});
