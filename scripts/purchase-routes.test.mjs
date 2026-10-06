@@ -7,7 +7,7 @@ const code = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
 const { default: worker } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 const copy = (v) => JSON.parse(JSON.stringify(v));
 function setup() {
-  const state = { order: { id: 'order-id', transaction_id: 'tx-id', gateway: 'ironpay', status: 'pending', name: 'Cliente', email: 'cliente@example.com', phone: '85999999999', document: '52998224725', amount: 37.90, products: [], tracking: {}, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, gatewayPaid: true, sent: [] };
+  const state = { order: { id: '11111111-2222-4333-8444-555555555555', transaction_id: 'tx-id', gateway: 'ironpay', status: 'pending', name: 'Cliente', email: 'cliente@example.com', phone: '85999999999', document: '52998224725', amount: 37.90, products: [{ name: 'Escova GOKOCO', quantity: 1 }], shipping: { cidade: 'Campina Grande', uf: 'PB', cep: '58400000' }, tracking: {}, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, gatewayPaid: true, sent: [] };
   const env = { SUPABASE_URL: 'https://db.example', SUPABASE_SERVICE_ROLE_KEY: 'test', IRONPAY_API_TOKEN: 'test', UTMIFY_API_TOKEN: 'test', ADMIN_SESSION_SECRET: 'test-admin' };
   const fetch = async (input, options = {}) => {
     const url = new URL(input);
@@ -17,10 +17,21 @@ function setup() {
     const params = url.searchParams;
     if (params.has('transaction_id') && params.get('transaction_id') !== 'eq.' + state.order.transaction_id) return Response.json([]);
     if (params.has('status') && params.get('status') !== 'eq.' + state.order.status) return Response.json([]);
+    if (params.has('status') && params.get('status') === 'eq.paid' && state.order.status !== 'paid') return Response.json([]);
+    if (params.has('tracking->shipping->>code')) {
+      const expected = params.get('tracking->shipping->>code').slice(3);
+      if (expected !== state.order.tracking?.shipping?.code) return Response.json([]);
+    }
+    if (url.pathname.endsWith('/api/public/order-tracking') && url.searchParams.has('code') && options.method !== 'PATCH') {
+      const code = url.searchParams.get('code');
+      if (state.order.status !== 'paid' || state.order.tracking?.shipping?.code !== code) return Response.json([]);
+    }
+    if (params.has('id') && params.get('id') !== 'eq.' + state.order.id) return Response.json([]);
     if (params.has('or') && state.order.tracking._purchase?.utmify?.state === 'sent') return Response.json([]);
     if (options.method === 'PATCH') {
       if (params.has('tracking') && JSON.stringify(JSON.parse(params.get('tracking').slice(3))) !== JSON.stringify(state.order.tracking)) return Response.json([]);
       Object.assign(state.order, JSON.parse(options.body));
+      if (params.has('select') && state.order.tracking.shipping?.code) return Response.json([copy(state.order)]);
     }
     return Response.json([copy(state.order)]);
   };
@@ -33,10 +44,38 @@ test('consulta de status confirma no gateway e envia sem depender do cliente', a
   const f = setup();
   await using(f, async () => {
     const data = await (await f.call('/api/public/pix/status?id=tx-id')).json();
-    assert.equal(data.status, 'paid'); assert.equal(data.amount, 37.9); assert.equal(data.eventId, 'pix_order-id');
+    assert.equal(data.status, 'paid'); assert.equal(data.amount, 37.9); assert.equal(data.eventId, 'pix_' + f.state.order.id);
     assert.equal(data.purchaseDestination, 'utmify'); assert.equal(f.state.sent.length, 1);
     assert.equal(data.email, undefined); assert.equal(data.tracking, undefined);
+    assert.match(f.state.order.tracking.shipping.code, /^GK[A-HJ-NP-Z2-9]{10}$/);
+    assert.equal(f.state.order.tracking.shipping.status, 'confirmed');
+    const trackingCode = f.state.order.tracking.shipping.code;
+    await f.call('/api/public/pix/status?id=tx-id');
+    assert.equal(f.state.order.tracking.shipping.code, trackingCode);
     await f.call('/api/public/pix/status?id=tx-id'); assert.equal(f.state.sent.length, 1);
+  });
+});
+
+test('rastreio público usa código secreto, oculta endereço e avança etapa pelo admin', async () => {
+  const f = setup(); f.state.order.status = 'paid';
+  const payload = Buffer.from(JSON.stringify({ exp: Date.now() + 60000 })).toString('base64');
+  const token = payload + '.' + createHmac('sha256', f.env.ADMIN_SESSION_SECRET).update(payload).digest('hex');
+  await using(f, async () => {
+    f.state.order.tracking.shipping = { code: 'GKABCDEFGHJK', created_at: f.state.order.created_at, status: 'confirmed', events: [] };
+    const publicResponse = await f.call('/api/public/order-tracking?code=GKABCDEFGHJK');
+    assert.equal(publicResponse.status, 200);
+    const publicData = await publicResponse.json();
+    assert.equal(publicData.destination.city, 'Campina Grande');
+    assert.equal(publicData.destination.cep, undefined);
+    assert.equal(publicData.email, undefined);
+
+    const updated = await f.call('/api/admin/order-tracking', { method: 'PATCH', headers: { Authorization: 'Bearer ' + token }, body: JSON.stringify({ id: f.state.order.id, code: 'GKABCDEFGHJK', status: 'shipped' }) });
+    assert.equal(updated.status, 200);
+    assert.equal(f.state.order.tracking.shipping.status, 'shipped');
+    assert.equal(f.state.order.tracking.shipping.events.at(-1).label, 'Pedido enviado');
+
+    const invalidCode = await f.call('/api/public/order-tracking?code=GKAAAAAAAAAA');
+    assert.equal(invalidCode.status, 404);
   });
 });
 

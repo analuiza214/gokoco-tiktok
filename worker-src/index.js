@@ -199,14 +199,33 @@ async function statusPix(request, env) {
   }
   if (!order) return json({ status: 'unknown' }, 404);
   if (order.status === 'paid') {
+    await registerOrderTracking(env, order.id, order.updated_at || order.created_at).catch((error) => console.error('[tracking/status]', error.message));
     await deliverPaidPurchase(env, db, order.id).catch((error) => console.error('[purchase/status]', error.message));
     return json({ status: 'paid', isPaid: true, amount: Number(order.amount), eventId: `pix_${order.id}`, purchaseDestination: purchaseDestination(env) });
   }
   const result = await queryPixGatewayStatus(env, order.transaction_id, order.gateway);
   const status = result.isPaid ? 'paid' : result.isRefunded ? 'refunded' : result.isExpired ? 'expired' : 'pending';
   if (status !== order.status) await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}`, 'PATCH', { status, updated_at: new Date().toISOString() });
-  if (status === 'paid') await deliverPaidPurchase(env, db, order.id, result.paidAt || new Date().toISOString()).catch((error) => console.error('[purchase/status]', error.message));
+  if (status === 'paid') {
+    await registerOrderTracking(env, order.id, result.paidAt || new Date().toISOString()).catch((error) => console.error('[tracking/status]', error.message));
+    await deliverPaidPurchase(env, db, order.id, result.paidAt || new Date().toISOString()).catch((error) => console.error('[purchase/status]', error.message));
+  }
   return json({ status, isPaid: status === 'paid', isExpired: result.isExpired, amount: Number(order.amount), eventId: `pix_${order.id}`, purchaseDestination: purchaseDestination(env) });
+}
+
+function createTrackingCode() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = crypto.getRandomValues(new Uint8Array(10));
+  return `GK${Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('')}`;
+}
+
+async function registerOrderTracking(env, orderId, paidAt) {
+  const rows = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(orderId)}&select=id,status,tracking&limit=1`);
+  const order = rows[0];
+  if (!order || order.tracking?.shipping?.code) return;
+  const code = createTrackingCode();
+  const tracking = { ...(order.tracking || {}), shipping: { code, created_at: paidAt || new Date().toISOString(), status: 'confirmed', events: [] } };
+  await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(orderId)}&status=eq.paid&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=id`, 'PATCH', { status: 'paid', tracking });
 }
 
 async function webhook(request, env) {
@@ -221,12 +240,67 @@ async function webhook(request, env) {
     const status = verified.isPaid ? 'paid' : verified.isRefunded ? 'refunded' : verified.isExpired ? 'expired' : order.status;
     if (status !== order.status) await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}`, 'PATCH', { status, updated_at: new Date().toISOString() });
     if (status === 'paid') {
+      await registerOrderTracking(env, order.id, verified.paidAt || (order.status === 'paid' ? undefined : new Date().toISOString()));
       const delivery = await deliverPaidPurchase(env, db, order.id, verified.paidAt || (order.status === 'paid' ? undefined : new Date().toISOString()));
       if (delivery.state === 'failed' || delivery.state === 'retry_pending' || delivery.state === 'busy') return json({ received: true, retryRequired: true }, 503);
     }
     break;
   }
   return json({ received: true });
+}
+
+async function publicOrderTracking(request, env) {
+  const code = new URL(request.url).searchParams.get('code')?.trim().toUpperCase() || '';
+  if (!/^GK[A-HJ-NP-Z2-9]{10}$/.test(code)) return json({ error: 'Código inválido ou não encontrado.' }, 404);
+  const rows = await db(env, 'gokoco_orders', `?tracking->shipping->>code=eq.${encodeURIComponent(code)}&select=id,status,created_at,updated_at,products,shipping,tracking&limit=1`);
+  const order = rows[0];
+  if (!order || order.status !== 'paid') return json({ error: 'Código inválido ou não encontrado.' }, 404);
+  return json({
+    code,
+    createdAt: order.created_at,
+    products: Array.isArray(order.products) ? order.products.map(({ name, quantity }) => ({ name: String(name || 'Escova Modeladora GOKOCO').slice(0, 100), quantity: Number(quantity) || 1 })) : [],
+    destination: { city: String(order.shipping?.cidade || '').slice(0, 80), state: String(order.shipping?.uf || '').slice(0, 2) },
+    shipping: order.tracking.shipping,
+  });
+}
+
+async function adminUpdateOrderTracking(request, env) {
+  const denied = await requireAdmin(request, env); if (denied) return denied;
+  if (request.method !== 'PATCH') return json({ error: 'Método inválido.' }, 405);
+  const body = await request.json().catch(() => ({}));
+  const id = String(body.id || '');
+  const code = String(body.code || '').trim().toUpperCase();
+  const status = String(body.status || '');
+  if (!/^[0-9a-f-]{36}$/i.test(id) || !/^GK[A-HJ-NP-Z2-9]{10}$/.test(code)) return json({ error: 'Código de rastreio inválido.' }, 400);
+  const stages = {
+    confirmed: { label: 'Pedido confirmado', detail: 'Pagamento aprovado e pedido confirmado.' },
+    preparing: { label: 'Preparando pedido', detail: 'Seu pedido está sendo separado e preparado.' },
+    shipped: { label: 'Pedido enviado', detail: 'Seu pedido foi despachado para entrega.' },
+    out_for_delivery: { label: 'Saiu para entrega', detail: 'Seu pedido está a caminho do endereço informado.' },
+    delivered: { label: 'Pedido entregue', detail: 'A entrega foi concluída.' },
+  };
+  if (!Object.hasOwn(stages, status)) return json({ error: 'Etapa de entrega inválida.' }, 400);
+  const rows = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(id)}&status=eq.paid&select=id,tracking&limit=1`);
+  const order = rows[0];
+  if (!order) return json({ error: 'Pedido pago não encontrado.' }, 404);
+  const previous = order.tracking?.shipping || {};
+  const previousStageIndex = ['confirmed', 'preparing', 'shipped', 'out_for_delivery', 'delivered'].indexOf(previous.status || 'confirmed');
+  const requestedStageIndex = ['confirmed', 'preparing', 'shipped', 'out_for_delivery', 'delivered'].indexOf(status);
+  if (status !== 'confirmed' && requestedStageIndex < previousStageIndex) return json({ error: 'A etapa só pode avançar. Escolha a etapa atual ou uma etapa posterior.' }, 409);
+  if (status === 'confirmed' && previous.status && previous.status !== 'confirmed') return json({ error: 'O rastreio já avançou e não pode voltar à confirmação.' }, 409);
+  const tracking = {
+    ...(order.tracking || {}),
+    shipping: {
+      ...previous,
+      code: previous.code || code,
+      created_at: previous.created_at || new Date().toISOString(),
+      status,
+      events: status === 'confirmed' ? [] : [...(Array.isArray(previous.events) ? previous.events.filter((event) => event.status !== 'confirmed') : []), { status, label: stages[status].label, detail: stages[status].detail, at: new Date().toISOString() }],
+    },
+  };
+  const saved = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(id)}&status=eq.paid&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=id`, 'PATCH', { tracking, updated_at: new Date().toISOString() });
+  if (!saved.length) return json({ error: 'O pedido mudou durante a atualização. Atualize a lista e tente novamente.' }, 409);
+  return json({ ok: true, shipping: tracking.shipping });
 }
 
 async function adminGateways(request, env) {
@@ -250,11 +324,15 @@ async function adminOrders(request, env) {
     const verified = await queryPixGatewayStatus(env, order.transaction_id, order.gateway);
     const status = verified.isPaid ? 'paid' : verified.isRefunded ? 'refunded' : verified.isExpired ? 'expired' : 'pending';
     if (status !== order.status) await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}`, 'PATCH', { status, updated_at: new Date().toISOString() });
-    if (status === 'paid') await deliverPaidPurchase(env, db, order.id, verified.paidAt || new Date().toISOString());
+    if (status === 'paid') {
+      const paidAt = verified.paidAt || new Date().toISOString();
+      await registerOrderTracking(env, order.id, paidAt);
+      await deliverPaidPurchase(env, db, order.id, paidAt);
+    }
   }));
   await retryPaidPurchases(env);
   const rows = await db(env, 'gokoco_orders', '?select=id,created_at,name,email,phone,amount,products,gateway,status,transaction_id,shipping,tracking&order=created_at.desc&limit=200');
-  return json({ orders: rows.map(({ tracking, ...order }) => ({ ...order, purchase: purchaseSummary(env, { ...order, tracking }) })) });
+  return json({ orders: rows.map(({ tracking, ...order }) => ({ ...order, shippingTracking: tracking?.shipping || null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
 }
 
 async function retryPaidPurchases(env) {
@@ -276,6 +354,8 @@ export default {
       if (path === '/api/admin/verify') return json({ valid: (await verifyAdminToken(request, env)).valid });
       if (path === '/api/admin/gateways') return await adminGateways(request, env);
       if (path === '/api/admin/orders') return await adminOrders(request, env);
+      if (path === '/api/admin/order-tracking') return await adminUpdateOrderTracking(request, env);
+      if (path === '/api/public/order-tracking' && request.method === 'GET') return await publicOrderTracking(request, env);
       if (path === '/api/process-purchase-queue' && request.method === 'POST') {
         const secret = String(env.CRON_SECRET || '');
         if (!secret || request.headers.get('x-cron-secret') !== secret) return json({ error: 'Não autorizado.' }, 401);

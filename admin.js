@@ -21,6 +21,10 @@ const statusInfo = {
   expired: { label: 'Expirado', fg: '#6b7280', bg: '#f3f4f6' },
   failed: { label: 'Falha ao gerar PIX', fg: '#b91c1c', bg: '#fee2e2' },
 };
+const shippingStages = [
+  ['confirmed', 'Pedido confirmado'], ['preparing', 'Preparando pedido'], ['shipped', 'Pedido enviado'],
+  ['out_for_delivery', 'Saiu para entrega'], ['delivered', 'Pedido entregue'],
+];
 
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const cash = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -119,7 +123,11 @@ function renderOrders() {
     const deliveryLabels = {sent: 'Compra enviada à '+destination, sending: 'Enviando compra à '+destination, pending: 'Compra aguardando envio à '+destination, failed: 'Falha no envio à '+destination, not_configured: 'Envio de compras não configurado'};
     const purchaseLine = order.status === 'paid' ? '<div class="order-detail" style="color:'+(delivery.state === 'sent' ? '#166534' : '#92400e')+'" title="'+esc(delivery.error || '')+'">'+esc(deliveryLabels[delivery.state] || 'Compra aguardando envio')+'</div>' : '';
     const tx = order.transaction_id ? `<div class="tx-line">Transação: ${esc(order.transaction_id)}</div>` : '';
-    return `<article class="order-card"><div class="order-layout"><div class="order-main"><div class="avatar" style="background:hsl(${avatarHue},55%,45%)">${esc(initials)}</div><div class="order-info"><div class="name-line"><span class="customer-name">${esc(order.name)}</span><span class="status-pill" style="color:${status.fg};background:${status.bg}">${esc(status.label)}</span></div><div class="order-detail"><span class="detail-icon">${icon('phone')}</span><span>${esc(formatPhone(order.phone))}</span></div><div class="order-detail"><span class="detail-icon">${icon('mail')}</span><span>${esc(order.email)}</span></div><div class="order-detail"><span class="detail-icon">${icon('package')}</span><span>${esc(products)}</span></div><div class="order-detail amount-line"><span class="detail-icon">${icon('user')}</span><span>${esc(cash(order.amount))} · PIX <span class="gateway-tag">${esc(gateway)}</span></span></div><div class="order-date">${esc(formatDate(order.created_at))}</div>${tx}${purchaseLine}</div></div><div class="order-actions"><a class="whatsapp" href="${esc(whatsapp(order))}" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" class="whatsapp-icon" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M11.999 0C5.373 0 0 5.373 0 12c0 2.126.555 4.122 1.524 5.854L0 24l6.336-1.494A11.949 11.949 0 0012 24c6.627 0 12-5.373 12-12S18.626 0 11.999 0zm0 21.818a9.808 9.808 0 01-5.006-1.37l-.36-.213-3.76.886.936-3.66-.234-.376A9.818 9.818 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182 17.43 2.182 21.818 6.57 21.818 12c0 5.43-4.389 9.818-9.819 9.818z"/></svg> Chamar no WhatsApp</a></div></div></article>`;
+    const tracking = order.shippingTracking || {};
+    const trackingCode = tracking.code || '';
+    const selectedStage = tracking.status || 'confirmed';
+    const trackingControls = order.status === 'paid' ? `<div class="tracking-code-view">Rastreio: <strong>${esc(trackingCode || 'Criado ao atualizar a etapa')}</strong></div><div class="tracking-controls"><label>Etapa da entrega<select class="tracking-stage" aria-label="Etapa da entrega">${shippingStages.map(([value, label]) => `<option value="${value}" ${selectedStage === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label>${trackingCode ? `<a class="tracking-link" href="/rastreio.html?codigo=${encodeURIComponent(trackingCode)}" target="_blank" rel="noopener noreferrer">Abrir rastreio</a>` : '<span class="tracking-pending">O código é criado ao escolher a etapa.</span>'}</div>` : '';
+    return `<article class="order-card" data-order-id="${esc(order.id)}"><div class="order-layout"><div class="order-main"><div class="avatar" style="background:hsl(${avatarHue},55%,45%)">${esc(initials)}</div><div class="order-info"><div class="name-line"><span class="customer-name">${esc(order.name)}</span><span class="status-pill" style="color:${status.fg};background:${status.bg}">${esc(status.label)}</span></div><div class="order-detail"><span class="detail-icon">${icon('phone')}</span><span>${esc(formatPhone(order.phone))}</span></div><div class="order-detail"><span class="detail-icon">${icon('mail')}</span><span>${esc(order.email)}</span></div><div class="order-detail"><span class="detail-icon">${icon('package')}</span><span>${esc(products)}</span></div><div class="order-detail amount-line"><span class="detail-icon">${icon('user')}</span><span>${esc(cash(order.amount))} · PIX <span class="gateway-tag">${esc(gateway)}</span></span></div><div class="order-date">${esc(formatDate(order.created_at))}</div>${tx}${purchaseLine}${trackingControls}</div></div><div class="order-actions"><a class="whatsapp" href="${esc(whatsapp(order))}" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" class="whatsapp-icon" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.099-.198-.074-.272-.198-.57z"/></svg> Chamar no WhatsApp</a></div></div></article>`;
   }).join('');
   const pagination = $('pagination');
   pagination.hidden = totalPages < 2;
@@ -199,6 +207,24 @@ $('reset-filters').addEventListener('click', () => {
   $('status-filters').querySelectorAll('button').forEach((item) => item.classList.toggle('selected', item.dataset.status === 'todos')); renderOrders();
 });
 $('pagination').addEventListener('click', (event) => { const button = event.target.closest('[data-page]'); if (!button || button.disabled) return; page = Number(button.dataset.page); renderOrders(); window.scrollTo(0, 0); });
+$('orders').addEventListener('change', async (event) => {
+  const select = event.target.closest('.tracking-stage');
+  if (!select) return;
+  const card = select.closest('[data-order-id]');
+  const order = orders.find((item) => item.id === card?.dataset.orderId);
+  if (!order) return;
+  select.disabled = true;
+  try {
+    const saved = await api('order-tracking', { method: 'PATCH', body: JSON.stringify({ id: order.id, code: order.shippingTracking?.code || '', status: select.value }) });
+    order.shippingTracking = saved.shipping;
+    renderOrders();
+  } catch (error) {
+    window.alert(error.message || 'Não foi possível atualizar a etapa do pedido.');
+    load();
+  } finally {
+    select.disabled = false;
+  }
+});
 $('gateway-open').addEventListener('click', () => { $('gateway-modal').hidden = false; });
 $('gateway-close').addEventListener('click', () => { $('gateway-modal').hidden = true; });
 $('gateway-modal').addEventListener('click', (event) => { if (event.target === $('gateway-modal')) $('gateway-modal').hidden = true; });
