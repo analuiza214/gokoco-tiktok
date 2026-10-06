@@ -197,7 +197,7 @@ test('rastreio calcula a projeção de embalagem após 40 minutos sem chamá-la 
     document: { getElementById: element },
     location: { search: '?codigo=GKABCDEFGHJK' },
     history: { replaceState() {} },
-    fetch: async () => new Response(JSON.stringify({ code: 'GKABCDEFGHJK', buyerName: 'Ana Paula & Silva', createdAt: '2026-10-06T12:00:00Z', products: [{ name: 'Escova GOKOCO', quantity: 1 }], shipping: { status: 'confirmed', created_at: '2026-10-06T12:00:00Z', events: [] } })),
+    fetch: async () => new Response(JSON.stringify({ code: 'GKABCDEFGHJK', buyerName: 'Ana Paula & Silva', createdAt: '2026-10-06T12:00:00Z', products: [{ name: 'Escova GOKOCO', quantity: 1, image: '/images/escova.png' }], destination: { city: 'Presidente Prudente', state: 'SP' }, shipping: { status: 'confirmed', created_at: '2026-10-06T12:00:00Z', events: [] } })),
     URLSearchParams, Intl, Date: FixedDate, Response,
   });
   await new Promise((resolve) => setImmediate(resolve));
