@@ -66,7 +66,7 @@ test('rastreio público usa código secreto, oculta endereço e avança etapa pe
     const publicResponse = await f.call('/api/public/order-tracking?code=GKABCDEFGHJK');
     assert.equal(publicResponse.status, 200);
     const publicData = await publicResponse.json();
-    assert.equal(publicData.buyerName, 'Maria');
+    assert.equal(publicData.buyerName, 'Maria Silva');
     assert.equal(publicData.products.length, 2);
     assert.equal(publicData.products[0].image, '/images/f2/cores/preta.webp');
     assert.equal(publicData.products[1].image, '/images/f2/cores/rosa.webp');
@@ -172,8 +172,10 @@ test('InitiateCheckout permanece apenas após dados preenchidos e transição à
   assert.ok(paidPage.includes('j.trackingCode'));
   assert.ok(paidPage.includes('Acompanhar meu pedido'));
   const trackingPage = fs.readFileSync(new URL('../rastreio.html', import.meta.url), 'utf8');
-  assert.ok(trackingPage.includes('As etapas previstas avançam conforme o tempo'));
+  assert.ok(trackingPage.includes('Etapas estimadas a partir da confirmação; podem mudar.'));
   assert.ok(trackingPage.includes('data.buyerName'));
+  assert.ok(trackingPage.includes('Código de rastreio para o pedido de'));
+  assert.ok(trackingPage.includes('@media(max-width:380px)'));
   assert.ok(trackingPage.includes('product-image'));
   [...trackingPage.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].forEach((match) => new vm.Script(match[1]));
 });
@@ -192,12 +194,13 @@ test('rastreio calcula a projeção de embalagem após 40 minutos sem chamá-la 
     document: { getElementById: element },
     location: { search: '?codigo=GKABCDEFGHJK' },
     history: { replaceState() {} },
-    fetch: async () => new Response(JSON.stringify({ code: 'GKABCDEFGHJK', buyerName: 'Cliente', createdAt: '2026-10-06T12:00:00Z', products: [{ name: 'Escova GOKOCO', quantity: 1 }], shipping: { status: 'confirmed', created_at: '2026-10-06T12:00:00Z', events: [] } })),
+    fetch: async () => new Response(JSON.stringify({ code: 'GKABCDEFGHJK', buyerName: 'Ana Paula & Silva', createdAt: '2026-10-06T12:00:00Z', products: [{ name: 'Escova GOKOCO', quantity: 1 }], shipping: { status: 'confirmed', created_at: '2026-10-06T12:00:00Z', events: [] } })),
     URLSearchParams, Intl, Date: FixedDate, Response,
   });
   await new Promise((resolve) => setImmediate(resolve));
   const timeline = element('timeline').innerHTML;
-  assert.match(timeline, /Projeção estimada neste momento:<\/strong> Em embalagem/);
-  assert.match(timeline, /Os horários são aproximados e não confirmados pela transportadora/);
+  assert.match(element('order').innerHTML, /Código de rastreio para o pedido de Ana Paula &amp; Silva/);
+  assert.match(timeline, /Previsão atual:<\/strong> Em embalagem/);
+  assert.match(timeline, /Etapas estimadas a partir da confirmação; podem mudar/);
   assert.match(timeline, /Estimativa · 06 de out\. de 2026, 09:40/);
 });

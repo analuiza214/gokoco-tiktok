@@ -1581,7 +1581,7 @@ async function publicOrderTracking(request, env) {
   if (!order || order.status !== 'paid') return json({ error: 'Código inválido ou não encontrado.' }, 404);
   return json({
     code,
-    buyerName: String(order.name || '').trim().split(/\s+/)[0].slice(0, 60),
+      buyerName: String(order.name || '').trim().slice(0, 100),
     createdAt: order.tracking.shipping.created_at || order.created_at,
     products: publicTrackingProducts(order.products),
     destination: { city: String(order.shipping?.cidade || '').slice(0, 80), state: String(order.shipping?.uf || '').slice(0, 2) },
