@@ -199,18 +199,19 @@ async function statusPix(request, env) {
   }
   if (!order) return json({ status: 'unknown' }, 404);
   if (order.status === 'paid') {
-    await registerOrderTracking(env, order.id, order.updated_at || order.created_at).catch((error) => console.error('[tracking/status]', error.message));
+    const shippingTracking = await registerOrderTracking(env, order.id, order.updated_at || order.created_at).catch((error) => { console.error('[tracking/status]', error.message); return null; });
     await deliverPaidPurchase(env, db, order.id).catch((error) => console.error('[purchase/status]', error.message));
-    return json({ status: 'paid', isPaid: true, amount: Number(order.amount), eventId: `pix_${order.id}`, purchaseDestination: purchaseDestination(env) });
+    return json({ status: 'paid', isPaid: true, amount: Number(order.amount), trackingCode: shippingTracking?.code || null, eventId: `pix_${order.id}`, purchaseDestination: purchaseDestination(env) });
   }
   const result = await queryPixGatewayStatus(env, order.transaction_id, order.gateway);
   const status = result.isPaid ? 'paid' : result.isRefunded ? 'refunded' : result.isExpired ? 'expired' : 'pending';
   if (status !== order.status) await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}`, 'PATCH', { status, updated_at: new Date().toISOString() });
+  let shippingTracking = null;
   if (status === 'paid') {
-    await registerOrderTracking(env, order.id, result.paidAt || new Date().toISOString()).catch((error) => console.error('[tracking/status]', error.message));
+    shippingTracking = await registerOrderTracking(env, order.id, result.paidAt || new Date().toISOString()).catch((error) => { console.error('[tracking/status]', error.message); return null; });
     await deliverPaidPurchase(env, db, order.id, result.paidAt || new Date().toISOString()).catch((error) => console.error('[purchase/status]', error.message));
   }
-  return json({ status, isPaid: status === 'paid', isExpired: result.isExpired, amount: Number(order.amount), eventId: `pix_${order.id}`, purchaseDestination: purchaseDestination(env) });
+  return json({ status, isPaid: status === 'paid', isExpired: result.isExpired, amount: Number(order.amount), trackingCode: shippingTracking?.code || null, eventId: `pix_${order.id}`, purchaseDestination: purchaseDestination(env) });
 }
 
 function createTrackingCode() {
@@ -222,10 +223,14 @@ function createTrackingCode() {
 async function registerOrderTracking(env, orderId, paidAt) {
   const rows = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(orderId)}&select=id,status,tracking&limit=1`);
   const order = rows[0];
-  if (!order || order.tracking?.shipping?.code) return;
+  if (!order) return null;
+  if (order.tracking?.shipping?.code) return order.tracking.shipping;
   const code = createTrackingCode();
   const tracking = { ...(order.tracking || {}), shipping: { code, created_at: paidAt || new Date().toISOString(), status: 'confirmed', events: [] } };
-  await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(orderId)}&status=eq.paid&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=id`, 'PATCH', { status: 'paid', tracking });
+  const saved = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(orderId)}&status=eq.paid&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=id`, 'PATCH', { status: 'paid', tracking });
+  if (saved.length) return tracking.shipping;
+  const current = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(orderId)}&select=tracking&limit=1`);
+  return current[0]?.tracking?.shipping || null;
 }
 
 async function webhook(request, env) {
@@ -257,7 +262,7 @@ async function publicOrderTracking(request, env) {
   if (!order || order.status !== 'paid') return json({ error: 'Código inválido ou não encontrado.' }, 404);
   return json({
     code,
-    createdAt: order.created_at,
+    createdAt: order.tracking.shipping.created_at || order.created_at,
     products: Array.isArray(order.products) ? order.products.map(({ name, quantity }) => ({ name: String(name || 'Escova Modeladora GOKOCO').slice(0, 100), quantity: Number(quantity) || 1 })) : [],
     destination: { city: String(order.shipping?.cidade || '').slice(0, 80), state: String(order.shipping?.uf || '').slice(0, 2) },
     shipping: order.tracking.shipping,
@@ -330,6 +335,10 @@ async function adminOrders(request, env) {
       await deliverPaidPurchase(env, db, order.id, paidAt);
     }
   }));
+  const paidOrders = await db(env, 'gokoco_orders', '?status=eq.paid&select=id,tracking,updated_at,created_at&order=created_at.desc&limit=200');
+  await Promise.allSettled(paidOrders.filter((order) => !order.tracking?.shipping?.code).map((order) =>
+    registerOrderTracking(env, order.id, order.updated_at || order.created_at),
+  ));
   await retryPaidPurchases(env);
   const rows = await db(env, 'gokoco_orders', '?select=id,created_at,name,email,phone,amount,products,gateway,status,transaction_id,shipping,tracking&order=created_at.desc&limit=200');
   return json({ orders: rows.map(({ tracking, ...order }) => ({ ...order, shippingTracking: tracking?.shipping || null, purchase: purchaseSummary(env, { ...order, tracking }) })) });

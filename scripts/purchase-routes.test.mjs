@@ -48,6 +48,7 @@ test('consulta de status confirma no gateway e envia sem depender do cliente', a
     assert.equal(data.purchaseDestination, 'utmify'); assert.equal(f.state.sent.length, 1);
     assert.equal(data.email, undefined); assert.equal(data.tracking, undefined);
     assert.match(f.state.order.tracking.shipping.code, /^GK[A-HJ-NP-Z2-9]{10}$/);
+    assert.equal(data.trackingCode, f.state.order.tracking.shipping.code);
     assert.equal(f.state.order.tracking.shipping.status, 'confirmed');
     const trackingCode = f.state.order.tracking.shipping.code;
     await f.call('/api/public/pix/status?id=tx-id');
@@ -76,6 +77,20 @@ test('rastreio público usa código secreto, oculta endereço e avança etapa pe
 
     const invalidCode = await f.call('/api/public/order-tracking?code=GKAAAAAAAAAA');
     assert.equal(invalidCode.status, 404);
+  });
+});
+
+test('admin cria e exibe automaticamente código para pedidos já pagos sem rastreio', async () => {
+  const f = setup(); f.state.order.status = 'paid';
+  const payload = Buffer.from(JSON.stringify({ exp: Date.now() + 60000 })).toString('base64');
+  const token = payload + '.' + createHmac('sha256', f.env.ADMIN_SESSION_SECRET).update(payload).digest('hex');
+  await using(f, async () => {
+    const response = await f.call('/api/admin/orders', { headers: { Authorization: 'Bearer ' + token } });
+    assert.equal(response.status, 200);
+    const data = await response.json();
+    assert.match(data.orders[0].shippingTracking.code, /^GK[A-HJ-NP-Z2-9]{10}$/);
+    assert.equal(data.orders[0].tracking, undefined);
+    assert.equal(f.state.order.tracking.shipping.status, 'confirmed');
   });
 });
 
@@ -134,4 +149,9 @@ test('InitiateCheckout permanece apenas após dados preenchidos e transição à
   assert.equal(elements['lv-step-2'].style.display, ''); assert.equal(events[0][1], 'InitiateCheckout');
   assert.equal((html.match(/fbq\('track','InitiateCheckout'/g) || []).length, 1);
   assert.ok(!fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8').includes('InitiateCheckout'));
+  const paidPage = fs.readFileSync(new URL('../pagamento.html', import.meta.url), 'utf8');
+  assert.ok(paidPage.includes('j.trackingCode'));
+  assert.ok(paidPage.includes('Acompanhar meu pedido'));
+  const trackingPage = fs.readFileSync(new URL('../rastreio.html', import.meta.url), 'utf8');
+  assert.ok(trackingPage.includes('As previsões são estimativas'));
 });
