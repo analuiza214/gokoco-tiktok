@@ -272,11 +272,9 @@ fbq('track','ViewContent',{content_name:'Escova Modeladora GOKOCO',content_type:
     cta.disabled=true; cta.innerHTML='Redirecionando...'; cta.style.opacity='.85';
     setTimeout(go,60);
   });
-  document.addEventListener('click',function(e){
-    var a=e.target.closest && e.target.closest('a[href="/pagamento"], a[href="/pagamento.html"]');
-    if(!a)return;
-    e.preventDefault(); open();
-  },true);
+  document.querySelectorAll('a.ttk-buy,a.ttk-secondary').forEach(function(a){
+    a.addEventListener('click',function(e){e.preventDefault();e.stopImmediatePropagation();open();});
+  });
 })();
 </script>
 
