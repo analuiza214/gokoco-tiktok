@@ -1317,7 +1317,7 @@ function cartTotal(cart) {
   }
   if (!Object.hasOwn(SHIPPING, cart.shipping)) return null;
   if (!Array.isArray(cart.bumps) || cart.bumps.length > 5 || new Set(cart.bumps).size !== cart.bumps.length || cart.bumps.some((id) => !Object.hasOwn(BUMPS, id))) return null;
-  if (![1, 0.5].includes(cart.discount) || ![0, 5].includes(cart.bonus)) return null;
+  if (![1, 0.5].includes(cart.discount) || cart.bonus !== 0) return null;
   const d = cart.discount;
   const round = (n) => Math.round(n * 100);
   const sum = round(base * d) + round(SHIPPING[cart.shipping] * d)

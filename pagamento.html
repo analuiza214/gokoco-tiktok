@@ -1108,11 +1108,8 @@ var q=parseInt(localStorage.getItem('qtdSelecionada')||'1',10)||1;
   }
 
   function bonus(){
-    try{
-      var params = new URLSearchParams(window.location.search);
-      if(params.get('bonus') === '5') sessionStorage.setItem('lv_bonus5','active');
-      return sessionStorage.getItem('lv_bonus5') === 'active' ? 5 : 0;
-    }catch(e){ return 0; }
+    try{ sessionStorage.removeItem('lv_bonus5'); }catch(e){}
+    return 0;
   }
 
   function compute(){

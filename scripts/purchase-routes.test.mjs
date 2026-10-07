@@ -215,3 +215,17 @@ test('rastreio avança a simulação no minuto previsto sem chamá-la de confirm
   assert.match(element('timeline').innerHTML, /<strong>Em embalagem<\/strong><span class="stage-badge">Previsão<\/span>/);
   assert.match(element('timeline').innerHTML, /tracking-stage[^"<]*forecast simulated/);
 });
+
+
+test('bônus antigo de R$ 5 não reduz mais o preço da escova', () => {
+  const source = fs.readFileSync(new URL('../worker-src/index.js', import.meta.url), 'utf8');
+  const calculate = vm.runInNewContext(source.slice(source.indexOf('function cartTotal('), source.indexOf('async function db(')) + ';cartTotal', { COLORS: { Preta: 37.90 }, SHIPPING: { 'Frete Grátis': 0 }, BUMPS: {} });
+  const cart = { qty: 1, colors: [{ label: 'Preta', quantity: 1 }], shipping: 'Frete Grátis', bumps: [], discount: 1, bonus: 0 };
+  assert.equal(calculate(cart), 37.90);
+  assert.equal(calculate({ ...cart, bonus: 5 }), null);
+  const html = fs.readFileSync(new URL('../pagamento.html', import.meta.url), 'utf8');
+  const stored = new Map([['lv_bonus5', 'active']]);
+  const bonus = vm.runInNewContext(html.slice(html.indexOf('  function bonus(){'), html.indexOf('  function compute(){')) + ';bonus', { sessionStorage: { removeItem: key => stored.delete(key) } });
+  assert.equal(bonus(), 0);
+  assert.equal(stored.has('lv_bonus5'), false);
+});
