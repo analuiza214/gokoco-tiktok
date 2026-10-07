@@ -212,6 +212,6 @@ test('rastreio avança a simulação no minuto previsto sem chamá-la de confirm
   assert.ok(timeline.includes('09:47'));
   fixedNow = Date.parse('2026-10-06T12:48:00Z');
   refreshTimeline();
-  assert.match(element('timeline').innerHTML, /<strong>Em embalagem<\/strong><span class="stage-badge">Etapa simulada<\/span>/);
+  assert.match(element('timeline').innerHTML, /<strong>Em embalagem<\/strong><span class="stage-badge">Previsão<\/span>/);
   assert.match(element('timeline').innerHTML, /tracking-stage[^"<]*forecast simulated/);
 });
