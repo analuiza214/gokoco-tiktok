@@ -241,6 +241,8 @@ async function webhook(request, env) {
     const rows = await db(env, 'gokoco_orders', `?transaction_id=eq.${encodeURIComponent(String(id))}&select=id,transaction_id,gateway,status&limit=1`);
     const order = rows[0];
     if (!order) continue;
+    const manualRows = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}&select=tracking&limit=1`);
+    if (manualRows[0]?.tracking?.manualPayment) continue;
     const verified = await queryPixGatewayStatus(env, order.transaction_id, order.gateway);
     const status = verified.isPaid ? 'paid' : verified.isRefunded ? 'refunded' : verified.isExpired ? 'expired' : order.status;
     if (status !== order.status) await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}`, 'PATCH', { status, updated_at: new Date().toISOString() });
@@ -345,6 +347,41 @@ async function adminUpdateOrderTracking(request, env) {
   return json({ ok: true, shipping: tracking.shipping });
 }
 
+async function adminManualPayment(request, env) {
+  const denied = await requireAdmin(request, env); if (denied) return denied;
+  if (request.method !== 'POST') return json({ error: 'Método inválido.' }, 405);
+  const body = await request.json().catch(() => ({}));
+  const id = String(body.id || '');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ error: 'Pedido inválido.' }, 400);
+  const rows = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(id)}&select=id,status,tracking&limit=1`);
+  const order = rows[0];
+  if (!order) return json({ error: 'Pedido não encontrado.' }, 404);
+  if (!['pending', 'expired', 'failed', 'paid'].includes(order.status)) return json({ error: 'Este pedido não pode ser marcado como pago.' }, 409);
+  if (order.status !== 'paid') {
+    const paidAt = new Date().toISOString();
+    const tracking = { ...(order.tracking || {}), manualPayment: { paidAt, source: 'admin', method: 'external' } };
+    const saved = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(id)}&status=eq.${order.status}&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=id`, 'PATCH', { status: 'paid', tracking, updated_at: paidAt });
+    if (!saved.length) return json({ error: 'O pedido mudou. Atualize a lista e tente novamente.' }, 409);
+  }
+  const shipping = await registerOrderTracking(env, id);
+  if (!shipping?.code) return json({ error: 'Pagamento salvo. Tente gerar o rastreio novamente.' }, 409);
+  await deliverPaidPurchase(env, db, id);
+  return json({ ok: true, shipping });
+}
+
+async function adminGenerateTracking(request, env) {
+  const denied = await requireAdmin(request, env); if (denied) return denied;
+  if (request.method !== 'POST') return json({ error: 'Método inválido.' }, 405);
+  const body = await request.json().catch(() => ({}));
+  const id = String(body.id || '');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ error: 'Pedido inválido.' }, 400);
+  const rows = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(id)}&status=eq.paid&select=id&limit=1`);
+  if (!rows.length) return json({ error: 'Marque o pagamento como recebido antes de gerar o rastreio.' }, 409);
+  const shipping = await registerOrderTracking(env, id);
+  if (!shipping?.code) return json({ error: 'Não foi possível gerar o rastreio. Tente novamente.' }, 409);
+  return json({ ok: true, shipping });
+}
+
 async function adminGateways(request, env) {
   const denied = await requireAdmin(request, env); if (denied) return denied;
   if (request.method === 'GET') return json({ gateways: await listGateways(env) });
@@ -378,7 +415,7 @@ async function adminOrders(request, env) {
   ));
   await retryPaidPurchases(env);
   const rows = await db(env, 'gokoco_orders', '?select=id,created_at,name,email,phone,amount,products,gateway,status,transaction_id,shipping,tracking&order=created_at.desc&limit=200');
-  return json({ orders: rows.map(({ tracking, ...order }) => ({ ...order, shippingTracking: tracking?.shipping || null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
+  return json({ orders: rows.map(({ tracking, ...order }) => ({ ...order, shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
 }
 
 async function retryPaidPurchases(env) {
@@ -401,6 +438,8 @@ export default {
       if (path === '/api/admin/gateways') return await adminGateways(request, env);
       if (path === '/api/admin/orders') return await adminOrders(request, env);
       if (path === '/api/admin/order-tracking') return await adminUpdateOrderTracking(request, env);
+      if (path === '/api/admin/manual-payment') return await adminManualPayment(request, env);
+      if (path === '/api/admin/generate-tracking') return await adminGenerateTracking(request, env);
       if (path === '/api/public/order-tracking' && request.method === 'GET') return await publicOrderTracking(request, env);
       if (path === '/api/process-purchase-queue' && request.method === 'POST') {
         const secret = String(env.CRON_SECRET || '');

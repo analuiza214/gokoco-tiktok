@@ -258,3 +258,28 @@ test('bônus aparece somente na saída e recusar permite voltar', () => {
   assert.equal(mobile.totals().backs, 1);
   assert.equal(mobile.values.get('lv_exit_bonus5'), undefined);
 });
+
+
+test('somente admin pode confirmar pagamento externo e gerar rastreio sem duplicar compras', async () => {
+  const f = setup(); f.state.gatewayPaid = false;
+  const payload = Buffer.from(JSON.stringify({ exp: Date.now() + 60000 })).toString('base64');
+  const token = payload + '.' + createHmac('sha256', f.env.ADMIN_SESSION_SECRET).update(payload).digest('hex');
+  const options = { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ id: f.state.order.id }) };
+  await using(f, async () => {
+    assert.equal((await f.call('/api/admin/manual-payment', { ...options, headers: {} })).status, 401);
+    assert.equal(f.state.order.status, 'pending');
+    assert.equal((await f.call('/api/admin/generate-tracking', options)).status, 409);
+    const response = await f.call('/api/admin/manual-payment', options);
+    assert.equal(response.status, 200);
+    const first = await response.json();
+    assert.equal(f.state.order.status, 'paid');
+    assert.equal(f.state.order.tracking.manualPayment.method, 'external');
+    assert.match(first.shipping.code, /^GK[A-HJ-NP-Z2-9]{10}$/);
+    await f.call('/api/admin/manual-payment', options);
+    const regenerated = await (await f.call('/api/admin/generate-tracking', options)).json();
+    assert.equal(regenerated.shipping.code, first.shipping.code);
+    assert.equal(f.state.sent.length, 1);
+    await f.call('/api/pix/webhook', { method: 'POST', body: JSON.stringify({ transaction_id: 'tx-id' }) });
+    assert.equal(f.state.order.status, 'paid');
+  });
+});

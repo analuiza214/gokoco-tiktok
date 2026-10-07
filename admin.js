@@ -125,6 +125,7 @@ function renderOrders() {
     const destination = delivery.destination === 'utmify' ? 'UTMify' : 'Meta';
     const deliveryLabels = {sent: 'Compra enviada à '+destination, sending: 'Enviando compra à '+destination, pending: 'Compra aguardando envio à '+destination, failed: 'Falha no envio à '+destination, not_configured: 'Envio de compras não configurado'};
     const purchaseLine = order.status === 'paid' ? '<div class="order-detail" style="color:'+(delivery.state === 'sent' ? '#166534' : '#92400e')+'" title="'+esc(delivery.error || '')+'">'+esc(deliveryLabels[delivery.state] || 'Compra aguardando envio')+'</div>' : '';
+    const manualLine = order.manualPayment ? '<div class="order-detail" style="color:#15803d">Pagamento recebido por fora · confirmado no admin</div>' : '';
     const tx = order.transaction_id ? `<div class="tx-line">Transação: ${esc(order.transaction_id)}</div>` : '';
     const tracking = order.shippingTracking || {};
     const trackingCode = tracking.code || '';
@@ -137,8 +138,9 @@ function renderOrders() {
     const mailSubject = encodeURIComponent(`Informações do seu pedido GOKOCO${trackingCode ? ` · ${trackingCode}` : ''}`);
     const trackingUrl = trackingCode ? `${location.origin}/rastreio.html?codigo=${encodeURIComponent(trackingCode)}` : '';
     const mailBody = encodeURIComponent(`Olá ${String(order.name || '').trim().split(/\s+/)[0] || 'tudo bem'}!\n\n${trackingUrl ? `Seu pedido já está com o código de rastreio ${trackingCode}. Acompanhe por aqui: ${trackingUrl}\n\n` : 'Estou entrando em contato sobre seu pedido da escova GOKOCO.\n\n'}Qualquer dúvida, estamos à disposição!`);
+    const paymentActions = ['pending', 'expired', 'failed'].includes(order.status) ? '<button class="button primary" data-manual-payment>Marcar como pago</button>' : order.status === 'paid' ? '<button class="button outline" data-generate-tracking>' + (trackingCode ? 'Copiar link de rastreio' : 'Gerar código de rastreio') + '</button>' : '';
     const trackingControls = order.status === 'paid' ? `<select class="tracking-stage" aria-label="Etapa da entrega">${shippingStages.map(([value, label]) => `<option value="${value}" ${selectedStage === value ? 'selected' : ''}>${label}</option>`).join('')}</select>` : '';
-    return `<article class="order-card" data-order-id="${esc(order.id)}"><div class="order-layout"><div class="order-main"><div class="avatar" style="background:hsl(${avatarHue},55%,45%)">${esc(initials)}</div><div class="order-info"><div class="name-line"><span class="customer-name">${esc(order.name)}</span><span class="status-pill" style="color:${status.fg};background:${status.bg}">${esc(status.label)}</span></div><div class="order-detail"><span class="detail-icon">${icon('phone')}</span><span>${esc(formatPhone(order.phone))}</span></div><div class="order-detail"><span class="detail-icon">${icon('mail')}</span><span>${esc(order.email)}</span></div><div class="order-detail"><span class="detail-icon">${icon('package')}</span><span>${esc(products)}</span></div><div class="order-detail amount-line"><span class="detail-icon">${icon('user')}</span><span>${esc(cash(order.amount))} · PIX <span class="gateway-tag">${esc(gateway)}</span></span></div><div class="order-date">${esc(formatDate(order.created_at))}</div>${tx}${purchaseLine}${trackingLine}</div></div><div class="order-actions"><a class="whatsapp" href="${esc(whatsapp(order))}" target="_blank" rel="noopener noreferrer">${icon('phone')} Chamar no WhatsApp</a><a class="order-email" href="mailto:${encodeURIComponent(order.email || '')}?subject=${mailSubject}&body=${mailBody}">${icon('send')} Enviar Email</a>${trackingControls}</div></div></article>`;
+    return `<article class="order-card" data-order-id="${esc(order.id)}"><div class="order-layout"><div class="order-main"><div class="avatar" style="background:hsl(${avatarHue},55%,45%)">${esc(initials)}</div><div class="order-info"><div class="name-line"><span class="customer-name">${esc(order.name)}</span><span class="status-pill" style="color:${status.fg};background:${status.bg}">${esc(status.label)}</span></div><div class="order-detail"><span class="detail-icon">${icon('phone')}</span><span>${esc(formatPhone(order.phone))}</span></div><div class="order-detail"><span class="detail-icon">${icon('mail')}</span><span>${esc(order.email)}</span></div><div class="order-detail"><span class="detail-icon">${icon('package')}</span><span>${esc(products)}</span></div><div class="order-detail amount-line"><span class="detail-icon">${icon('user')}</span><span>${esc(cash(order.amount))} · PIX <span class="gateway-tag">${esc(gateway)}</span></span></div><div class="order-date">${esc(formatDate(order.created_at))}</div>${tx}${manualLine}${purchaseLine}${trackingLine}</div></div><div class="order-actions"><a class="whatsapp" href="${esc(whatsapp(order))}" target="_blank" rel="noopener noreferrer">${icon('phone')} Chamar no WhatsApp</a><a class="order-email" href="mailto:${encodeURIComponent(order.email || '')}?subject=${mailSubject}&body=${mailBody}">${icon('send')} Enviar Email</a>${trackingControls}${paymentActions}</div></div></article>`;
   }).join('');
   const pagination = $('pagination');
   pagination.hidden = totalPages < 2;
@@ -218,6 +220,23 @@ $('reset-filters').addEventListener('click', () => {
   $('status-filters').querySelectorAll('button').forEach((item) => item.classList.toggle('selected', item.dataset.status === 'todos')); renderOrders();
 });
 $('pagination').addEventListener('click', (event) => { const button = event.target.closest('[data-page]'); if (!button || button.disabled) return; page = Number(button.dataset.page); renderOrders(); window.scrollTo(0, 0); });
+$('orders').addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-manual-payment],[data-generate-tracking]');
+  if (!button) return;
+  const order = orders.find(item => item.id === button.closest('[data-order-id]')?.dataset.orderId);
+  if (!order) return;
+  const manual = button.hasAttribute('data-manual-payment');
+  if (manual && !window.confirm('Você confirma que recebeu o pagamento de ' + cash(order.amount) + ' deste cliente por fora?')) return;
+  button.disabled = true;
+  try {
+    const saved = await api(manual ? 'manual-payment' : 'generate-tracking', { method: 'POST', body: JSON.stringify({ id: order.id }) });
+    order.status = 'paid'; order.shippingTracking = saved.shipping;
+    const url = location.origin + '/rastreio.html?codigo=' + encodeURIComponent(saved.shipping.code);
+    if (!manual) { try { await navigator.clipboard.writeText(url); window.alert('Link de rastreio copiado!'); } catch (_) { window.prompt('Copie o link de rastreio:', url); } }
+    await load();
+  } catch (error) { window.alert(error.message || 'Não foi possível salvar o pedido.'); }
+  finally { button.disabled = false; }
+});
 $('orders').addEventListener('change', async (event) => {
   const select = event.target.closest('.tracking-stage');
   if (!select) return;
