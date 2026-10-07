@@ -222,10 +222,39 @@ test('bônus antigo de R$ 5 não reduz mais o preço da escova', () => {
   const calculate = vm.runInNewContext(source.slice(source.indexOf('function cartTotal('), source.indexOf('async function db(')) + ';cartTotal', { COLORS: { Preta: 37.90 }, SHIPPING: { 'Frete Grátis': 0 }, BUMPS: {} });
   const cart = { qty: 1, colors: [{ label: 'Preta', quantity: 1 }], shipping: 'Frete Grátis', bumps: [], discount: 1, bonus: 0 };
   assert.equal(calculate(cart), 37.90);
-  assert.equal(calculate({ ...cart, bonus: 5 }), null);
+  assert.equal(calculate({ ...cart, bonus: 5 }), 32.90);
   const html = fs.readFileSync(new URL('../pagamento.html', import.meta.url), 'utf8');
   const stored = new Map([['lv_bonus5', 'active']]);
-  const bonus = vm.runInNewContext(html.slice(html.indexOf('  function bonus(){'), html.indexOf('  function compute(){')) + ';bonus', { sessionStorage: { removeItem: key => stored.delete(key) } });
+  const bonus = vm.runInNewContext(html.slice(html.indexOf('  function bonus(){'), html.indexOf('  function compute(){')) + ';bonus', { sessionStorage: { removeItem: key => stored.delete(key), getItem: key => stored.get(key) } });
   assert.equal(bonus(), 0);
   assert.equal(stored.has('lv_bonus5'), false);
+  stored.set('lv_exit_bonus5', 'active');
+  assert.equal(bonus(), 5);
+});
+
+
+test('bônus aparece somente na saída e recusar permite voltar', () => {
+  const source = fs.readFileSync(new URL('../js/exit-bonus.js', import.meta.url), 'utf8');
+  function fixture() {
+    const events = {}, values = new Map(), nodes = {};
+    let buys = 0, backs = 0, pushes = 0;
+    for (const id of ['lv-bonus-overlay', 'lv-bonus-claim', 'lv-bonus-decline']) nodes[id] = { style: {}, classList: { add() {}, remove() {}, contains() { return true; } }, focus() {}, addEventListener(type, handler) { events[id + type] = handler; } };
+    vm.runInNewContext(source, { document: { getElementById: id => nodes[id], querySelector: selector => selector === '.lv-bonus-count' ? {} : { click() { buys++; } }, body: { style: {} }, addEventListener(type, handler) { events[type] = handler; } }, window: { matchMedia: () => ({ matches: true }), addEventListener(type, handler) { events[type] = handler; } }, history: { state: null, pushState() { pushes++; }, back() { backs++; } }, location: { href: 'https://example.com/' }, sessionStorage: { getItem: key => values.get(key), setItem: (key, value) => values.set(key, value) }, setInterval() { return 1; }, clearInterval() {} });
+    return { events, values, nodes, totals: () => ({ buys, backs, pushes }) };
+  }
+  const desktop = fixture();
+  assert.notEqual(desktop.nodes['lv-bonus-overlay'].style.display, 'flex');
+  desktop.events.mouseout({ relatedTarget: null, clientY: 0 });
+  assert.equal(desktop.nodes['lv-bonus-overlay'].style.display, 'flex');
+  desktop.events['lv-bonus-claimclick']();
+  assert.equal(desktop.values.get('lv_exit_bonus5'), 'active');
+  assert.equal(desktop.totals().buys, 1);
+  const mobile = fixture();
+  mobile.events.pointerdown();
+  assert.equal(mobile.totals().pushes, 1);
+  mobile.events.popstate();
+  assert.equal(mobile.nodes['lv-bonus-overlay'].style.display, 'flex');
+  mobile.events['lv-bonus-declineclick']();
+  assert.equal(mobile.totals().backs, 1);
+  assert.equal(mobile.values.get('lv_exit_bonus5'), undefined);
 });

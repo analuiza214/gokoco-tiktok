@@ -1109,7 +1109,7 @@ var q=parseInt(localStorage.getItem('qtdSelecionada')||'1',10)||1;
 
   function bonus(){
     try{ sessionStorage.removeItem('lv_bonus5'); }catch(e){}
-    return 0;
+    try{ return sessionStorage.getItem('lv_exit_bonus5') === 'active' ? 5 : 0; }catch(e){ return 0; }
   }
 
   function compute(){
