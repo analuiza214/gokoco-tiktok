@@ -211,7 +211,12 @@ fbq('track','PageView');
             Gerar QR Code
           </button>
 
-          <p style="margin:12px 0 0;text-align:center;font-size:11.5px;color:#8a8b91">Abra o app do seu banco e cole o código. Aprovação imediata.</p>
+          <p style="margin:12px 0 0;text-align:center;font-size:11.5px;color:#8a8b91">Abra o app do seu banco e cole o código. A confirmação pode levar alguns minutos.</p>
+          <div id="lv-pix-help" style="display:none;margin-top:18px;padding:14px;border:1px solid #d1fae5;border-radius:12px;background:#f0fdf4;text-align:center">
+            <p style="margin:0 0 10px;color:#166534;font-size:13px;font-weight:700;line-height:1.45">Já pagou e a confirmação ainda não apareceu?</p>
+            <a id="lv-pix-help-whatsapp" href="https://wa.me/5583991297085" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;justify-content:center;min-height:46px;padding:10px 14px;border-radius:9px;background:#16a34a;color:#fff;font-size:14px;font-weight:800;text-decoration:none">Avisar pelo WhatsApp</a>
+            <p style="margin:9px 0 0;color:#4b5563;font-size:11px;line-height:1.45">Envie o comprovante na conversa. Nossa equipe vai conferir o pagamento. Este aviso não confirma o pedido automaticamente.</p>
+          </div>
         </div>
       </section>
 
@@ -696,6 +701,19 @@ fbq('track','PageView');
     if(qrEl){ var src=qrEl.getAttribute('data-src'); if(src && qrEl.getAttribute('src')!==src) qrEl.src=src; qrEl.classList.remove('hidden'); }
     var qrToggle=document.getElementById('lv-pix-qr-toggle'); if(qrToggle) qrToggle.style.display='none';
   }
+  function showPixHelp(){
+    var box=document.getElementById('lv-pix-help');
+    var link=document.getElementById('lv-pix-help-whatsapp');
+    if(!box || !link) return;
+    var tx='',order='';
+    try{ tx=localStorage.getItem('lastPixTx')||''; order=localStorage.getItem('lastPixOrder')||''; }catch(e){}
+    var ref=tx||order;
+    var message='Olá! Paguei meu pedido via PIX na Bella Mix, mas a confirmação ainda não apareceu no site. Podem verificar, por favor?';
+    if(ref) message+=' Referência: '+ref+'.';
+    message+=' Posso enviar o comprovante por aqui.';
+    link.href='https://wa.me/5583991297085?text='+encodeURIComponent(message);
+    box.style.display='block';
+  }
   function showPixCode(cp, qr){
     var codeEl=document.getElementById('lv-pix-code');
     if(codeEl){ codeEl.innerText=cp; codeEl.style.display='block'; }
@@ -704,6 +722,7 @@ fbq('track','PageView');
     var genEl=document.getElementById('lv-pix-generate'); if(genEl) genEl.style.display='none';
     var copyBtn=document.getElementById('lv-copy-pix'); if(copyBtn) copyBtn.style.display='flex';
     revealQr();
+    showPixHelp();
     try{ if(window.lvStartPixTimer) window.lvStartPixTimer(); }catch(e){}
     loaded=true; loading=false;
 
@@ -819,6 +838,7 @@ fbq('track','PageView');
         var ids=[res.j.transactionId,res.j.gatewayTransactionId].filter(Boolean).filter(function(v,i,a){return a.indexOf(v)===i;}).join(',');
         try{ localStorage.setItem('lastPixTx', ids||''); localStorage.setItem('lastPixTxAt', String(Date.now())); localStorage.setItem('lvPixNext','/upsell1'); localStorage.setItem('lastPixOrder', res.j.orderId||res.j.gatewayTransactionId||''); }catch(e){}
         try{ localStorage.setItem('lv_pix_cache', JSON.stringify({ids:ids||'',cp:cp,qr:res.j.qrCode||'',ts:Date.now()})); }catch(e){}
+        showPixHelp();
         if(ids) startPolling(ids);
       })
       .catch(function(){ fail('Erro de conexão. Tente novamente.'); });
