@@ -1681,7 +1681,9 @@ async function adminOrders(request, env) {
   const denied = await requireAdmin(request, env); if (denied) return denied;
   if (request.method !== 'GET') return json({ error: 'Método inválido.' }, 405);
   const since = new Date(Date.now() - 7 * 86400000).toISOString();
-  const pending = await db(env, 'gokoco_orders', `?select=id,transaction_id,gateway,status&status=eq.pending&created_at=gte.${encodeURIComponent(since)}&order=created_at.asc&limit=50`);
+  // A consulta do admin também verifica gateways e pode escrever no banco.
+  // Limite o trabalho em lote para respeitar o teto de subrequests do Worker.
+  const pending = await db(env, 'gokoco_orders', `?select=id,transaction_id,gateway,status&status=eq.pending&created_at=gte.${encodeURIComponent(since)}&order=created_at.asc&limit=2`);
   await Promise.allSettled(pending.filter((order) => order.transaction_id).map(async (order) => {
     const verified = await queryPixGatewayStatus(env, order.transaction_id, order.gateway);
     const status = verified.isPaid ? 'paid' : verified.isRefunded ? 'refunded' : verified.isExpired ? 'expired' : 'pending';
@@ -1692,8 +1694,9 @@ async function adminOrders(request, env) {
       await deliverPaidPurchase(env, db, order.id, paidAt);
     }
   }));
-  const paidOrders = await db(env, 'gokoco_orders', '?status=eq.paid&select=id,tracking,updated_at,created_at&order=created_at.desc&limit=200');
-  await Promise.allSettled(paidOrders.filter((order) => !order.tracking?.shipping?.code).map((order) =>
+  const missingTracking = encodeURIComponent('tracking->shipping->>code');
+  const paidOrders = await db(env, 'gokoco_orders', `?status=eq.paid&${missingTracking}=is.null&select=id,tracking,updated_at,created_at&order=created_at.desc&limit=3`);
+  await Promise.allSettled(paidOrders.map((order) =>
     registerOrderTracking(env, order.id, order.updated_at || order.created_at),
   ));
   await retryPaidPurchases(env);
@@ -1706,7 +1709,7 @@ async function retryPaidPurchases(env) {
   if (!destination) return { configured: false, processed: 0 };
   const since = new Date(Date.now() - 7 * 86400000).toISOString();
   const path = `tracking->_purchase->${destination}->>state`;
-  const rows = await db(env, 'gokoco_orders', `?status=eq.paid&updated_at=gte.${encodeURIComponent(since)}&or=(${path}.is.null,${path}.neq.sent)&select=id&order=created_at.asc&limit=10`);
+  const rows = await db(env, 'gokoco_orders', `?status=eq.paid&updated_at=gte.${encodeURIComponent(since)}&or=(${path}.is.null,${path}.neq.sent)&select=id&order=created_at.asc&limit=3`);
   const results = await Promise.allSettled(rows.map((order) => deliverPaidPurchase(env, db, order.id)));
   return { configured: true, processed: rows.length, sent: results.filter((r) => r.status === 'fulfilled' && r.value.state === 'sent').length, failed: results.filter((r) => r.status === 'rejected' || r.value?.state === 'failed').length };
 }
