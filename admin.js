@@ -120,11 +120,12 @@ function renderOrders() {
     const products = Array.isArray(order.products) ? order.products.map((p) => `${p.quantity && p.quantity > 1 ? `${p.quantity}× ` : ''}${p.name || 'Produto'}`).join(', ') : 'Pedido GOKOCO';
     const initials = String(order.name || '?').trim().charAt(0).toUpperCase();
     const avatarHue = ((Number.parseInt(String(order.id).replace(/\D/g, '').slice(-4), 10) || 7) * 67) % 360;
+    const external = order.gateway === 'manual_tracking';
     const gateway = gatewayNames[order.gateway] || order.gateway || 'PIX';
     const delivery = order.purchase || {};
     const destination = delivery.destination === 'utmify' ? 'UTMify' : 'Meta';
     const deliveryLabels = {sent: 'Compra enviada à '+destination, sending: 'Enviando compra à '+destination, pending: 'Compra aguardando envio à '+destination, failed: 'Falha no envio à '+destination, not_configured: 'Envio de compras não configurado'};
-    const purchaseLine = order.status === 'paid' ? '<div class="order-detail" style="color:'+(delivery.state === 'sent' ? '#166534' : '#92400e')+'" title="'+esc(delivery.error || '')+'">'+esc(deliveryLabels[delivery.state] || 'Compra aguardando envio')+'</div>' : '';
+    const purchaseLine = external ? '<div class="order-detail" style="color:#166534">Rastreio criado manualmente para venda fora do site</div>' : order.status === 'paid' ? '<div class="order-detail" style="color:'+(delivery.state === 'sent' ? '#166534' : '#92400e')+'" title="'+esc(delivery.error || '')+'">'+esc(deliveryLabels[delivery.state] || 'Compra aguardando envio')+'</div>' : '';
     const manualLine = order.manualPayment ? '<div class="order-detail" style="color:#15803d">Pagamento recebido por fora · confirmado no admin</div>' : '';
     const tx = order.transaction_id ? `<div class="tx-line">Transação: ${esc(order.transaction_id)}</div>` : '';
     const tracking = order.shippingTracking || {};
@@ -140,7 +141,7 @@ function renderOrders() {
     const mailBody = encodeURIComponent(`Olá ${String(order.name || '').trim().split(/\s+/)[0] || 'tudo bem'}!\n\n${trackingUrl ? `Seu pedido já está com o código de rastreio ${trackingCode}. Acompanhe por aqui: ${trackingUrl}\n\n` : 'Estou entrando em contato sobre seu pedido da escova GOKOCO.\n\n'}Qualquer dúvida, estamos à disposição!`);
     const paymentActions = ['pending', 'expired', 'failed'].includes(order.status) ? '<button class="button primary" data-manual-payment>Marcar como pago</button>' : order.status === 'paid' ? '<button class="button outline" data-generate-tracking>' + (trackingCode ? 'Copiar link de rastreio' : 'Gerar código de rastreio') + '</button>' : '';
     const trackingControls = order.status === 'paid' ? `<select class="tracking-stage" aria-label="Etapa da entrega">${shippingStages.map(([value, label]) => `<option value="${value}" ${selectedStage === value ? 'selected' : ''}>${label}</option>`).join('')}</select>` : '';
-    return `<article class="order-card" data-order-id="${esc(order.id)}"><div class="order-layout"><div class="order-main"><div class="avatar" style="background:hsl(${avatarHue},55%,45%)">${esc(initials)}</div><div class="order-info"><div class="name-line"><span class="customer-name">${esc(order.name)}</span><span class="status-pill" style="color:${status.fg};background:${status.bg}">${esc(status.label)}</span></div><div class="order-detail"><span class="detail-icon">${icon('phone')}</span><span>${esc(formatPhone(order.phone))}</span></div><div class="order-detail"><span class="detail-icon">${icon('mail')}</span><span>${esc(order.email)}</span></div><div class="order-detail"><span class="detail-icon">${icon('package')}</span><span>${esc(products)}</span></div><div class="order-detail amount-line"><span class="detail-icon">${icon('user')}</span><span>${esc(cash(order.amount))} · PIX <span class="gateway-tag">${esc(gateway)}</span></span></div><div class="order-date">${esc(formatDate(order.created_at))}</div>${tx}${manualLine}${purchaseLine}${trackingLine}</div></div><div class="order-actions"><a class="whatsapp" href="${esc(whatsapp(order))}" target="_blank" rel="noopener noreferrer">${icon('phone')} Chamar no WhatsApp</a><a class="order-email" href="mailto:${encodeURIComponent(order.email || '')}?subject=${mailSubject}&body=${mailBody}">${icon('send')} Enviar Email</a>${trackingControls}${paymentActions}</div></div></article>`;
+    return `<article class="order-card" data-order-id="${esc(order.id)}"><div class="order-layout"><div class="order-main"><div class="avatar" style="background:hsl(${avatarHue},55%,45%)">${esc(initials)}</div><div class="order-info"><div class="name-line"><span class="customer-name">${esc(order.name)}</span><span class="status-pill" style="color:${status.fg};background:${status.bg}">${esc(external ? 'Venda externa' : status.label)}</span></div><div class="order-detail"><span class="detail-icon">${icon('phone')}</span><span>${esc(formatPhone(order.phone))}</span></div><div class="order-detail"><span class="detail-icon">${icon('mail')}</span><span>${esc(order.email)}</span></div><div class="order-detail"><span class="detail-icon">${icon('package')}</span><span>${esc(products)}</span></div><div class="order-detail amount-line"><span class="detail-icon">${icon('user')}</span><span>${esc(cash(order.amount))} · ${external ? 'Venda externa' : `PIX <span class="gateway-tag">${esc(gateway)}</span>`}</span></div><div class="order-date">${esc(formatDate(order.created_at))}</div>${tx}${manualLine}${purchaseLine}${trackingLine}</div></div><div class="order-actions">${order.phone ? `<a class="whatsapp" href="${esc(whatsapp(order))}" target="_blank" rel="noopener noreferrer">${icon('phone')} Chamar no WhatsApp</a>` : ''}${external ? '' : `<a class="order-email" href="mailto:${encodeURIComponent(order.email || '')}?subject=${mailSubject}&body=${mailBody}">${icon('send')} Enviar Email</a>`}${trackingControls}${paymentActions}</div></div></article>`;
   }).join('');
   const pagination = $('pagination');
   pagination.hidden = totalPages < 2;
@@ -201,6 +202,32 @@ $('login-form').addEventListener('submit', async (event) => {
 });
 $('refresh').addEventListener('click', load);
 $('logout').addEventListener('click', showLogin);
+$('external-tracking-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('button[type="submit"]');
+  const errorBox = $('external-tracking-error');
+  errorBox.hidden = true; $('external-tracking-result').hidden = true;
+  button.disabled = true;
+  try {
+    const fields = Object.fromEntries(new FormData(form));
+    const saved = await api('external-tracking', { method: 'POST', body: JSON.stringify(fields) });
+    const url = `${location.origin}/rastreio.html?codigo=${encodeURIComponent(saved.code)}`;
+    $('external-tracking-code').textContent = saved.code;
+    $('external-tracking-link').href = url;
+    $('external-tracking-result').hidden = false;
+    form.reset();
+    await load();
+  } catch (error) {
+    errorBox.textContent = error.message || 'Não foi possível gerar o rastreio.';
+    errorBox.hidden = false;
+  } finally { button.disabled = false; }
+});
+$('external-tracking-copy').addEventListener('click', async () => {
+  const url = $('external-tracking-link').href;
+  try { await navigator.clipboard.writeText(url); $('external-tracking-copy').textContent = 'Link copiado!'; }
+  catch (_) { window.prompt('Copie o link de rastreio:', url); }
+});
 $('search').addEventListener('input', () => { page = 1; $('clear-search').hidden = !$('search').value; renderOrders(); });
 $('clear-search').addEventListener('click', () => { $('search').value = ''; $('clear-search').hidden = true; page = 1; renderOrders(); });
 $('sort').addEventListener('change', () => { selectedSort = $('sort').value; page = 1; renderOrders(); });

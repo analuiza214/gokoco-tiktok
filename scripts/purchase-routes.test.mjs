@@ -19,8 +19,8 @@ function setup() {
     if (params.has('status') && params.get('status') !== 'eq.' + state.order.status) return Response.json([]);
     if (params.has('status') && params.get('status') === 'eq.paid' && state.order.status !== 'paid') return Response.json([]);
     if (params.has('tracking->shipping->>code')) {
-      const expected = params.get('tracking->shipping->>code').slice(3);
-      if (expected !== state.order.tracking?.shipping?.code) return Response.json([]);
+      const filter = params.get('tracking->shipping->>code');
+      if (filter === 'is.null' ? !!state.order.tracking?.shipping?.code : filter.slice(3) !== state.order.tracking?.shipping?.code) return Response.json([]);
       const selected = String(params.get('select') || '').split(',');
       return Response.json([Object.fromEntries(selected.map((field) => [field, state.order[field]]))]);
     }
@@ -282,4 +282,33 @@ test('somente admin pode confirmar pagamento externo e gerar rastreio sem duplic
     await f.call('/api/pix/webhook', { method: 'POST', body: JSON.stringify({ transaction_id: 'tx-id' }) });
     assert.equal(f.state.order.status, 'paid');
   });
+});
+
+test('admin gera rastreio para venda fora do site sem enviar compra ao gateway', async () => {
+  const env = { SUPABASE_URL: 'https://db.example', SUPABASE_SERVICE_ROLE_KEY: 'test', ADMIN_SESSION_SECRET: 'test-admin', UTMIFY_API_TOKEN: 'test' };
+  const payload = Buffer.from(JSON.stringify({ exp: Date.now() + 60000 })).toString('base64');
+  const token = payload + '.' + createHmac('sha256', env.ADMIN_SESSION_SECRET).update(payload).digest('hex');
+  const body = JSON.stringify({ name: 'Ana Silva', product: 'Escova GOKOCO', city: 'Fortaleza', state: 'CE', amount: '37.90' });
+  let saved;
+  const original = globalThis.fetch;
+  globalThis.fetch = async (input, options = {}) => {
+    assert.equal(new URL(input).hostname, 'db.example');
+    if (options.method === 'POST') {
+      saved = { id: '11111111-2222-4333-8444-555555555555', ...JSON.parse(options.body) };
+      return Response.json([{ id: saved.id }]);
+    }
+    return Response.json(saved ? [saved] : []);
+  };
+  try {
+    const call = (headers = {}) => worker.fetch(new Request('https://store.example/api/admin/external-tracking', { method: 'POST', headers, body }), env);
+    assert.equal((await call()).status, 401);
+    const response = await call({ Authorization: 'Bearer ' + token });
+    assert.equal(response.status, 201);
+    const data = await response.json();
+    assert.match(data.code, /^GK[A-HJ-NP-Z2-9]{10}$/);
+    assert.equal(saved.tracking.manualExternal, true);
+    assert.equal(saved.tracking.shipping.code, data.code);
+    assert.equal(saved.gateway, 'manual_tracking');
+    assert.equal(saved.shipping.cidade, 'Fortaleza');
+  } finally { globalThis.fetch = original; }
 });

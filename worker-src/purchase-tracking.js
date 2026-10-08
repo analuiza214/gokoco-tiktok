@@ -131,6 +131,7 @@ export async function deliverPaidPurchase(env, db, orderId, paidAt) {
     const rows = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(orderId)}&status=eq.paid&select=*&limit=1`);
     const order = rows?.[0];
     if (!order) return { state: 'not_paid' };
+    if (order.tracking?.manualExternal) return { state: 'external_tracking' };
     const metadata = order.tracking?._purchase || {};
     const prior = metadata[destination] || {};
     if (prior.state === 'sent') return purchaseSummary(env, order);

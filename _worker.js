@@ -1145,6 +1145,7 @@ async function deliverPaidPurchase(env, db, orderId, paidAt) {
     const rows = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(orderId)}&status=eq.paid&select=*&limit=1`);
     const order = rows?.[0];
     if (!order) return { state: 'not_paid' };
+    if (order.tracking?.manualExternal) return { state: 'external_tracking' };
     const metadata = order.tracking?._purchase || {};
     const prior = metadata[destination] || {};
     if (prior.state === 'sent') return purchaseSummary(env, order);
@@ -1665,6 +1666,33 @@ async function adminGenerateTracking(request, env) {
   return json({ ok: true, shipping });
 }
 
+async function adminCreateExternalTracking(request, env) {
+  const denied = await requireAdmin(request, env); if (denied) return denied;
+  if (request.method !== 'POST') return json({ error: 'Método inválido.' }, 405);
+  const body = await request.json().catch(() => ({}));
+  const name = String(body.name || '').trim().slice(0, 100);
+  const product = String(body.product || '').trim().slice(0, 150);
+  const city = String(body.city || '').trim().slice(0, 80);
+  const state = String(body.state || '').trim().toUpperCase();
+  const amount = Number(body.amount);
+  if (!name || !product || !city || !/^[A-Z]{2}$/.test(state) || !Number.isFinite(amount) || amount <= 0 || amount > 99999999.99)
+    return json({ error: 'Preencha nome, produto, cidade, UF e valor da venda.' }, 400);
+  const now = new Date().toISOString();
+  const code = createTrackingCode();
+  const order = {
+    checkout_id: `external-tracking-${crypto.randomUUID()}`,
+    name, email: String(body.email || '').trim().slice(0, 150), phone: String(body.phone || '').replace(/\D/g, '').slice(0, 20), document: '',
+    amount: Math.round(amount * 100) / 100,
+    products: [{ name: product, quantity: 1, price: Math.round(amount * 100) / 100 }],
+    shipping: { cidade: city, uf: state },
+    tracking: { manualExternal: true, shipping: { code, created_at: now, status: 'confirmed', events: [] } },
+    gateway: 'manual_tracking', status: 'paid', created_at: now, updated_at: now,
+  };
+  const saved = await db(env, 'gokoco_orders', '?select=id', 'POST', order);
+  if (!saved.length) return json({ error: 'Não foi possível salvar o rastreio.' }, 500);
+  return json({ ok: true, code, id: saved[0].id }, 201);
+}
+
 async function adminGateways(request, env) {
   const denied = await requireAdmin(request, env); if (denied) return denied;
   if (request.method === 'GET') return json({ gateways: await listGateways(env) });
@@ -1709,7 +1737,7 @@ async function retryPaidPurchases(env) {
   if (!destination) return { configured: false, processed: 0 };
   const since = new Date(Date.now() - 7 * 86400000).toISOString();
   const path = `tracking->_purchase->${destination}->>state`;
-  const rows = await db(env, 'gokoco_orders', `?status=eq.paid&updated_at=gte.${encodeURIComponent(since)}&or=(${path}.is.null,${path}.neq.sent)&select=id&order=created_at.asc&limit=3`);
+  const rows = await db(env, 'gokoco_orders', `?status=eq.paid&gateway=neq.manual_tracking&updated_at=gte.${encodeURIComponent(since)}&or=(${path}.is.null,${path}.neq.sent)&select=id&order=created_at.asc&limit=3`);
   const results = await Promise.allSettled(rows.map((order) => deliverPaidPurchase(env, db, order.id)));
   return { configured: true, processed: rows.length, sent: results.filter((r) => r.status === 'fulfilled' && r.value.state === 'sent').length, failed: results.filter((r) => r.status === 'rejected' || r.value?.state === 'failed').length };
 }
@@ -1726,6 +1754,7 @@ export default {
       if (path === '/api/admin/order-tracking') return await adminUpdateOrderTracking(request, env);
       if (path === '/api/admin/manual-payment') return await adminManualPayment(request, env);
       if (path === '/api/admin/generate-tracking') return await adminGenerateTracking(request, env);
+      if (path === '/api/admin/external-tracking') return await adminCreateExternalTracking(request, env);
       if (path === '/api/public/order-tracking' && request.method === 'GET') return await publicOrderTracking(request, env);
       if (path === '/api/process-purchase-queue' && request.method === 'POST') {
         const secret = String(env.CRON_SECRET || '');

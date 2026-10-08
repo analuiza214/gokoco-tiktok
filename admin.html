@@ -45,6 +45,22 @@
         <article class="stat-card"><strong class="stat-green" id="count-paid">—</strong><span class="stat-label">Pagaram</span></article>
       </section>
 
+      <section class="external-tracking-panel" aria-labelledby="external-tracking-title">
+        <h2 id="external-tracking-title">Rastreio para venda fora do site</h2>
+        <p>Cadastre a venda e gere um link para o cliente acompanhar a entrega.</p>
+        <form id="external-tracking-form" class="external-tracking-form">
+          <label>Nome do cliente<input name="name" maxlength="100" required></label>
+          <label>Produto<input name="product" maxlength="150" required></label>
+          <label>Cidade<input name="city" maxlength="80" required></label>
+          <label>UF<input name="state" maxlength="2" pattern="[A-Za-z]{2}" placeholder="CE" required></label>
+          <label>Valor da venda (R$)<input name="amount" type="number" min="0.01" max="99999999.99" step="0.01" required></label>
+          <label>WhatsApp (opcional)<input name="phone" inputmode="tel"></label>
+          <button class="button primary" type="submit">Gerar código de rastreio</button>
+        </form>
+        <div class="alert" id="external-tracking-error" role="alert" hidden></div>
+        <div class="external-tracking-result" id="external-tracking-result" hidden><strong>Código: <span id="external-tracking-code"></span></strong><a id="external-tracking-link" target="_blank" rel="noopener noreferrer">Abrir rastreio</a><button class="button outline" id="external-tracking-copy" type="button">Copiar link</button></div>
+      </section>
+
       <label class="search-box"><span data-icon="search"></span><input id="search" type="search" placeholder="Buscar por nome, email ou telefone..."><button id="clear-search" aria-label="Limpar busca" hidden><span data-icon="x"></span></button></label>
 
       <div class="filter-row">
