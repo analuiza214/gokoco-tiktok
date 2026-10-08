@@ -173,9 +173,12 @@ async function load() {
   $('page-error').hidden = true;
   if (!orders.length) $('loading').hidden = false;
   try {
-    const [gatewayData, orderData] = await Promise.all([api('gateways'), api('orders')]);
+    const [gatewayData, orderData, manualData] = await Promise.all([api('gateways'), api('orders'), api('external-tracking')]);
     gateways = gatewayData.gateways || [];
     orders = orderData.orders || [];
+    const codes = manualData.codes || [];
+    $('external-tracking-history').hidden = !codes.length;
+    $('external-tracking-history').innerHTML = codes.length ? `<span>Códigos recentes</span>${codes.map((item) => `<a href="/rastreio.html?codigo=${encodeURIComponent(item.code)}" target="_blank" rel="noopener noreferrer">${esc(item.code)}</a>`).join('')}` : '';
     renderStats(); renderGateways(); renderOrders();
   } catch (error) {
     if (/Sessão expirada|Não autorizado/i.test(error.message)) showLogin();
@@ -210,13 +213,12 @@ $('external-tracking-form').addEventListener('submit', async (event) => {
   errorBox.hidden = true; $('external-tracking-result').hidden = true;
   button.disabled = true;
   try {
-    const fields = Object.fromEntries(new FormData(form));
-    const saved = await api('external-tracking', { method: 'POST', body: JSON.stringify(fields) });
+    const saved = await api('external-tracking', { method: 'POST', body: '{}' });
     const url = `${location.origin}/rastreio.html?codigo=${encodeURIComponent(saved.code)}`;
     $('external-tracking-code').textContent = saved.code;
     $('external-tracking-link').href = url;
     $('external-tracking-result').hidden = false;
-    form.reset();
+    $('external-tracking-copy').textContent = 'Copiar link';
     await load();
   } catch (error) {
     errorBox.textContent = error.message || 'Não foi possível gerar o rastreio.';

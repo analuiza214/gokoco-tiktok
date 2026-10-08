@@ -297,7 +297,8 @@ async function publicOrderTracking(request, env) {
   if (!/^GK[A-HJ-NP-Z2-9]{10}$/.test(code)) return json({ error: 'Código inválido ou não encontrado.' }, 404);
   const rows = await db(env, 'gokoco_orders', `?tracking->shipping->>code=eq.${encodeURIComponent(code)}&select=id,name,status,created_at,updated_at,products,shipping,tracking&limit=1`);
   const order = rows[0];
-  if (!order || order.status !== 'paid') return json({ error: 'Código inválido ou não encontrado.' }, 404);
+  if (!order || (order.status !== 'paid' && !(order.status === 'tracking_only' && order.tracking?.manualExternal))) return json({ error: 'Código inválido ou não encontrado.' }, 404);
+  if (order.tracking?.manualExternal) return json({ code, manual: true, createdAt: order.tracking.shipping.created_at || order.created_at, shipping: order.tracking.shipping });
   return json({
     code,
       buyerName: String(order.name || '').trim().slice(0, 100),
@@ -384,25 +385,19 @@ async function adminGenerateTracking(request, env) {
 
 async function adminCreateExternalTracking(request, env) {
   const denied = await requireAdmin(request, env); if (denied) return denied;
+  if (request.method === 'GET') {
+    const rows = await db(env, 'gokoco_orders', '?gateway=eq.manual_tracking&select=id,created_at,tracking&order=created_at.desc&limit=30');
+    return json({ codes: rows.map((row) => ({ id: row.id, code: row.tracking?.shipping?.code, createdAt: row.created_at })).filter((row) => row.code) });
+  }
   if (request.method !== 'POST') return json({ error: 'Método inválido.' }, 405);
-  const body = await request.json().catch(() => ({}));
-  const name = String(body.name || '').trim().slice(0, 100);
-  const product = String(body.product || '').trim().slice(0, 150);
-  const city = String(body.city || '').trim().slice(0, 80);
-  const state = String(body.state || '').trim().toUpperCase();
-  const amount = Number(body.amount);
-  if (!name || !product || !city || !/^[A-Z]{2}$/.test(state) || !Number.isFinite(amount) || amount <= 0 || amount > 99999999.99)
-    return json({ error: 'Preencha nome, produto, cidade, UF e valor da venda.' }, 400);
   const now = new Date().toISOString();
   const code = createTrackingCode();
   const order = {
     checkout_id: `external-tracking-${crypto.randomUUID()}`,
-    name, email: String(body.email || '').trim().slice(0, 150), phone: String(body.phone || '').replace(/\D/g, '').slice(0, 20), document: '',
-    amount: Math.round(amount * 100) / 100,
-    products: [{ name: product, quantity: 1, price: Math.round(amount * 100) / 100 }],
-    shipping: { cidade: city, uf: state },
+    name: 'Rastreio manual', email: '', phone: '', document: '',
+    amount: 0.01, products: [], shipping: {},
     tracking: { manualExternal: true, shipping: { code, created_at: now, status: 'confirmed', events: [] } },
-    gateway: 'manual_tracking', status: 'paid', created_at: now, updated_at: now,
+    gateway: 'manual_tracking', status: 'tracking_only', created_at: now, updated_at: now,
   };
   const saved = await db(env, 'gokoco_orders', '?select=id', 'POST', order);
   if (!saved.length) return json({ error: 'Não foi possível salvar o rastreio.' }, 500);
@@ -444,7 +439,7 @@ async function adminOrders(request, env) {
     registerOrderTracking(env, order.id, order.updated_at || order.created_at),
   ));
   await retryPaidPurchases(env);
-  const rows = await db(env, 'gokoco_orders', '?select=id,created_at,name,email,phone,amount,products,gateway,status,transaction_id,shipping,tracking&order=created_at.desc&limit=200');
+  const rows = await db(env, 'gokoco_orders', '?gateway=neq.manual_tracking&select=id,created_at,name,email,phone,amount,products,gateway,status,transaction_id,shipping,tracking&order=created_at.desc&limit=200');
   return json({ orders: rows.map(({ tracking, ...order }) => ({ ...order, shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
 }
 

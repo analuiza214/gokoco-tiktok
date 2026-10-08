@@ -216,6 +216,27 @@ test('rastreio avança a simulação no minuto previsto sem chamá-la de confirm
   assert.match(element('timeline').innerHTML, /tracking-stage[^"<]*forecast simulated/);
 });
 
+test('rastreio avulso mostra só o código e etapas previstas, sem destinatário inventado', async () => {
+  const html = fs.readFileSync(new URL('../rastreio.html', import.meta.url), 'utf8');
+  const script = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map((match) => match[1])[0];
+  const elements = new Map();
+  const element = (id) => {
+    if (!elements.has(id)) elements.set(id, { hidden: true, innerHTML: '', value: '', addEventListener() {}, querySelector() { return { disabled: false }; } });
+    return elements.get(id);
+  };
+  vm.runInNewContext(script, {
+    document: { getElementById: element }, location: { search: '?codigo=GKABCDEFGHJK' },
+    fetch: async () => Response.json({ code: 'GKABCDEFGHJK', manual: true, createdAt: '2026-10-06T12:00:00Z', shipping: { status: 'confirmed', created_at: '2026-10-06T12:00:00Z', events: [] } }),
+    URLSearchParams, Intl, Date, Response, setInterval() {},
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.match(element('order').innerHTML, /CÓDIGO DE RASTREIO/);
+  assert.doesNotMatch(element('order').innerHTML, /Cliente|Escova|Destino/);
+  assert.match(element('timeline').innerHTML, /Código gerado/);
+  assert.match(element('timeline').innerHTML, /Previsão/);
+  assert.doesNotMatch(element('timeline').innerHTML, /Guarulhos|Pagamento aprovado|endereço informado/);
+});
+
 
 test('bônus antigo de R$ 5 não reduz mais o preço da escova', () => {
   const source = fs.readFileSync(new URL('../worker-src/index.js', import.meta.url), 'utf8');
@@ -288,7 +309,7 @@ test('admin gera rastreio para venda fora do site sem enviar compra ao gateway',
   const env = { SUPABASE_URL: 'https://db.example', SUPABASE_SERVICE_ROLE_KEY: 'test', ADMIN_SESSION_SECRET: 'test-admin', UTMIFY_API_TOKEN: 'test' };
   const payload = Buffer.from(JSON.stringify({ exp: Date.now() + 60000 })).toString('base64');
   const token = payload + '.' + createHmac('sha256', env.ADMIN_SESSION_SECRET).update(payload).digest('hex');
-  const body = JSON.stringify({ name: 'Ana Silva', product: 'Escova GOKOCO', city: 'Fortaleza', state: 'CE', amount: '37.90' });
+  const body = '{}';
   let saved;
   const original = globalThis.fetch;
   globalThis.fetch = async (input, options = {}) => {
@@ -309,6 +330,16 @@ test('admin gera rastreio para venda fora do site sem enviar compra ao gateway',
     assert.equal(saved.tracking.manualExternal, true);
     assert.equal(saved.tracking.shipping.code, data.code);
     assert.equal(saved.gateway, 'manual_tracking');
-    assert.equal(saved.shipping.cidade, 'Fortaleza');
+    assert.equal(saved.status, 'tracking_only');
+    assert.equal(saved.name, 'Rastreio manual');
+    assert.deepEqual(saved.products, []);
+    assert.deepEqual(saved.shipping, {});
+    const publicResponse = await worker.fetch(new Request('https://store.example/api/public/order-tracking?code=' + data.code), env);
+    assert.equal(publicResponse.status, 200);
+    const publicData = await publicResponse.json();
+    assert.equal(publicData.manual, true);
+    assert.equal(publicData.buyerName, undefined);
+    assert.equal(publicData.destination, undefined);
+    assert.equal(publicData.products, undefined);
   } finally { globalThis.fetch = original; }
 });
