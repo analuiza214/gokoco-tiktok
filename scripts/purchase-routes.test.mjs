@@ -6,6 +6,18 @@ import { createHmac } from 'node:crypto';
 const code = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
 const { default: worker } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 const copy = (v) => JSON.parse(JSON.stringify(v));
+
+test('não cria cobrança PIX sem endereço de entrega completo', async () => {
+  const payload = {
+    checkoutId: '11111111-2222-4333-8444-555555555555', amount: 37.90,
+    cart: { qty: 1, colors: [], shipping: 'Frete Grátis', bumps: [], discount: 1, bonus: 0 },
+    client: { name: 'Maria Silva', email: 'maria@example.com', document: '52998224725', phone: '85999999999' },
+    shipping: { cep: '60000-000', logradouro: 'Rua das Flores', numero: '', bairro: 'Centro', cidade: 'Fortaleza', uf: 'CE' },
+  };
+  const response = await worker.fetch(new Request('https://store.example/api/public/pix/create', { method: 'POST', body: JSON.stringify(payload) }), {});
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).code, 'invalid_address');
+});
 function setup() {
   const state = { order: { id: '11111111-2222-4333-8444-555555555555', transaction_id: 'tx-id', gateway: 'ironpay', status: 'pending', name: 'Maria Silva', email: 'cliente@example.com', phone: '85999999999', document: '52998224725', amount: 37.90, products: [{ name: 'Escova Modeladora GOKOCO - Preta x1 + Rosa x1 · Bivolt', quantity: 1 }], shipping: { cidade: 'Campina Grande', uf: 'PB', cep: '58400000' }, tracking: {}, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, gatewayPaid: true, sent: [] };
   const env = { SUPABASE_URL: 'https://db.example', SUPABASE_SERVICE_ROLE_KEY: 'test', IRONPAY_API_TOKEN: 'test', UTMIFY_API_TOKEN: 'test', ADMIN_SESSION_SECRET: 'test-admin' };

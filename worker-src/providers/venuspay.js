@@ -124,6 +124,15 @@ export async function createPixVenuspay(context, corsHeaders, body) {
       customer_name: String(name),
       city: address?.city || "",
       state: address?.state || "",
+      shipping_address: {
+        street: String(address.street).trim(),
+        number: String(address.number).trim(),
+        complement: String(address.complement || "").trim(),
+        neighborhood: String(address.neighborhood).trim(),
+        city: String(address.city).trim(),
+        state: String(address.state).trim().toUpperCase(),
+        zip_code: String(address.zipCode).replace(/\D/g, ""),
+      },
     },
   };
 

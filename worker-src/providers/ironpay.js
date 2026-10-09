@@ -29,7 +29,7 @@ export async function createPixIronpay(context, corsHeaders, body) {
     return new Response(JSON.stringify({ error: "Gateway de pagamento nao configurado." }), { status: 500, headers: corsHeaders });
   }
 
-  const { amount, name, document, productName, email, phone } = body;
+  const { amount, name, document, productName, email, phone, address } = body;
 
   if (!amount || !name) {
     return new Response(JSON.stringify({ error: "Campos obrigatorios: amount, name." }), { status: 400, headers: corsHeaders });
@@ -55,6 +55,13 @@ export async function createPixIronpay(context, corsHeaders, body) {
       email: email ? String(email) : "cliente@email.com",
       phone_number: phone ? String(phone).replace(/\D/g, "") || "00000000000" : "00000000000",
       document: payerDocument,
+      street_name: String(address.street).trim(),
+      number: String(address.number).trim(),
+      complement: String(address.complement || "").trim(),
+      neighborhood: String(address.neighborhood).trim(),
+      city: String(address.city).trim(),
+      state: String(address.state).trim().toUpperCase(),
+      zip_code: String(address.zipCode).replace(/\D/g, ""),
     },
     cart: [
       {

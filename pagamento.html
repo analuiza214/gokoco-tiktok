@@ -344,6 +344,10 @@ fbq('track','PageView');
       }); }
       if(t==='IR PARA O PAGAMENTO' && !b.dataset.lvw){ b.dataset.lvw='1'; b.addEventListener('click', function(e){
         e.preventDefault();
+        var required=[['lv-cep','CEP'],['lv-endereco','endereço'],['lv-numero','número'],['lv-bairro','bairro'],['lv-cidade','cidade'],['lv-uf','UF']];
+        var missing=required.find(function(item){return !getVal(item[0]);});
+        if(missing){ alert('Preencha '+missing[1]+' para continuar.'); document.getElementById(missing[0]).focus(); return; }
+        if(getVal('lv-cep').replace(/\D/g,'').length!==8 || !/^[A-Za-z]{2}$/.test(getVal('lv-uf'))){ alert('Confira o CEP e a UF antes de continuar.'); return; }
         saveEndereco();
         renderResumo();
         show(3);

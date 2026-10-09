@@ -32,7 +32,7 @@ async function createPixIronpay(context, corsHeaders, body) {
     return new Response(JSON.stringify({ error: "Gateway de pagamento nao configurado." }), { status: 500, headers: corsHeaders });
   }
 
-  const { amount, name, document, productName, email, phone } = body;
+  const { amount, name, document, productName, email, phone, address } = body;
 
   if (!amount || !name) {
     return new Response(JSON.stringify({ error: "Campos obrigatorios: amount, name." }), { status: 400, headers: corsHeaders });
@@ -58,6 +58,13 @@ async function createPixIronpay(context, corsHeaders, body) {
       email: email ? String(email) : "cliente@email.com",
       phone_number: phone ? String(phone).replace(/\D/g, "") || "00000000000" : "00000000000",
       document: payerDocument,
+      street_name: String(address.street).trim(),
+      number: String(address.number).trim(),
+      complement: String(address.complement || "").trim(),
+      neighborhood: String(address.neighborhood).trim(),
+      city: String(address.city).trim(),
+      state: String(address.state).trim().toUpperCase(),
+      zip_code: String(address.zipCode).replace(/\D/g, ""),
     },
     cart: [
       {
@@ -775,6 +782,15 @@ async function createPixVenuspay(context, corsHeaders, body) {
       customer_name: String(name),
       city: address?.city || "",
       state: address?.state || "",
+      shipping_address: {
+        street: String(address.street).trim(),
+        number: String(address.number).trim(),
+        complement: String(address.complement || "").trim(),
+        neighborhood: String(address.neighborhood).trim(),
+        city: String(address.city).trim(),
+        state: String(address.state).trim().toUpperCase(),
+        zip_code: String(address.zipCode).replace(/\D/g, ""),
+      },
     },
   };
 
@@ -1384,11 +1400,23 @@ function isValidBuyerEmail(value) {
   return /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.[a-z]{2,63}$/i.test(email);
 }
 
+function validateShipping(shipping) {
+  const address = shipping && typeof shipping === 'object' ? shipping : {};
+  if (digits(address.cep).length !== 8) return 'Informe um CEP válido para a entrega.';
+  for (const [field, label] of [['logradouro', 'endereço'], ['numero', 'número'], ['bairro', 'bairro'], ['cidade', 'cidade']]) {
+    if (!String(address[field] || '').trim()) return `Informe ${label} para a entrega.`;
+  }
+  if (!/^[A-Za-z]{2}$/.test(String(address.uf || '').trim())) return 'Informe a UF com duas letras.';
+  return null;
+}
+
 async function createPix(request, env) {
   const body = await request.json().catch(() => null);
   if (body?.client) body.client.email = normalizeBuyerEmail(body.client.email);
   const invalid = validateBuyer(body);
   if (invalid) return json({ message: invalid, code: 'invalid_document' }, 400);
+  const invalidShipping = validateShipping(body.shipping);
+  if (invalidShipping) return json({ message: invalidShipping, code: 'invalid_address' }, 400);
   const checkoutId = String(body.checkoutId || '');
   if (!/^[a-f0-9-]{20,50}$/i.test(checkoutId)) return json({ message: 'Identificador de checkout inválido.' }, 400);
   const previous = await db(env, 'gokoco_orders', `?checkout_id=eq.${encodeURIComponent(checkoutId)}&select=*&limit=1`);
@@ -1413,7 +1441,7 @@ async function createPix(request, env) {
     const recent = await db(env, 'gokoco_orders', `?client_ip_hash=eq.${ipHash}&created_at=gte.${encodeURIComponent(since)}&status=eq.pending&select=id&limit=5`);
     if (recent.length >= 5) return json({ message: 'Muitas cobranças PIX. Tente novamente em uma hora.' }, 429);
   }
-  const shipping = body.shipping || {};
+  const shipping = body.shipping;
   const order = {
     checkout_id: checkoutId,
     name: String(body.client.name).trim().slice(0, 150),
