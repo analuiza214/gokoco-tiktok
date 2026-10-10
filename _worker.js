@@ -1548,11 +1548,24 @@ async function registerOrderTracking(env, orderId, paidAt) {
 async function webhook(request, env) {
   const notification = await request.json().catch(() => null);
   if (!notification) return json({ received: true });
-  const ids = [notification.objectId, notification.data?.transaction_id, notification.data?.id, notification.transaction_hash, notification.transactionId, notification.transaction_id, notification.id].filter(Boolean);
+  const ids = [
+    notification.objectId, notification.transactionId, notification.transaction_id, notification.transactionHash, notification.transaction_hash, notification.id,
+    notification.object?.id, notification.object?.transaction_id, notification.object?.transactionId, notification.object?.hash,
+    notification.transaction?.id, notification.transaction?.transaction_id, notification.transaction?.hash,
+    notification.payment?.id, notification.payment?.transaction_id, notification.payment?.transactionId,
+    notification.data?.objectId, notification.data?.transaction_id, notification.data?.transactionId, notification.data?.transactionHash,
+    notification.data?.transaction_hash, notification.data?.id, notification.data?.transaction?.id, notification.data?.transaction?.transaction_id,
+    notification.data?.object?.id, notification.data?.payment?.id,
+  ].filter((value) => typeof value === 'string' || typeof value === 'number').map(String).filter(Boolean);
+  const seenIds = new Set();
+  let matchedOrder = false;
   for (const id of ids) {
+    if (seenIds.has(id)) continue;
+    seenIds.add(id);
     const rows = await db(env, 'gokoco_orders', `?transaction_id=eq.${encodeURIComponent(String(id))}&select=id,transaction_id,gateway,status&limit=1`);
     const order = rows[0];
     if (!order) continue;
+    matchedOrder = true;
     const manualRows = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}&select=tracking&limit=1`);
     if (manualRows[0]?.tracking?.manualPayment) continue;
     const verified = await queryPixGatewayStatus(env, order.transaction_id, order.gateway);
@@ -1565,6 +1578,8 @@ async function webhook(request, env) {
     }
     break;
   }
+  if (!seenIds.size) console.warn('[payment/webhook] notificação sem identificador de transação reconhecido', { fields: Object.keys(notification).slice(0, 12) });
+  else if (!matchedOrder) console.warn('[payment/webhook] transação recebida sem pedido correspondente', { candidates: ids.length, fields: Object.keys(notification).slice(0, 12) });
   return json({ received: true });
 }
 
@@ -1731,20 +1746,7 @@ async function adminGateways(request, env) {
 async function adminOrders(request, env) {
   const denied = await requireAdmin(request, env); if (denied) return denied;
   if (request.method !== 'GET') return json({ error: 'Método inválido.' }, 405);
-  const since = new Date(Date.now() - 7 * 86400000).toISOString();
-  // A consulta do admin também verifica gateways e pode escrever no banco.
-  // Limite o trabalho em lote para respeitar o teto de subrequests do Worker.
-  const pending = await db(env, 'gokoco_orders', `?select=id,transaction_id,gateway,status&status=eq.pending&created_at=gte.${encodeURIComponent(since)}&order=created_at.asc&limit=2`);
-  await Promise.allSettled(pending.filter((order) => order.transaction_id).map(async (order) => {
-    const verified = await queryPixGatewayStatus(env, order.transaction_id, order.gateway);
-    const status = verified.isPaid ? 'paid' : verified.isRefunded ? 'refunded' : verified.isExpired ? 'expired' : 'pending';
-    if (status !== order.status) await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}`, 'PATCH', { status, updated_at: new Date().toISOString() });
-    if (status === 'paid') {
-      const paidAt = verified.paidAt || new Date().toISOString();
-      await registerOrderTracking(env, order.id, paidAt);
-      await deliverPaidPurchase(env, db, order.id, paidAt);
-    }
-  }));
+  await reconcilePendingPayments(env, 2);
   const missingTracking = encodeURIComponent('tracking->shipping->>code');
   const paidOrders = await db(env, 'gokoco_orders', `?status=eq.paid&${missingTracking}=is.null&select=id,tracking,updated_at,created_at&order=created_at.desc&limit=3`);
   await Promise.allSettled(paidOrders.map((order) =>
@@ -1753,6 +1755,45 @@ async function adminOrders(request, env) {
   await retryPaidPurchases(env);
   const rows = await db(env, 'gokoco_orders', '?gateway=neq.manual_tracking&select=id,created_at,name,email,phone,amount,products,gateway,status,transaction_id,shipping,tracking&order=created_at.desc&limit=200');
   return json({ orders: rows.map(({ tracking, ...order }) => ({ ...order, shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
+}
+
+async function reconcilePendingPayments(env, limit = 2) {
+  const pending = await db(env, 'gokoco_orders', `?select=id,transaction_id,gateway,status,updated_at&status=eq.pending&order=updated_at.asc,created_at.asc&limit=${Math.max(1, Math.min(10, Number(limit) || 2))}`);
+  const summary = { checked: 0, paid: 0, expired: 0, failed: 0 };
+  await Promise.all(pending.filter((order) => order.transaction_id).map(async (order) => {
+    let claimedAt;
+    try {
+      const previousUpdatedAt = Date.parse(order.updated_at || '') || 0;
+      claimedAt = new Date(Math.max(Date.now(), previousUpdatedAt + 1)).toISOString();
+      const updateFilter = order.updated_at
+        ? `updated_at=eq.${encodeURIComponent(order.updated_at)}`
+        : 'updated_at=is.null';
+      const claimed = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}&status=eq.pending&${updateFilter}&select=id`, 'PATCH', { updated_at: claimedAt });
+      if (!claimed.length) return;
+      summary.checked++;
+
+      const verified = await queryPixGatewayStatus(env, order.transaction_id, order.gateway);
+      const status = verified.isPaid ? 'paid' : verified.isRefunded ? 'refunded' : verified.isExpired ? 'expired' : 'pending';
+      if (status === 'pending') return;
+
+      const updated = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}&status=eq.pending&updated_at=eq.${encodeURIComponent(claimedAt)}&select=id`, 'PATCH', {
+        status, updated_at: new Date().toISOString(),
+      });
+      if (!updated.length) return;
+      if (status === 'paid') {
+        summary.paid++;
+        const paidAt = verified.paidAt || new Date().toISOString();
+        await registerOrderTracking(env, order.id, paidAt);
+        await deliverPaidPurchase(env, db, order.id, paidAt);
+      } else {
+        summary.expired++;
+      }
+    } catch (error) {
+      summary.failed++;
+      console.error('[payment/reconcile]', order.gateway, order.id, error?.message || error);
+    }
+  }));
+  return summary;
 }
 
 async function retryPaidPurchases(env) {
@@ -1782,7 +1823,9 @@ export default {
       if (path === '/api/process-purchase-queue' && request.method === 'POST') {
         const secret = String(env.CRON_SECRET || '');
         if (!secret || request.headers.get('x-cron-secret') !== secret) return json({ error: 'Não autorizado.' }, 401);
-        return json(await retryPaidPurchases(env));
+        const payments = await reconcilePendingPayments(env, 5);
+        const purchases = await retryPaidPurchases(env);
+        return json({ payments, purchases });
       }
       if (path === '/api/public/pix/create' && request.method === 'POST') return await createPix(request, env);
       if (path === '/api/public/pix/status' && request.method === 'GET') return await statusPix(request, env);

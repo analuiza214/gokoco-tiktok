@@ -143,6 +143,83 @@ test('webhook confirmado envia compra uma vez mesmo quando repetido', async () =
   });
 });
 
+test('webhook reconhece identificador da transação em payload aninhado', async () => {
+  const f = setup();
+  await using(f, async () => {
+    const response = await f.call('/api/pix/webhook', { method: 'POST', body: JSON.stringify({ data: { transaction: { id: 'tx-id' } } }) });
+    assert.equal(response.status, 200);
+    assert.equal(f.state.order.status, 'paid');
+    assert.equal(f.state.sent.length, 1);
+  });
+});
+
+test('admin alterna a reconciliação entre pedidos pendentes sem prender nos mais antigos', async () => {
+  const f = setup();
+  const orders = Array.from({ length: 4 }, (_, index) => ({
+    ...copy(f.state.order),
+    id: `order-${index + 1}`,
+    transaction_id: `tx-${index + 1}`,
+    created_at: `2026-10-01T00:0${index}:00.000Z`,
+    updated_at: `2026-10-01T00:0${index}:00.000Z`,
+  }));
+  const checked = [];
+  f.fetch = async (input, options = {}) => {
+    const url = new URL(input);
+    if (url.hostname === 'api.ironpayapp.com.br') {
+      const transactionId = decodeURIComponent(url.pathname.split('/').pop());
+      checked.push(transactionId);
+      return transactionId === 'tx-1'
+        ? Response.json({ error: 'temporary gateway error' }, { status: 502 })
+        : Response.json({ payment_status: 'PENDING' });
+    }
+    assert.equal(url.hostname, 'db.example');
+    const params = url.searchParams;
+    let rows = orders.filter((order) => {
+      if (params.has('id') && params.get('id') !== `eq.${order.id}`) return false;
+      if (params.has('status') && params.get('status') !== `eq.${order.status}`) return false;
+      if (params.has('updated_at') && params.get('updated_at') !== `eq.${order.updated_at}`) return false;
+      return true;
+    });
+    if (options.method === 'PATCH') {
+      const body = JSON.parse(options.body);
+      rows.forEach((order) => Object.assign(order, body));
+      return Response.json(params.has('select') ? rows.map(({ id }) => ({ id })) : rows.map(copy));
+    }
+    if (params.has('order')) rows = rows.sort((a, b) => a.updated_at.localeCompare(b.updated_at) || a.created_at.localeCompare(b.created_at));
+    if (params.has('limit')) rows = rows.slice(0, Number(params.get('limit')));
+    return Response.json(rows.map(copy));
+  };
+  const payload = Buffer.from(JSON.stringify({ exp: Date.now() + 60000 })).toString('base64');
+  const token = payload + '.' + createHmac('sha256', f.env.ADMIN_SESSION_SECRET).update(payload).digest('hex');
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    await using(f, async () => {
+      for (let i = 0; i < 2; i++) {
+        const response = await f.call('/api/admin/orders', { headers: { Authorization: 'Bearer ' + token } });
+        assert.equal(response.status, 200);
+      }
+    });
+  } finally {
+    console.error = originalError;
+  }
+  assert.deepEqual(checked.sort(), ['tx-1', 'tx-2', 'tx-3', 'tx-4']);
+});
+
+test('rotina protegida reconcilia pagamentos pendentes além de repetir envios', async () => {
+  const f = setup();
+  f.env.CRON_SECRET = 'cron-test';
+  await using(f, async () => {
+    assert.equal((await f.call('/api/process-purchase-queue', { method: 'POST', headers: { 'x-cron-secret': 'errado' } })).status, 401);
+    const response = await f.call('/api/process-purchase-queue', { method: 'POST', headers: { 'x-cron-secret': 'cron-test' } });
+    assert.equal(response.status, 200);
+    const summary = await response.json();
+    assert.equal(summary.payments.paid, 1);
+    assert.equal(f.state.order.status, 'paid');
+    assert.equal(f.state.sent.length, 1);
+  });
+});
+
 test('admin recupera pedido pago ainda não enviado e informa resultado', async () => {
   const f = setup(); f.state.order.status = 'paid';
   const payload = Buffer.from(JSON.stringify({ exp: Date.now() + 60000 })).toString('base64');
