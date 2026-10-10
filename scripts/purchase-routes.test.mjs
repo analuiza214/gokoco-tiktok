@@ -222,10 +222,19 @@ test('rastreio avança a simulação no minuto previsto sem chamá-la de confirm
   assert.match(timeline, /<strong>Em embalagem<\/strong><span class="stage-badge">Previsão<\/span>/);
   assert.match(timeline, /<strong>Em embalagem<\/strong>/);
   assert.ok(timeline.includes('09:47'));
+  assert.doesNotMatch(timeline, /<strong>Saiu para entrega<\/strong>/);
+  assert.doesNotMatch(timeline, /<strong>Entrega estimada<\/strong>/);
   fixedNow = Date.parse('2026-10-06T12:48:00Z');
   refreshTimeline();
   assert.match(element('timeline').innerHTML, /<strong>Em embalagem<\/strong><span class="stage-badge">Previsão<\/span>/);
   assert.match(element('timeline').innerHTML, /tracking-stage[^"<]*forecast simulated/);
+  fixedNow = Date.parse('2026-10-08T12:22:00Z');
+  refreshTimeline();
+  assert.match(element('timeline').innerHTML, /<strong>Saiu para entrega<\/strong>/);
+  assert.doesNotMatch(element('timeline').innerHTML, /<strong>Entrega estimada<\/strong>/);
+  fixedNow = Date.parse('2026-10-21T12:00:00Z');
+  refreshTimeline();
+  assert.match(element('timeline').innerHTML, /<strong>Entrega estimada<\/strong>/);
 });
 
 test('rastreio avulso mostra só o código e etapas previstas, sem destinatário inventado', async () => {
