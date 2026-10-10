@@ -520,13 +520,6 @@ export default {
       if (path === '/api/admin/generate-tracking') return await adminGenerateTracking(request, env);
       if (path === '/api/admin/external-tracking') return await adminCreateExternalTracking(request, env);
       if (path === '/api/public/order-tracking' && request.method === 'GET') return await publicOrderTracking(request, env);
-      if (path === '/api/process-purchase-queue' && request.method === 'POST') {
-        const secret = String(env.CRON_SECRET || '');
-        if (!secret || request.headers.get('x-cron-secret') !== secret) return json({ error: 'Não autorizado.' }, 401);
-        const payments = await reconcilePendingPayments(env, 5);
-        const purchases = await retryPaidPurchases(env);
-        return json({ payments, purchases });
-      }
       if (path === '/api/public/pix/create' && request.method === 'POST') return await createPix(request, env);
       if (path === '/api/public/pix/status' && request.method === 'GET') return await statusPix(request, env);
       if (path === '/api/pix/webhook' && request.method === 'POST') return await webhook(request, env);
