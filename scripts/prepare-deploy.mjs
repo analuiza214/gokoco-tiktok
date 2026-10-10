@@ -14,4 +14,4 @@ for (const directory of directories) {
   const source = path.join(root, directory);
   if (fs.existsSync(source)) fs.cpSync(source, path.join(output, directory), { recursive: true });
 }
-console.log(`Assets de publicação preparados em ${output}`);
+console.log(`Assets de publicação preparados em ${output}`); 
