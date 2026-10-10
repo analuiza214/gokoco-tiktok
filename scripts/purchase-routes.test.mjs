@@ -206,6 +206,20 @@ test('admin alterna a reconciliação entre pedidos pendentes sem prender nos ma
   assert.deepEqual(checked.sort(), ['tx-1', 'tx-2', 'tx-3', 'tx-4']);
 });
 
+test('rotina protegida reconcilia pagamentos pendentes além de repetir envios', async () => {
+  const f = setup();
+  f.env.CRON_SECRET = 'cron-test';
+  await using(f, async () => {
+    assert.equal((await f.call('/api/process-purchase-queue', { method: 'POST', headers: { 'x-cron-secret': 'errado' } })).status, 401);
+    const response = await f.call('/api/process-purchase-queue', { method: 'POST', headers: { 'x-cron-secret': 'cron-test' } });
+    assert.equal(response.status, 200);
+    const summary = await response.json();
+    assert.equal(summary.payments.paid, 1);
+    assert.equal(f.state.order.status, 'paid');
+    assert.equal(f.state.sent.length, 1);
+  });
+});
+
 test('admin recupera pedido pago ainda não enviado e informa resultado', async () => {
   const f = setup(); f.state.order.status = 'paid';
   const payload = Buffer.from(JSON.stringify({ exp: Date.now() + 60000 })).toString('base64');
@@ -219,9 +233,10 @@ test('admin recupera pedido pago ainda não enviado e informa resultado', async 
   });
 });
 
-test('modo sem credencial não quebra confirmação paga', async () => {
+test('fila exige segredo e modo sem credencial não quebra confirmação paga', async () => {
   const f = setup(); delete f.env.UTMIFY_API_TOKEN;
   await using(f, async () => {
+    assert.equal((await f.call('/api/process-purchase-queue', { method: 'POST' })).status, 401);
     const data = await (await f.call('/api/public/pix/status?id=tx-id')).json();
     assert.equal(data.status, 'paid'); assert.equal(data.purchaseDestination, null); assert.equal(f.state.sent.length, 0);
   });
