@@ -954,6 +954,38 @@ fbq('track','PageView');
   #lv-kits hr{border:0;border-top:1px solid #f0f0f0;margin:14px 0 12px}
 </style>
 
+<script>
+(function(){
+  var offers = [
+    {id:'necessaire',title:'Necessaire Térmica + Luva Antiqueimadura',desc:'Guarda a escova ainda quente e leva pra viagem sem risco',price:'R$ 19,47',img:'/images/bump-necessaire.webp'},
+    {id:'siage',title:'Combo Eudora Siàge Pro Cronology Curvas (7 itens)',desc:'Shampoo, condicionador, máscara, creme e ampolas',price:'R$ 32,63',img:'/images/bump-siage.webp'},
+    {id:'wella',title:'Kit Cronograma Capilar Wella 3x150ml',desc:'Máscaras Fusion + Oil Reflections + Invigo Nutri-Enrich',price:'R$ 45,70',img:'/images/bump-wella.webp'}
+  ];
+  function render(){
+    var step=document.getElementById('lv-step-2');
+    if(!step || document.getElementById('lv-bumps')) return;
+    var paymentButton=Array.from(step.querySelectorAll('button')).find(function(b){return b.textContent.trim()==='IR PARA O PAGAMENTO';});
+    if(!paymentButton) return;
+    var actions=paymentButton.parentElement;
+    var wrap=document.createElement('div');
+    wrap.id='lv-bumps';
+    wrap.innerHTML='<h3>Adicione essas ofertas na sua compra</h3><p class="lv-sub">Selecione somente os itens que deseja levar junto.</p>'+
+      offers.map(function(o){return '<button type="button" class="lv-bump" data-id="'+o.id+'" aria-pressed="false" style="width:100%;text-align:left">'+
+        '<span class="lv-check" aria-hidden="true"></span><img decoding="async" loading="lazy" class="lv-thumb" src="'+o.img+'" alt="">'+
+        '<span class="lv-info"><span class="lv-title" style="display:block">'+o.title+'</span><span class="lv-desc" style="display:block">'+o.desc+'</span>'+
+        '<span class="lv-price" style="display:block">'+o.price+'</span></span></button>';}).join('');
+    actions.parentNode.insertBefore(wrap,actions);
+    wrap.addEventListener('click',function(event){
+      var card=event.target.closest('.lv-bump');
+      if(!card || !wrap.contains(card)) return;
+      var selected=card.classList.toggle('on');
+      card.setAttribute('aria-pressed',String(selected));
+    });
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',render); else render();
+})();
+</script>
+
 <script>(function(){try{
   var c=localStorage.getItem('corSelecionada')||'';
   if(!c) return;

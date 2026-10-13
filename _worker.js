@@ -1316,7 +1316,7 @@ const gateways = [
 ];
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
 const digits = (value) => String(value || '').replace(/\D/g, '');
-const BUMPS = {};
+const BUMPS = { necessaire: 19.47, siage: 32.63, wella: 45.70 };
 const COLORS = { Preta: 37.90, Branca: 37.90, Rosa: 37.90 };
 const SHIPPING = { 'Frete Grátis': 0, JADLOG: 18.47, 'SEDEX 12': 33.40 };
 function normalizeBuyerEmail(value) {
