@@ -22,6 +22,28 @@ export function capturePurchaseTracking(request, body) {
   return tracking;
 }
 
+export async function recoverCustomerAttribution(env, db, tracking, buyer) {
+  const current = Object.fromEntries(ATTRIBUTION_KEYS.map((key) => [key, tracking?.[key] || null]));
+  const hasAttribution = (values) => ATTRIBUTION_KEYS.some((key) => Boolean(values?.[key]));
+  if (hasAttribution(current)) return { ...tracking, attribution_source: 'current_visit' };
+
+  const since = new Date(Date.now() - 30 * 86400000).toISOString();
+  const email = String(buyer?.email || '').trim().toLowerCase();
+  const phone = String(buyer?.phone || '').replace(/\D/g, '');
+  const filters = [email ? `email=eq.${encodeURIComponent(email)}` : null, phone ? `phone=eq.${encodeURIComponent(phone)}` : null].filter(Boolean);
+  if (!filters.length) return { ...tracking, attribution_source: 'unattributed' };
+  try {
+    const results = await Promise.all(filters.map((filter) => db(env, 'gokoco_orders', `?${filter}&created_at=gte.${encodeURIComponent(since)}&select=tracking,created_at&order=created_at.desc&limit=5`)));
+    const previous = results.flat().filter((order) => hasAttribution(order?.tracking)).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0]?.tracking;
+    if (!previous) return { ...tracking, attribution_source: 'unattributed' };
+    const recovered = Object.fromEntries(ATTRIBUTION_KEYS.map((key) => [key, previous[key] || null]));
+    return { ...tracking, ...recovered, first_touch: recovered, last_touch: null, attribution_source: 'recovered_customer_history' };
+  } catch (error) {
+    console.warn('[attribution] Não foi possível consultar histórico do cliente:', error?.message || error);
+    return { ...tracking, attribution_source: 'unattributed' };
+  }
+}
+
 export function purchaseDestination(env) {
   const mode = String(env.PURCHASE_DELIVERY_MODE || 'auto').trim().toLowerCase();
   if (mode === 'utmify') return 'utmify';

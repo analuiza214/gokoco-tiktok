@@ -5,7 +5,7 @@ import { createPixMasterfy } from './providers/masterfy.js';
 import { createPixUmbrellapag } from './providers/umbrellapag.js';
 import { createPixVenuspay } from './providers/venuspay.js';
 import { queryPixGatewayStatus } from './pix-gateway-status.js';
-import { capturePurchaseTracking, purchaseDestination, purchaseSummary, deliverPaidPurchase } from './purchase-tracking.js';
+import { capturePurchaseTracking, recoverCustomerAttribution, purchaseDestination, purchaseSummary, deliverPaidPurchase } from './purchase-tracking.js';
 import { deliverPaidEmail, retryPaidEmails } from './order-email.js';
 import { processRecoveryQueue } from './recovery-email.js';
 
@@ -153,7 +153,7 @@ async function createPix(request, env) {
     amount: Number(body.amount),
     products: Array.isArray(body.products) ? body.products.slice(0, 10) : [],
     shipping,
-    tracking: capturePurchaseTracking(request, body),
+    tracking: await recoverCustomerAttribution(env, db, capturePurchaseTracking(request, body), body.client),
     gateway: active[0].id,
     client_ip_hash: ipHash,
     status: 'creating',

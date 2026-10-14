@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 const source = fs.readFileSync(new URL('../worker-src/purchase-tracking.js', import.meta.url), 'utf8');
-const { capturePurchaseTracking, deliverPaidPurchase, purchaseDestination } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+const { capturePurchaseTracking, recoverCustomerAttribution, deliverPaidPurchase, purchaseDestination } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 const copy = (value) => JSON.parse(JSON.stringify(value));
 function fixture() {
   let order = { id: 'order-123', transaction_id: 'tx-123', status: 'paid', created_at: '2026-10-02T12:00:00Z', updated_at: '2026-10-02T12:30:00Z', name: 'Cliente Teste', email: 'teste@example.com', phone: '85999999999', document: '52998224725', amount: 75.80, products: [{ name: 'Escova', quantity: 2, price: 37.90 }], tracking: { utm_source: 'FB', utm_campaign: 'Campanha A', _browser: { source_url: 'https://example.com/pagamento', fbp: 'fb.1.123.456', ip: '192.0.2.1', user_agent: 'Test Browser' } } };
@@ -27,6 +27,26 @@ test('seleciona uma única rota de compra e nunca aceita estado de envio do clie
   assert.equal(tracking._purchase, undefined);
   assert.equal(tracking.utm_source, 'FB');
   assert.equal(tracking._browser.source_url, 'https://example.com/pagamento');
+});
+
+test('recupera UTMs do histórico do mesmo cliente sem substituir campanha nova', async () => {
+  const prior = { created_at: new Date().toISOString(), tracking: { utm_source: 'facebook', utm_campaign: 'Criativo A', fbclid: 'click-antigo', _purchase: { utmify: { state: 'sent' } } } };
+  const queries = [];
+  const db = async (_env, _table, query) => { queries.push(query); return query.includes('email=eq.maria%40example.com') ? [prior] : []; };
+  const request = new Request('https://loja.example/api/public/pix/create');
+  const buyer = { email: 'maria@example.com', phone: '85999999999' };
+  const recovered = await recoverCustomerAttribution({}, db, capturePurchaseTracking(request, { tracking: {} }), buyer);
+  assert.equal(recovered.utm_source, 'facebook');
+  assert.equal(recovered.utm_campaign, 'Criativo A');
+  assert.equal(recovered.attribution_source, 'recovered_customer_history');
+  assert.equal(recovered._purchase, undefined);
+  assert.equal(recovered._browser.source_url, 'https://loja.example/pagamento');
+  assert.equal(queries.length, 2);
+  const current = await recoverCustomerAttribution({}, db, capturePurchaseTracking(request, { tracking: { utm_source: 'google', utm_campaign: 'Criativo B' } }), buyer);
+  assert.equal(current.utm_source, 'google');
+  assert.equal(current.utm_campaign, 'Criativo B');
+  assert.equal(current.attribution_source, 'current_visit');
+  assert.equal(queries.length, 2);
 });
 
 test('pagamento pendente não gera compra', async () => {

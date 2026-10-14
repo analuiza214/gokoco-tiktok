@@ -46,6 +46,8 @@ O script automático `scripts/pixel/pixel.js` enviado na conversa permanece fora
 
 ## Recuperação e diagnóstico
 
+Quando uma pessoa retorna sem UTMs no link (por exemplo, após conversar pelo WhatsApp), o checkout tenta recuperar a origem de um pedido anterior feito com o mesmo e-mail ou telefone nos últimos 30 dias. Uma campanha presente na visita atual sempre prevalece. A associação não é possível se a pessoa informar outros dados e abrir o link em outro navegador sem identificação anterior; nesse caso o pedido continua sem atribuição, sem inventar uma origem. O campo `attribution_source` no rastreio do pedido indica se a origem veio da visita atual ou do histórico do cliente.
+
 O admin mostra, junto do pedido pago, se a compra foi enviada, aguarda configuração ou falhou. O envio só é marcado como concluído após uma resposta aceita do destino; a falha mantém o pedido pago e permite tentar de novo. Reservas de envio têm prazo de dois minutos, com espera de um minuto após falha.
 
 Na abertura/atualização do admin, até dois pagamentos pendentes são verificados por vez. A fila usa a última atualização como posição e reserva cada tentativa antes de consultar o gateway, para que erros e pendências voltem ao fim da fila e não bloqueiem pedidos seguintes.
