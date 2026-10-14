@@ -6,7 +6,7 @@ import { createPixUmbrellapag } from './providers/umbrellapag.js';
 import { createPixVenuspay } from './providers/venuspay.js';
 import { queryPixGatewayStatus } from './pix-gateway-status.js';
 import { capturePurchaseTracking, recoverCustomerAttribution, purchaseDestination, purchaseSummary, deliverPaidPurchase } from './purchase-tracking.js';
-import { deliverPaidEmail, retryPaidEmails } from './order-email.js';
+import { deliverPaidEmail, retryPaidEmails, sendManualOrderEmail } from './order-email.js';
 import { processRecoveryQueue } from './recovery-email.js';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
@@ -464,6 +464,23 @@ async function adminOrders(request, env) {
   return json({ orders: rows.map(({ tracking, ...order }) => ({ ...order, shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, recovery: tracking?._recovery || null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
 }
 
+async function adminSendOrderEmail(request, env) {
+  const denied = await requireAdmin(request, env); if (denied) return denied;
+  if (request.method !== 'POST') return json({ error: 'Método inválido.' }, 405);
+  const body = await request.json().catch(() => ({}));
+  const id = String(body.id || '');
+  const subject = String(body.subject || '').trim();
+  const message = String(body.message || '').trim();
+  if (!/^[0-9a-f-]{36}$/i.test(id) || !subject || subject.length > 150 || !message || message.length > 5000) return json({ error: 'Confira o pedido, assunto e mensagem.' }, 400);
+  const rows = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(id)}&gateway=neq.manual_tracking&select=id,name,email&limit=1`);
+  if (!rows.length) return json({ error: 'Pedido não encontrado.' }, 404);
+  const result = await sendManualOrderEmail(env, rows[0], subject, message);
+  if (result.state === 'not_configured') return json({ error: 'Configure o Resend no servidor para enviar e-mails.' }, 503);
+  if (result.state === 'invalid_input') return json({ error: 'O e-mail do cliente, assunto ou mensagem é inválido.' }, 400);
+  if (result.state !== 'sent') return json({ error: 'O Resend não confirmou o envio. Tente novamente.' }, 502);
+  return json({ ok: true, email_id: result.email_id });
+}
+
 async function reconcilePendingPayments(env, limit = 2) {
   const pending = await db(env, 'gokoco_orders', `?select=id,transaction_id,gateway,status,updated_at&status=eq.pending&order=updated_at.asc,created_at.asc&limit=${Math.max(1, Math.min(10, Number(limit) || 2))}`);
   const summary = { checked: 0, paid: 0, expired: 0, failed: 0 };
@@ -523,6 +540,7 @@ export default {
       if (path === '/api/admin/verify') return json({ valid: (await verifyAdminToken(request, env)).valid });
       if (path === '/api/admin/gateways') return await adminGateways(request, env);
       if (path === '/api/admin/orders') return await adminOrders(request, env);
+      if (path === '/api/admin/send-order-email') return await adminSendOrderEmail(request, env);
       if (path === '/api/admin/order-tracking') return await adminUpdateOrderTracking(request, env);
       if (path === '/api/admin/manual-payment') return await adminManualPayment(request, env);
       if (path === '/api/admin/generate-tracking') return await adminGenerateTracking(request, env);

@@ -87,3 +87,25 @@ export async function retryPaidEmails(env, db, limit = 1) {
   const results = await Promise.allSettled(rows.map((order) => deliverPaidEmail(env, db, order.id)));
   return { configured: true, processed: rows.length, sent: results.filter((r) => r.status === 'fulfilled' && r.value.state === 'sent').length, failed: results.filter((r) => r.status === 'rejected' || r.value?.state === 'failed').length };
 }
+
+export async function sendManualOrderEmail(env, order, subject, message) {
+  const settings = emailSettings(env);
+  if (!settings) return { state: 'not_configured' };
+  const recipient = emailText(order.email, 254);
+  const title = emailText(subject, 150);
+  const body = emailText(message, 5000);
+  if (!emailAddress(recipient) || !title || !body) return { state: 'invalid_input' };
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${settings.key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: `GOKOCO <${settings.from}>`, to: [recipient], reply_to: settings.replyTo,
+      subject: title, text: body,
+      html: `<div style="max-width:560px;margin:auto;font-family:Arial,sans-serif;color:#17212b;line-height:1.6;white-space:pre-wrap">${escapeHtml(body)}</div>`,
+    }),
+    signal: AbortSignal.timeout(12000),
+  });
+  const receipt = await response.json().catch(() => ({}));
+  if (!response.ok || !receipt.id) return { state: 'failed' };
+  return { state: 'sent', email_id: String(receipt.id) };
+}

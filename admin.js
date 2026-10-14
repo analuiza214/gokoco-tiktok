@@ -142,12 +142,9 @@ function renderOrders() {
         ? `<a class="order-tracking" href="/rastreio.html?codigo=${encodeURIComponent(trackingCode)}" target="_blank" rel="noopener noreferrer">${icon('package')}<strong>${esc(trackingCode)}</strong><span>(rastreio enviado)</span></a>`
         : `<div class="order-tracking tracking-pending">${icon('package')}<span>Código de rastreio sendo preparado</span></div>`
       : '';
-    const mailSubject = encodeURIComponent(`Informações do seu pedido GOKOCO${trackingCode ? ` · ${trackingCode}` : ''}`);
-    const trackingUrl = trackingCode ? `${location.origin}/rastreio.html?codigo=${encodeURIComponent(trackingCode)}` : '';
-    const mailBody = encodeURIComponent(`Olá ${String(order.name || '').trim().split(/\s+/)[0] || 'tudo bem'}!\n\n${trackingUrl ? `Seu pedido já está com o código de rastreio ${trackingCode}. Acompanhe por aqui: ${trackingUrl}\n\n` : 'Estou entrando em contato sobre seu pedido da escova GOKOCO.\n\n'}Qualquer dúvida, estamos à disposição!`);
     const paymentActions = ['pending', 'expired', 'failed'].includes(order.status) ? '<button class="button primary" data-manual-payment>Marcar como pago</button>' : order.status === 'paid' ? '<button class="button outline" data-generate-tracking>' + (trackingCode ? 'Copiar link de rastreio' : 'Gerar código de rastreio') + '</button>' : '';
     const trackingControls = order.status === 'paid' ? `<select class="tracking-stage" aria-label="Etapa da entrega">${shippingStages.map(([value, label]) => `<option value="${value}" ${selectedStage === value ? 'selected' : ''}>${label}</option>`).join('')}</select>` : '';
-    return `<article class="order-card" data-order-id="${esc(order.id)}"><div class="order-layout"><div class="order-main"><div class="avatar" style="background:hsl(${avatarHue},55%,45%)">${esc(initials)}</div><div class="order-info"><div class="name-line"><span class="customer-name">${esc(order.name)}</span><span class="status-pill" style="color:${status.fg};background:${status.bg}">${esc(external ? 'Venda externa' : status.label)}</span></div><div class="order-detail"><span class="detail-icon">${icon('phone')}</span><span>${esc(formatPhone(order.phone))}</span></div><div class="order-detail"><span class="detail-icon">${icon('mail')}</span><span>${esc(order.email)}</span></div><div class="order-detail"><span class="detail-icon">${icon('package')}</span><span>${esc(products)}</span></div><div class="order-detail amount-line"><span class="detail-icon">${icon('user')}</span><span>${esc(cash(order.amount))} · ${external ? 'Venda externa' : `PIX <span class="gateway-tag">${esc(gateway)}</span>`}</span></div><div class="order-date">${esc(formatDate(order.created_at))}</div>${tx}${manualLine}${purchaseLine}${recoveryLine}${trackingLine}</div></div><div class="order-actions">${order.phone ? `<a class="whatsapp" href="${esc(whatsapp(order))}" target="_blank" rel="noopener noreferrer">${icon('phone')} Chamar no WhatsApp</a>` : ''}${external ? '' : `<a class="order-email" href="mailto:${encodeURIComponent(order.email || '')}?subject=${mailSubject}&body=${mailBody}">${icon('send')} Enviar Email</a>`}${trackingControls}${paymentActions}</div></div></article>`;
+    return `<article class="order-card" data-order-id="${esc(order.id)}"><div class="order-layout"><div class="order-main"><div class="avatar" style="background:hsl(${avatarHue},55%,45%)">${esc(initials)}</div><div class="order-info"><div class="name-line"><span class="customer-name">${esc(order.name)}</span><span class="status-pill" style="color:${status.fg};background:${status.bg}">${esc(external ? 'Venda externa' : status.label)}</span></div><div class="order-detail"><span class="detail-icon">${icon('phone')}</span><span>${esc(formatPhone(order.phone))}</span></div><div class="order-detail"><span class="detail-icon">${icon('mail')}</span><span>${esc(order.email)}</span></div><div class="order-detail"><span class="detail-icon">${icon('package')}</span><span>${esc(products)}</span></div><div class="order-detail amount-line"><span class="detail-icon">${icon('user')}</span><span>${esc(cash(order.amount))} · ${external ? 'Venda externa' : `PIX <span class="gateway-tag">${esc(gateway)}</span>`}</span></div><div class="order-date">${esc(formatDate(order.created_at))}</div>${tx}${manualLine}${purchaseLine}${recoveryLine}${trackingLine}</div></div><div class="order-actions">${order.phone ? `<a class="whatsapp" href="${esc(whatsapp(order))}" target="_blank" rel="noopener noreferrer">${icon('phone')} Chamar no WhatsApp</a>` : ''}${external || !order.email ? '' : `<button class="order-email" type="button" data-send-email>${icon('send')} Enviar Email</button>`}${trackingControls}${paymentActions}</div></div></article>`;
   }).join('');
   const pagination = $('pagination');
   pagination.hidden = totalPages < 2;
@@ -255,6 +252,44 @@ $('reset-filters').addEventListener('click', () => {
   $('status-filters').querySelectorAll('button').forEach((item) => item.classList.toggle('selected', item.dataset.status === 'todos')); renderOrders();
 });
 $('pagination').addEventListener('click', (event) => { const button = event.target.closest('[data-page]'); if (!button || button.disabled) return; page = Number(button.dataset.page); renderOrders(); window.scrollTo(0, 0); });
+let emailOrderId = null;
+function closeEmailModal() { $('email-modal').hidden = true; emailOrderId = null; }
+$('orders').addEventListener('click', (event) => {
+  const button = event.target.closest('[data-send-email]');
+  if (!button) return;
+  const order = orders.find((item) => item.id === button.closest('[data-order-id]')?.dataset.orderId);
+  if (!order?.email) return;
+  emailOrderId = order.id;
+  const code = order.shippingTracking?.code;
+  const firstName = String(order.name || '').trim().split(/\s+/)[0] || 'tudo bem';
+  $('email-recipient').value = order.email;
+  $('email-subject').value = `Informações do seu pedido GOKOCO${code ? ` · ${code}` : ''}`;
+  $('email-message').value = `Olá ${firstName}!\n\n${code ? `Seu código de rastreio é ${code}. Acompanhe por aqui: ${location.origin}/rastreio.html?codigo=${encodeURIComponent(code)}\n\n` : 'Estou entrando em contato sobre seu pedido da escova GOKOCO.\n\n'}Qualquer dúvida, estamos à disposição!\nEquipe GOKOCO`;
+  $('email-error').hidden = true;
+  $('email-success').hidden = true;
+  $('email-submit').disabled = false;
+  $('email-modal').hidden = false;
+  $('email-subject').focus();
+});
+$('email-close').addEventListener('click', closeEmailModal);
+$('email-modal').addEventListener('click', (event) => { if (event.target === $('email-modal')) closeEmailModal(); });
+$('email-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!emailOrderId) return;
+  const button = $('email-submit');
+  button.disabled = true;
+  $('email-error').hidden = true;
+  $('email-success').hidden = true;
+  try {
+    await api('send-order-email', { method: 'POST', body: JSON.stringify({ id: emailOrderId, subject: $('email-subject').value, message: $('email-message').value }) });
+    $('email-success').textContent = `E-mail enviado para ${$('email-recipient').value}.`;
+    $('email-success').hidden = false;
+    emailOrderId = null;
+  } catch (error) {
+    $('email-error').textContent = error.message || 'Não foi possível enviar o e-mail.';
+    $('email-error').hidden = false;
+  } finally { button.disabled = !emailOrderId; }
+});
 $('orders').addEventListener('click', async (event) => {
   const button = event.target.closest('[data-manual-payment],[data-generate-tracking]');
   if (!button) return;
@@ -303,7 +338,7 @@ $('gateways').addEventListener('click', async (event) => {
     gateways = data.gateways || []; renderGateways();
   } catch (error) { $('gateway-error').textContent = error.message; $('gateway-error').hidden = false; button.disabled = false; }
 });
-document.addEventListener('keydown', (event) => { if (event.key === 'Escape') $('gateway-modal').hidden = true; });
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { $('gateway-modal').hidden = true; closeEmailModal(); } });
 
 if (token) api('verify').then((data) => data.valid ? showPanel() : showLogin()).catch(showLogin);
 window.setInterval(() => { if (token && !$('shell').hidden) load(); }, 60_000);

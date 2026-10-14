@@ -88,6 +88,19 @@
       <div class="gateway-list" id="gateways"></div>
     </section>
   </div>
+  <div class="modal-backdrop" id="email-modal" hidden>
+    <section class="gateway-modal email-modal" role="dialog" aria-modal="true" aria-labelledby="email-title">
+      <div class="modal-heading"><div class="modal-icon" data-icon="mail"></div><div class="modal-title"><h2 id="email-title">Enviar e-mail sobre o pedido</h2><p>Mensagem enviada pelo e-mail da GOKOCO.</p></div><button class="close-button" id="email-close" type="button" aria-label="Fechar"><span data-icon="x"></span></button></div>
+      <form id="email-form" class="email-form">
+        <label>Para<input id="email-recipient" type="email" readonly></label>
+        <label>Assunto<input id="email-subject" type="text" maxlength="150" required></label>
+        <label>Mensagem<textarea id="email-message" maxlength="5000" rows="9" required></textarea></label>
+        <div class="alert" id="email-error" role="alert" hidden></div>
+        <p id="email-success" role="status" hidden></p>
+        <button class="button primary" id="email-submit" type="submit">Enviar e-mail</button>
+      </form>
+    </section>
+  </div>
   <script src="/admin.js" defer></script>
 </body>
 </html>

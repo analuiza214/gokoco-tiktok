@@ -15,7 +15,7 @@ output += wrap('providers/venuspay.js', ['createPixVenuspay', 'statusPixVenuspay
 output += wrap('pix-gateway-status.js', ['queryPixGatewayStatus']);
 output += wrap('admin-auth.js', ['verifyAdminToken']);
 output += wrap('purchase-tracking.js', ['capturePurchaseTracking', 'recoverCustomerAttribution', 'purchaseDestination', 'purchaseSummary', 'deliverPaidPurchase']);
-output += wrap('order-email.js', ['deliverPaidEmail', 'retryPaidEmails']);
+output += wrap('order-email.js', ['deliverPaidEmail', 'retryPaidEmails', 'sendManualOrderEmail']);
 output += wrap('recovery-email.js', ['processRecoveryQueue']);
 output += `\nconst adminLogin = (() => {\n${read('admin-login.js')}\nreturn onRequest;\n})();\n`;
 output += read('index.js');

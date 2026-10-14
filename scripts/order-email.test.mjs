@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const source = fs.readFileSync(new URL('../worker-src/order-email.js', import.meta.url), 'utf8');
-const { deliverPaidEmail } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+const { deliverPaidEmail, sendManualOrderEmail } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 const copy = (value) => JSON.parse(JSON.stringify(value));
 
 function fixture() {
@@ -75,5 +75,19 @@ test('falha do Resend não marca enviado e pode ser repetida com a mesma chave',
     f.order.tracking._email.retry_at = '2000-01-01T00:00:00Z';
     assert.equal((await deliverPaidEmail(f.env, f.db, f.order.id)).state, 'sent');
     assert.deepEqual(sent, ['gokoco-paid-order-123', 'gokoco-paid-order-123']);
+  } finally { globalThis.fetch = original; }
+});
+
+test('envio manual usa o e-mail do pedido e escapa conteúdo HTML', async () => {
+  const f = fixture(), sent = []; const original = globalThis.fetch;
+  globalThis.fetch = async (_url, options) => { sent.push(JSON.parse(options.body)); return Response.json({ id: 'manual-123' }); };
+  try {
+    const result = await sendManualOrderEmail(f.env, f.order, 'Sobre o pedido', 'Olá <cliente>!');
+    assert.equal(result.state, 'sent');
+    assert.deepEqual(sent[0].to, ['maria@example.com']);
+    assert.equal(sent[0].subject, 'Sobre o pedido');
+    assert.equal(sent[0].text, 'Olá <cliente>!');
+    assert.match(sent[0].html, /&lt;cliente&gt;/);
+    assert.equal((await sendManualOrderEmail(f.env, { email: '' }, 'Assunto', 'Mensagem')).state, 'invalid_input');
   } finally { globalThis.fetch = original; }
 });
