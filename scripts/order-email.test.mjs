@@ -14,7 +14,6 @@ function fixture() {
   };
   const env = {
     RESEND_API_KEY: 're_test', RESEND_FROM_EMAIL: 'pedidos@gokoco.example',
-    RESEND_REPLY_TO: 'atendimento@gokoco.example', RESEND_START_AT: '2026-10-15T00:00:00Z',
     SITE_URL: 'https://loja.example',
   };
   const db = async (_env, _table, query, method, body) => {
@@ -37,7 +36,7 @@ test('só envia e-mail de pedido pago com rastreio e configuração completa', a
   f.order.status = 'paid'; delete f.order.tracking.shipping;
   assert.equal((await deliverPaidEmail(f.env, f.db, f.order.id)).state, 'tracking_pending');
   f.order.tracking.shipping = { code: 'GK1234567890' };
-  f.env.RESEND_START_AT = '2026-10-16T00:00:00Z';
+  f.order.tracking._purchase.paid_at = '2026-10-14T19:00:00Z';
   assert.equal((await deliverPaidEmail(f.env, f.db, f.order.id)).state, 'before_activation');
 });
 
@@ -53,7 +52,7 @@ test('envia uma vez, com link de rastreio, perguntas e endereço de resposta', a
     assert.equal(sent[0].url, 'https://api.resend.com/emails');
     assert.equal(sent[0].options.headers['Idempotency-Key'], 'gokoco-paid-order-123');
     assert.equal(sent[0].payload.to[0], 'maria@example.com');
-    assert.equal(sent[0].payload.reply_to, 'atendimento@gokoco.example');
+    assert.equal(sent[0].payload.reply_to, 'pedidos@gokoco.example');
     assert.match(sent[0].payload.text, /GK1234567890/);
     assert.match(sent[0].payload.text, /https:\/\/loja.example\/rastreio.html\?codigo=GK1234567890/);
     assert.match(sent[0].payload.text, /Por qual motivo você comprou com a gente\?/);

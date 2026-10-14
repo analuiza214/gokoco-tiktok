@@ -75,8 +75,7 @@ test('confirmação do PIX também envia o e-mail de rastreio uma única vez', a
   const f = setup(), emails = [];
   Object.assign(f.env, {
     RESEND_API_KEY: 're_test', RESEND_FROM_EMAIL: 'pedidos@gokoco.example',
-    RESEND_REPLY_TO: 'atendimento@gokoco.example',
-    RESEND_START_AT: new Date(Date.now() - 86400000).toISOString(), SITE_URL: 'https://store.example',
+    SITE_URL: 'https://store.example',
   });
   const regularFetch = f.fetch;
   f.fetch = async (url, options) => {
@@ -90,7 +89,7 @@ test('confirmação do PIX também envia o e-mail de rastreio uma única vez', a
     await f.call('/api/public/pix/status?id=tx-id');
     await f.call('/api/public/pix/status?id=tx-id');
     assert.equal(emails.length, 1);
-    assert.equal(emails[0].reply_to, 'atendimento@gokoco.example');
+    assert.equal(emails[0].reply_to, 'pedidos@gokoco.example');
     assert.match(emails[0].text, new RegExp(f.state.order.tracking.shipping.code));
     assert.equal(f.state.order.tracking._email.state, 'sent');
   });

@@ -1197,16 +1197,15 @@ const { deliverPaidEmail, retryPaidEmails } = (() => {
 const emailText = (value, limit = 300) => String(value || '').trim().slice(0, limit);
 const emailAddress = (value) => /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(value);
 const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+const EMAIL_ACTIVATION_AT = Date.parse('2026-10-14T19:56:21Z');
 
 function emailSettings(env) {
   const key = emailText(env.RESEND_API_KEY, 300);
   const from = emailText(env.RESEND_FROM_EMAIL, 254);
-  const replyTo = emailText(env.RESEND_REPLY_TO, 254);
-  const start = emailText(env.RESEND_START_AT, 40);
   let site;
   try { site = new URL(String(env.SITE_URL || '')); } catch { return null; }
-  if (!key || !emailAddress(from) || !emailAddress(replyTo) || !start || !Number.isFinite(Date.parse(start)) || site.protocol !== 'https:') return null;
-  return { key, from, replyTo, start: Date.parse(start), site: site.origin };
+  if (!key || !emailAddress(from) || site.protocol !== 'https:') return null;
+  return { key, from, replyTo: from, start: EMAIL_ACTIVATION_AT, site: site.origin };
 }
 
 function composeEmail(order, code, settings) {

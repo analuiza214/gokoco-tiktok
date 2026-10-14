@@ -10,11 +10,9 @@ Antes de ativar, verifique no Resend um domínio próprio e configure na aplica�
 | --- | --- |
 | `RESEND_API_KEY` | Secret da API do Resend, com permissão de envio. Nunca colocar no site público ou no Git. |
 | `RESEND_FROM_EMAIL` | Endereço do domínio verificado, por exemplo `pedidos@seudominio.com`. |
-| `RESEND_REPLY_TO` | Caixa de entrada real que receberá as respostas dos clientes. |
-| `RESEND_START_AT` | Data/hora UTC do momento em que você ativar o envio, no formato `AAAA-MM-DDTHH:mm:ssZ`, para não disparar a automação a pedidos anteriores. |
 | `SITE_URL` | URL HTTPS pública da loja, usada no link de rastreio. |
 
-Sem todos esses valores, a automação fica desativada. Após configurá-los, faça novo deployment no Pages. A rotina protegida `/api/process-purchase-queue` também tenta novamente e-mails pendentes; para isso, mantenha a chamada agendada com `CRON_SECRET`. O remetente precisa ser um domínio verificado no Resend, e `RESEND_REPLY_TO` deve apontar para uma caixa que você realmente acompanhe.
+Sem esses valores, a automação fica desativada. Após configurá-los, faça novo deployment no Pages. A rotina protegida `/api/process-purchase-queue` também tenta novamente e-mails pendentes; para isso, mantenha a chamada agendada com `CRON_SECRET`. O remetente precisa ser um domínio verificado no Resend. As respostas vão para o mesmo endereço do remetente. Compras pagas antes da ativação desta integração não recebem e-mails retroativos.
 
 A confirmação continua sendo consultada no gateway. Depois de confirmar, o servidor envia a compra; a página do cliente não precisa continuar aberta. A consulta do checkout, o webhook e a atualização do admin passam pelo mesmo controle de envio no campo `tracking` existente em `gokoco_orders`. Não é necessário executar SQL novo.
 
