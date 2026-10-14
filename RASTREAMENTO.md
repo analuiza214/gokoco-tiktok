@@ -16,6 +16,10 @@ Sem esses valores, a automação fica desativada. Após configurá-los, faça no
 
 A confirmação continua sendo consultada no gateway. Depois de confirmar, o servidor envia a compra; a página do cliente não precisa continuar aberta. A consulta do checkout, o webhook e a atualização do admin passam pelo mesmo controle de envio no campo `tracking` existente em `gokoco_orders`. Não é necessário executar SQL novo.
 
+## Recuperação automática de PIX não pago
+
+A chamada agendada já usada em `/api/process-purchase-queue` também processa a recuperação. Um pedido com PIX pendente criado após a ativação recebe no máximo três e-mails: o primeiro após 30 minutos, o segundo 4 horas depois e o terceiro 24 horas após o segundo. Antes de cada envio, o servidor consulta o gateway e interrompe a sequência se o pagamento já foi confirmado. A mesma pessoa não recebe uma nova sequência por outro pedido quando já pagou ou já foi contatada. Cada tentativa usa chave de envio única e registra seu resultado em `tracking._recovery`, sem alterar o banco. O admin mostra quantos e-mails foram enviados e a data prevista do próximo. Os textos são da GOKOCO e não prometem prazo de entrega ou estoque não confirmados. Pedidos anteriores à ativação não entram nessa automação.
+
 ## Configuração no Cloudflare Pages
 
 Projeto: `gokoco-tiktok`. Em Settings → Variables and Secrets → Production, cadastre:

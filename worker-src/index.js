@@ -7,6 +7,7 @@ import { createPixVenuspay } from './providers/venuspay.js';
 import { queryPixGatewayStatus } from './pix-gateway-status.js';
 import { capturePurchaseTracking, purchaseDestination, purchaseSummary, deliverPaidPurchase } from './purchase-tracking.js';
 import { deliverPaidEmail, retryPaidEmails } from './order-email.js';
+import { processRecoveryQueue } from './recovery-email.js';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
 const gateways = [
@@ -460,7 +461,7 @@ async function adminOrders(request, env) {
   ));
   await retryPaidPurchases(env);
   const rows = await db(env, 'gokoco_orders', '?gateway=neq.manual_tracking&select=id,created_at,name,email,phone,amount,products,gateway,status,transaction_id,shipping,tracking&order=created_at.desc&limit=200');
-  return json({ orders: rows.map(({ tracking, ...order }) => ({ ...order, shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
+  return json({ orders: rows.map(({ tracking, ...order }) => ({ ...order, shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, recovery: tracking?._recovery || null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
 }
 
 async function reconcilePendingPayments(env, limit = 2) {
@@ -533,7 +534,8 @@ export default {
         const payments = await reconcilePendingPayments(env, 5);
         const purchases = await retryPaidPurchases(env);
         const emails = await retryPaidEmails(env, db);
-        return json({ payments, purchases, emails });
+        const recovery = await processRecoveryQueue(env, db, queryPixGatewayStatus);
+        return json({ payments, purchases, emails, recovery });
       }
       if (path === '/api/public/pix/create' && request.method === 'POST') return await createPix(request, env);
       if (path === '/api/public/pix/status' && request.method === 'GET') return await statusPix(request, env);
