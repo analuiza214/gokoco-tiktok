@@ -6,6 +6,7 @@ import { createPixUmbrellapag } from './providers/umbrellapag.js';
 import { createPixVenuspay } from './providers/venuspay.js';
 import { queryPixGatewayStatus } from './pix-gateway-status.js';
 import { capturePurchaseTracking, purchaseDestination, purchaseSummary, deliverPaidPurchase } from './purchase-tracking.js';
+import { deliverPaidEmail, retryPaidEmails } from './order-email.js';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
 const gateways = [
@@ -213,6 +214,7 @@ async function statusPix(request, env) {
   if (order.status === 'paid') {
     const shippingTracking = await registerOrderTracking(env, order.id, order.updated_at || order.created_at).catch((error) => { console.error('[tracking/status]', error.message); return null; });
     await deliverPaidPurchase(env, db, order.id).catch((error) => console.error('[purchase/status]', error.message));
+    await deliverPaidEmail(env, db, order.id).catch((error) => console.error('[email/status]', error.message));
     return json({ status: 'paid', isPaid: true, amount: Number(order.amount), trackingCode: shippingTracking?.code || null, eventId: `pix_${order.id}`, purchaseDestination: purchaseDestination(env) });
   }
   const result = await queryPixGatewayStatus(env, order.transaction_id, order.gateway);
@@ -222,6 +224,7 @@ async function statusPix(request, env) {
   if (status === 'paid') {
     shippingTracking = await registerOrderTracking(env, order.id, result.paidAt || new Date().toISOString()).catch((error) => { console.error('[tracking/status]', error.message); return null; });
     await deliverPaidPurchase(env, db, order.id, result.paidAt || new Date().toISOString()).catch((error) => console.error('[purchase/status]', error.message));
+    await deliverPaidEmail(env, db, order.id, result.paidAt || new Date().toISOString()).catch((error) => console.error('[email/status]', error.message));
   }
   return json({ status, isPaid: status === 'paid', isExpired: result.isExpired, amount: Number(order.amount), trackingCode: shippingTracking?.code || null, eventId: `pix_${order.id}`, purchaseDestination: purchaseDestination(env) });
 }
@@ -274,6 +277,7 @@ async function webhook(request, env) {
     if (status === 'paid') {
       await registerOrderTracking(env, order.id, verified.paidAt || (order.status === 'paid' ? undefined : new Date().toISOString()));
       const delivery = await deliverPaidPurchase(env, db, order.id, verified.paidAt || (order.status === 'paid' ? undefined : new Date().toISOString()));
+      await deliverPaidEmail(env, db, order.id, verified.paidAt).catch((error) => console.error('[email/webhook]', error.message));
       if (delivery.state === 'failed' || delivery.state === 'retry_pending' || delivery.state === 'busy') return json({ received: true, retryRequired: true }, 503);
     }
     break;
@@ -394,6 +398,7 @@ async function adminManualPayment(request, env) {
   const shipping = await registerOrderTracking(env, id);
   if (!shipping?.code) return json({ error: 'Pagamento salvo. Tente gerar o rastreio novamente.' }, 409);
   await deliverPaidPurchase(env, db, id);
+  await deliverPaidEmail(env, db, id).catch((error) => console.error('[email/admin]', error.message));
   return json({ ok: true, shipping });
 }
 
@@ -407,6 +412,7 @@ async function adminGenerateTracking(request, env) {
   if (!rows.length) return json({ error: 'Marque o pagamento como recebido antes de gerar o rastreio.' }, 409);
   const shipping = await registerOrderTracking(env, id);
   if (!shipping?.code) return json({ error: 'Não foi possível gerar o rastreio. Tente novamente.' }, 409);
+  await deliverPaidEmail(env, db, id).catch((error) => console.error('[email/tracking]', error.message));
   return json({ ok: true, shipping });
 }
 
@@ -485,6 +491,7 @@ async function reconcilePendingPayments(env, limit = 2) {
         const paidAt = verified.paidAt || new Date().toISOString();
         await registerOrderTracking(env, order.id, paidAt);
         await deliverPaidPurchase(env, db, order.id, paidAt);
+        await deliverPaidEmail(env, db, order.id, paidAt);
       } else {
         summary.expired++;
       }
@@ -525,7 +532,8 @@ export default {
         if (!secret || request.headers.get('x-cron-secret') !== secret) return json({ error: 'Não autorizado.' }, 401);
         const payments = await reconcilePendingPayments(env, 5);
         const purchases = await retryPaidPurchases(env);
-        return json({ payments, purchases });
+        const emails = await retryPaidEmails(env, db);
+        return json({ payments, purchases, emails });
       }
       if (path === '/api/public/pix/create' && request.method === 'POST') return await createPix(request, env);
       if (path === '/api/public/pix/status' && request.method === 'GET') return await statusPix(request, env);

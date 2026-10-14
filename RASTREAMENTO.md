@@ -1,5 +1,21 @@
 # Compras confirmadas — Bella Mix / GOKOCO
 
+## E-mail automático de confirmação (Resend)
+
+Depois que o gateway confirma o pagamento e o código de rastreio é gerado, o servidor pode enviar um e-mail com o código, o link da página de rastreio e quatro perguntas para o cliente responder. O e-mail é enviado uma vez por pedido pago; webhook, checkout e admin compartilham o mesmo registro de envio. Pedidos sem rastreio ou ainda pendentes não recebem e-mail. Falhas podem ser repetidas sem marcar o pedido como enviado.
+
+Antes de ativar, verifique no Resend um domínio próprio e configure na aplicação Cloudflare Pages `gokoco-tiktok`, em **Settings → Variables and Secrets → Production**:
+
+| Nome | Valor / finalidade |
+| --- | --- |
+| `RESEND_API_KEY` | Secret da API do Resend, com permissão de envio. Nunca colocar no site público ou no Git. |
+| `RESEND_FROM_EMAIL` | Endereço do domínio verificado, por exemplo `pedidos@seudominio.com`. |
+| `RESEND_REPLY_TO` | Caixa de entrada real que receberá as respostas dos clientes. |
+| `RESEND_START_AT` | Data/hora UTC do momento em que você ativar o envio, no formato `AAAA-MM-DDTHH:mm:ssZ`, para não disparar a automação a pedidos anteriores. |
+| `SITE_URL` | URL HTTPS pública da loja, usada no link de rastreio. |
+
+Sem todos esses valores, a automação fica desativada. Após configurá-los, faça novo deployment no Pages. A rotina protegida `/api/process-purchase-queue` também tenta novamente e-mails pendentes; para isso, mantenha a chamada agendada com `CRON_SECRET`. O remetente precisa ser um domínio verificado no Resend, e `RESEND_REPLY_TO` deve apontar para uma caixa que você realmente acompanhe.
+
 A confirmação continua sendo consultada no gateway. Depois de confirmar, o servidor envia a compra; a página do cliente não precisa continuar aberta. A consulta do checkout, o webhook e a atualização do admin passam pelo mesmo controle de envio no campo `tracking` existente em `gokoco_orders`. Não é necessário executar SQL novo.
 
 ## Configuração no Cloudflare Pages

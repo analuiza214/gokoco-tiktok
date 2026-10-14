@@ -71,6 +71,31 @@ test('consulta de status confirma no gateway e envia sem depender do cliente', a
   });
 });
 
+test('confirmação do PIX também envia o e-mail de rastreio uma única vez', async () => {
+  const f = setup(), emails = [];
+  Object.assign(f.env, {
+    RESEND_API_KEY: 're_test', RESEND_FROM_EMAIL: 'pedidos@gokoco.example',
+    RESEND_REPLY_TO: 'atendimento@gokoco.example',
+    RESEND_START_AT: new Date(Date.now() - 86400000).toISOString(), SITE_URL: 'https://store.example',
+  });
+  const regularFetch = f.fetch;
+  f.fetch = async (url, options) => {
+    if (new URL(url).hostname === 'api.resend.com') {
+      emails.push(JSON.parse(options.body));
+      return Response.json({ id: 'email-123' });
+    }
+    return regularFetch(url, options);
+  };
+  await using(f, async () => {
+    await f.call('/api/public/pix/status?id=tx-id');
+    await f.call('/api/public/pix/status?id=tx-id');
+    assert.equal(emails.length, 1);
+    assert.equal(emails[0].reply_to, 'atendimento@gokoco.example');
+    assert.match(emails[0].text, new RegExp(f.state.order.tracking.shipping.code));
+    assert.equal(f.state.order.tracking._email.state, 'sent');
+  });
+});
+
 test('rastreio público usa código secreto, oculta endereço e avança etapa pelo admin', async () => {
   const f = setup(); f.state.order.status = 'paid';
   const payload = Buffer.from(JSON.stringify({ exp: Date.now() + 60000 })).toString('base64');
