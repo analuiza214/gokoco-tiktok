@@ -472,7 +472,7 @@ async function adminSendOrderEmail(request, env) {
   const subject = String(body.subject || '').trim();
   const message = String(body.message || '').trim();
   if (!/^[0-9a-f-]{36}$/i.test(id) || !subject || subject.length > 150 || !message || message.length > 5000) return json({ error: 'Confira o pedido, assunto e mensagem.' }, 400);
-  const rows = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(id)}&gateway=neq.manual_tracking&select=id,name,email&limit=1`);
+  const rows = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(id)}&gateway=neq.manual_tracking&select=id,name,email,status,tracking&limit=1`);
   if (!rows.length) return json({ error: 'Pedido não encontrado.' }, 404);
   const result = await sendManualOrderEmail(env, rows[0], subject, message);
   if (result.state === 'not_configured') return json({ error: 'Configure o Resend no servidor para enviar e-mails.' }, 503);
