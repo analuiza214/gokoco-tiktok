@@ -40,6 +40,8 @@ Use `PURCHASE_DELIVERY_MODE=meta`, `FB_PIXEL_ID=1542362403143695` e o secret `FB
 
 O modo `meta` envia à Meta diretamente; o modo `utmify` envia somente à UTMify. Sem modo explícito, a presença de `UTMIFY_API_TOKEN` dá preferência à UTMify; se ela não estiver configurada e existir `FB_ACCESS_TOKEN`, usa Meta. Isso evita enviar a mesma compra por duas integrações de servidor independentes.
 
+No modo UTMify, a loja registra o pedido como `waiting_payment` assim que o PIX é gerado. Quando o gateway confirma o pagamento, envia `paid` com o mesmo `orderId` e `createdAt`, atualizando o pedido existente. A rotina protegida tenta novamente o registro de PIX pendentes que falhou, enquanto o pedido continuar pendente. Não configure um envio adicional do mesmo gateway à UTMify sem conferir a identificação dos pedidos, para evitar duplicação.
+
 No modo Meta, o Purchase do navegador e do servidor compartilham `pix_<id interno do pedido>` para deduplicação. No modo UTMify, o Purchase manual do navegador fica desativado porque a identificação de evento da UTMify é própria. PageView e o InitiateCheckout ao avançar dos dados para o CEP continuam no navegador. ViewContent é enviado na página do produto.
 
 O script automático `scripts/pixel/pixel.js` enviado na conversa permanece fora da publicação: ele reconhece botões de compra e links de pagamento como início de checkout, contrariando a regra solicitada para a etapa de CEP. O script de UTMs `scripts/utms/latest.js` continua instalado.

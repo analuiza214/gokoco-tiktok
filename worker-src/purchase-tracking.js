@@ -77,13 +77,13 @@ function products(order) {
   return [{ id: 'gokoco_escova', name: 'Escova Modeladora GOKOCO', planId: null, planName: null, quantity: 1, priceInCents: Math.round(Number(order.amount) * 100) }];
 }
 
-async function sendUtmify(env, order, paidAt) {
+async function sendUtmify(env, order, status, paidAt = null) {
   const token = String(env.UTMIFY_API_TOKEN || '').trim();
   if (!token) throw new Error('UTMIFY_API_TOKEN não configurado.');
   const cents = Math.round(Number(order.amount) * 100);
   const payload = {
-    orderId: String(order.transaction_id || order.id), platform: 'BellaMix', paymentMethod: 'pix', status: 'paid',
-    createdAt: utc(order.created_at), approvedDate: utc(paidAt), refundedAt: null,
+    orderId: String(order.transaction_id || order.id), platform: 'BellaMix', paymentMethod: 'pix', status,
+    createdAt: utc(order.created_at), approvedDate: paidAt ? utc(paidAt) : null, refundedAt: null,
     customer: { name: order.name, email: order.email, phone: order.phone || null, document: order.document || null, country: 'BR', ...(order.tracking?._browser?.ip ? { ip: order.tracking._browser.ip } : {}) },
     products: products(order),
     trackingParameters: Object.fromEntries(ATTRIBUTION_KEYS.slice(0, 7).map((key) => [key, order.tracking?.[key] || null])),
@@ -96,6 +96,34 @@ async function sendUtmify(env, order, paidAt) {
   });
   if (!response.ok) throw new Error(`UTMify respondeu HTTP ${response.status}. Confira a credencial e os dados do pedido.`);
   return { http_status: response.status };
+}
+
+export async function deliverPendingPurchase(env, db, orderId) {
+  if (purchaseDestination(env) !== 'utmify') return { state: 'not_configured' };
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const rows = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(orderId)}&status=eq.pending&select=*&limit=1`);
+    const order = rows?.[0];
+    if (!order?.transaction_id) return { state: 'not_pending' };
+    const prior = order.tracking?._purchase?.utmify_pending || {};
+    if (prior.state === 'sent') return { state: 'sent' };
+    if (prior.state === 'sending' && Date.parse(prior.lease_until) > Date.now()) return { state: 'sending' };
+    if (Date.parse(prior.retry_at) > Date.now()) return { state: 'retry_pending' };
+    const claim = crypto.randomUUID();
+    const tracking = { ...order.tracking, _purchase: { ...order.tracking?._purchase, utmify_pending: { state: 'sending', claim, attempts: (Number(prior.attempts) || 0) + 1, lease_until: new Date(Date.now() + 120000).toISOString() } } };
+    const claimed = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}&status=eq.pending&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=*`, 'PATCH', { tracking });
+    if (!claimed?.[0]) continue;
+    let result;
+    try {
+      const receipt = await sendUtmify(env, claimed[0], 'waiting_payment');
+      result = { state: 'sent', claim, attempts: tracking._purchase.utmify_pending.attempts, sent_at: new Date().toISOString(), ...receipt };
+    } catch (error) {
+      result = { state: 'failed', claim, attempts: tracking._purchase.utmify_pending.attempts, retry_at: new Date(Date.now() + 60000).toISOString(), error: error.name === 'TimeoutError' ? 'Tempo limite ao enviar o PIX pendente.' : text(error.message, 250) };
+      console.error('[purchase/pending]', order.id, result.error);
+    }
+    const completed = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}&status=eq.pending&tracking=eq.${encodeURIComponent(JSON.stringify(claimed[0].tracking || {}))}&select=id`, 'PATCH', { tracking: { ...tracking, _purchase: { ...tracking._purchase, utmify_pending: result } } });
+    return completed?.length ? result : { state: 'status_changed' };
+  }
+  return { state: 'busy' };
 }
 
 async function hash(value) {
@@ -157,6 +185,7 @@ export async function deliverPaidPurchase(env, db, orderId, paidAt) {
     const metadata = order.tracking?._purchase || {};
     const prior = metadata[destination] || {};
     if (prior.state === 'sent') return purchaseSummary(env, order);
+    if (destination === 'utmify' && metadata.utmify_pending?.state === 'sending' && Date.parse(metadata.utmify_pending.lease_until) > Date.now()) return { state: 'pending_sending' };
     if (prior.state === 'sending' && Date.parse(prior.lease_until) > Date.now()) return { state: 'sending' };
     if (Date.parse(prior.retry_at) > Date.now()) return { state: 'retry_pending' };
     const date = metadata.paid_at || order.tracking?._payment?.paid_at || paidAt || order.updated_at || order.created_at;
@@ -167,7 +196,7 @@ export async function deliverPaidPurchase(env, db, orderId, paidAt) {
     if (!claimed) continue;
     let result;
     try {
-      const receipt = destination === 'utmify' ? await sendUtmify(env, claimed, date) : await sendMeta(env, claimed, date);
+      const receipt = destination === 'utmify' ? await sendUtmify(env, claimed, 'paid', date) : await sendMeta(env, claimed, date);
       result = { state: 'sent', claim, attempts: tracking._purchase[destination].attempts, sent_at: new Date().toISOString(), ...receipt };
     } catch (error) {
       // Não registrar respostas do fornecedor: podem conter dados pessoais ou tokens.

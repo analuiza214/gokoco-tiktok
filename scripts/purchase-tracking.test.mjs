@@ -3,13 +3,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 const source = fs.readFileSync(new URL('../worker-src/purchase-tracking.js', import.meta.url), 'utf8');
-const { capturePurchaseTracking, recoverCustomerAttribution, deliverPaidPurchase, purchaseDestination } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+const { capturePurchaseTracking, recoverCustomerAttribution, deliverPaidPurchase, deliverPendingPurchase, purchaseDestination } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 const copy = (value) => JSON.parse(JSON.stringify(value));
 function fixture() {
   let order = { id: 'order-123', transaction_id: 'tx-123', status: 'paid', created_at: '2026-10-02T12:00:00Z', updated_at: '2026-10-02T12:30:00Z', name: 'Cliente Teste', email: 'teste@example.com', phone: '85999999999', document: '52998224725', amount: 75.80, products: [{ name: 'Escova', quantity: 2, price: 37.90 }], tracking: { utm_source: 'FB', utm_campaign: 'Campanha A', _browser: { source_url: 'https://example.com/pagamento', fbp: 'fb.1.123.456', ip: '192.0.2.1', user_agent: 'Test Browser' } } };
   const db = async (_env, _table, query, method, body) => {
     const params = new URLSearchParams(query.slice(1));
-    if (params.get('status') === 'eq.paid' && order.status !== 'paid') return [];
+    if (params.get('status')?.startsWith('eq.') && order.status !== params.get('status').slice(3)) return [];
     if (method !== 'PATCH') return [copy(order)];
     const expected = JSON.parse(params.get('tracking').slice(3));
     if (JSON.stringify(expected) !== JSON.stringify(order.tracking)) return [];
@@ -52,6 +52,41 @@ test('recupera UTMs do histórico do mesmo cliente sem substituir campanha nova'
 test('pagamento pendente não gera compra', async () => {
   const f = fixture(); f.order.status = 'pending';
   assert.equal((await deliverPaidPurchase({ UTMIFY_API_TOKEN: 'test' }, f.db, f.order.id)).state, 'not_paid');
+});
+
+test('PIX pendente e pagamento confirmado atualizam o mesmo pedido na UTMify', async () => {
+  const f = fixture(), sent = [], original = globalThis.fetch;
+  f.order.status = 'pending';
+  globalThis.fetch = async (_url, options) => { sent.push(JSON.parse(options.body)); return new Response('{}'); };
+  try {
+    assert.equal((await deliverPendingPurchase({ UTMIFY_API_TOKEN: 'test' }, f.db, f.order.id)).state, 'sent');
+    assert.equal((await deliverPendingPurchase({ UTMIFY_API_TOKEN: 'test' }, f.db, f.order.id)).state, 'sent');
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].status, 'waiting_payment');
+    assert.equal(sent[0].approvedDate, null);
+    f.order.status = 'paid';
+    assert.equal((await deliverPaidPurchase({ UTMIFY_API_TOKEN: 'test' }, f.db, f.order.id)).state, 'sent');
+    assert.equal(sent.length, 2);
+    assert.equal(sent[1].status, 'paid');
+    assert.equal(sent[0].orderId, sent[1].orderId);
+    assert.equal(sent[0].createdAt, sent[1].createdAt);
+  } finally { globalThis.fetch = original; }
+});
+
+test('falha no envio do PIX pendente pode ser repetida sem enviá-lo após pagamento', async () => {
+  const f = fixture(), sent = [], original = globalThis.fetch;
+  f.order.status = 'pending';
+  globalThis.fetch = async (_url, options) => { sent.push(JSON.parse(options.body)); return new Response('{}', { status: sent.length === 1 ? 503 : 200 }); };
+  try {
+    assert.equal((await deliverPendingPurchase({ UTMIFY_API_TOKEN: 'test' }, f.db, f.order.id)).state, 'failed');
+    assert.equal((await deliverPendingPurchase({ UTMIFY_API_TOKEN: 'test' }, f.db, f.order.id)).state, 'retry_pending');
+    f.order.tracking._purchase.utmify_pending.retry_at = '2000-01-01T00:00:00Z';
+    assert.equal((await deliverPendingPurchase({ UTMIFY_API_TOKEN: 'test' }, f.db, f.order.id)).state, 'sent');
+    f.order.status = 'paid';
+    assert.equal((await deliverPendingPurchase({ UTMIFY_API_TOKEN: 'test' }, f.db, f.order.id)).state, 'not_pending');
+    assert.equal(sent.length, 2);
+    assert.equal(sent[0].orderId, sent[1].orderId);
+  } finally { globalThis.fetch = original; }
 });
 
 test('webhook/admin/status simultâneos enviam um pedido com centavos e UTMs corretos', async () => {

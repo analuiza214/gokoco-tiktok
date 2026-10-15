@@ -5,7 +5,7 @@ import { createPixMasterfy } from './providers/masterfy.js';
 import { createPixUmbrellapag } from './providers/umbrellapag.js';
 import { createPixVenuspay } from './providers/venuspay.js';
 import { queryPixGatewayStatus } from './pix-gateway-status.js';
-import { capturePurchaseTracking, recoverCustomerAttribution, purchaseDestination, purchaseSummary, deliverPaidPurchase } from './purchase-tracking.js';
+import { capturePurchaseTracking, recoverCustomerAttribution, purchaseDestination, purchaseSummary, deliverPaidPurchase, deliverPendingPurchase } from './purchase-tracking.js';
 import { deliverPaidEmail, retryPaidEmails, sendManualOrderEmail } from './order-email.js';
 import { processRecoveryQueue } from './recovery-email.js';
 
@@ -112,7 +112,7 @@ function validateShipping(shipping) {
   return null;
 }
 
-async function createPix(request, env) {
+async function createPix(request, env, ctx) {
   const body = await request.json().catch(() => null);
   if (body?.client) body.client.email = normalizeBuyerEmail(body.client.email);
   const invalid = validateBuyer(body);
@@ -124,6 +124,10 @@ async function createPix(request, env) {
   const previous = await db(env, 'gokoco_orders', `?checkout_id=eq.${encodeURIComponent(checkoutId)}&select=*&limit=1`);
   if (previous[0]?.pix_code) {
     const old = previous[0];
+    if (old.status === 'pending' && purchaseDestination(env) === 'utmify') {
+      const send = deliverPendingPurchase(env, db, old.id).catch((error) => console.error('[purchase/pending]', old.id, error?.message || error));
+      if (ctx?.waitUntil) ctx.waitUntil(send); else await send;
+    }
     return json({ copyPaste: old.pix_code, qrCode: old.qr_code, transactionId: old.transaction_id, gatewayTransactionId: old.transaction_id, orderId: old.id });
   }
   if (previous[0] && previous[0].status !== 'failed') return json({ message: 'A cobrança anterior está em processamento. Aguarde um momento.' }, 409);
@@ -195,6 +199,10 @@ async function createPix(request, env) {
     status: 'pending', transaction_id: String(payment.transactionId), pix_code: payment.pixCode, qr_code: qr,
     updated_at: new Date().toISOString(),
   });
+  if (purchaseDestination(env) === 'utmify') {
+    const send = deliverPendingPurchase(env, db, id).catch((error) => console.error('[purchase/pending]', id, error?.message || error));
+    if (ctx?.waitUntil) ctx.waitUntil(send); else await send;
+  }
   if (env.PIX_RATELIMIT) {
     const count = Number(await env.PIX_RATELIMIT.get(ipKey) || 0);
     await env.PIX_RATELIMIT.put(ipKey, String(count + 1), { expirationTtl: 3600 });
@@ -554,8 +562,17 @@ async function retryPaidPurchases(env, limit = 3) {
   return { configured: true, processed: rows.length, sent: results.filter((r) => r.status === 'fulfilled' && r.value.state === 'sent').length, failed: results.filter((r) => r.status === 'rejected' || r.value?.state === 'failed').length };
 }
 
+async function retryPendingPurchases(env) {
+  if (purchaseDestination(env) !== 'utmify') return { configured: false, processed: 0 };
+  const since = new Date(Date.now() - 7 * 86400000).toISOString();
+  const path = 'tracking->_purchase->utmify_pending->>state';
+  const rows = await db(env, 'gokoco_orders', `?status=eq.pending&transaction_id=not.is.null&created_at=gte.${encodeURIComponent(since)}&or=(${path}.is.null,${path}.neq.sent)&select=id&order=created_at.desc&limit=1`);
+  if (rows[0]) await deliverPendingPurchase(env, db, rows[0].id);
+  return { configured: true, processed: rows.length };
+}
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     try {
       const path = url.pathname;
@@ -578,11 +595,12 @@ export default {
         const payments = phase === 'fulfillment' ? null : await reconcilePendingPayments(env, 2, true);
         await fulfillConfirmedPayment(env);
         const purchases = await retryPaidPurchases(env, 1);
+        const pendingPurchases = await retryPendingPurchases(env);
         const emails = await retryPaidEmails(env, db);
         const recovery = phase === 'fulfillment' ? null : await processRecoveryQueue(env, db, queryPixGatewayStatus, 1);
-        return json({ payments, purchases, emails, recovery });
+        return json({ payments, purchases, pendingPurchases, emails, recovery });
       }
-      if (path === '/api/public/pix/create' && request.method === 'POST') return await createPix(request, env);
+      if (path === '/api/public/pix/create' && request.method === 'POST') return await createPix(request, env, ctx);
       if (path === '/api/public/pix/status' && request.method === 'GET') return await statusPix(request, env);
       if (path === '/api/pix/webhook' && request.method === 'POST') return await webhook(request, env);
       if (path.startsWith('/api/')) return json({ error: 'Rota não encontrada.' }, 404);
