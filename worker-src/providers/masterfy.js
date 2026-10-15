@@ -168,6 +168,7 @@ export async function statusPixMasterfy(context, corsHeaders, transactionId) {
       `https://api.masterfypagamentos.com/v1/payment/${encodeURIComponent(transactionId)}`,
       {
         method: "GET",
+        signal: AbortSignal.timeout(12000),
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`,

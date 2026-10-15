@@ -228,7 +228,7 @@ export async function statusPixVenuspay(context, corsHeaders, transactionId) {
   try {
     const res = await fetch(
       `${STATUS_URL}?transaction_id=${encodeURIComponent(transactionId)}`,
-      { method: "GET", headers: { Accept: "application/json" } }
+      { method: "GET", headers: { Accept: "application/json" }, signal: AbortSignal.timeout(12000) }
     );
 
     const data = await res.json();

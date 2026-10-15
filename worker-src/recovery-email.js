@@ -111,7 +111,7 @@ export async function processRecoveryQueue(env, db, verifyPayment, limit = 3) {
     db(env, 'gokoco_orders', `${base}&or=(tracking->_recovery.is.null,tracking->_recovery->>state.eq.failed,tracking->_recovery->>state.eq.sending)&or=(tracking->_recovery->>count.is.null,tracking->_recovery->>count.eq.0)&select=id&order=created_at.desc&limit=${size}`),
     db(env, 'gokoco_orders', `${base}&tracking->_recovery->>count=gte.1&tracking->_recovery->>count=lte.2&tracking->_recovery->>state=neq.stopped&tracking->_recovery->>next_at=lte.${encodeURIComponent(new Date(now).toISOString())}&select=id&order=created_at.asc&limit=${size}`),
   ]);
-  const rows = [...newOrders, ...followups];
+  const rows = [...followups, ...newOrders].slice(0, size);
   const results = await Promise.allSettled(rows.map((order) => processRecoveryOrder(env, db, verifyPayment, order.id, now)));
   return { configured: true, processed: rows.length, sent: results.filter((r) => r.status === 'fulfilled' && r.value.sent).length, failed: results.filter((r) => r.status === 'rejected' || r.value?.state === 'failed').length };
 }

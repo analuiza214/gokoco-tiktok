@@ -159,7 +159,7 @@ export async function deliverPaidPurchase(env, db, orderId, paidAt) {
     if (prior.state === 'sent') return purchaseSummary(env, order);
     if (prior.state === 'sending' && Date.parse(prior.lease_until) > Date.now()) return { state: 'sending' };
     if (Date.parse(prior.retry_at) > Date.now()) return { state: 'retry_pending' };
-    const date = metadata.paid_at || paidAt || order.updated_at || order.created_at;
+    const date = metadata.paid_at || order.tracking?._payment?.paid_at || paidAt || order.updated_at || order.created_at;
     if (!Number.isFinite(Date.parse(date))) throw new Error('Data de pagamento inválida.');
     const claim = crypto.randomUUID();
     const tracking = { ...order.tracking, _purchase: { ...metadata, paid_at: date, [destination]: { state: 'sending', claim, attempts: (Number(prior.attempts) || 0) + 1, lease_until: new Date(Date.now() + 120000).toISOString() } } };

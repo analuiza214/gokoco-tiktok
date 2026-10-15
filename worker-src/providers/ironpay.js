@@ -141,7 +141,7 @@ export async function statusPixIronpay(context, corsHeaders, transactionId) {
   try {
     const res = await fetch(
       `https://api.ironpayapp.com.br/api/public/v1/transactions/${encodeURIComponent(transactionId)}?api_token=${encodeURIComponent(apiToken)}`,
-      { method: "GET", headers: { "Content-Type": "application/json" } }
+      { method: "GET", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(12000) }
     );
 
     const data = await res.json();

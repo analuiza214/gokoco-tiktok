@@ -213,6 +213,7 @@ export async function statusPixUmbrellapag(context, corsHeaders, transactionId) 
       `${API_BASE}/user/transactions/${encodeURIComponent(transactionId)}`,
       {
         method: "GET",
+        signal: AbortSignal.timeout(12000),
         headers: apiHeaders(apiKey),
       }
     );

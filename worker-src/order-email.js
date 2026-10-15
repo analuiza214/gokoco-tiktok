@@ -63,7 +63,7 @@ export async function deliverPaidEmail(env, db, orderId, paidAt) {
     const code = emailText(order.tracking?.shipping?.code, 40);
     if (!/^[A-Z0-9]{8,40}$/.test(code)) return { state: 'tracking_pending' };
     if (!emailAddress(String(order.email || ''))) return { state: 'invalid_email' };
-    const date = order.tracking?.manualPayment?.paidAt || order.tracking?._purchase?.paid_at || paidAt || order.updated_at || order.created_at;
+    const date = order.tracking?.manualPayment?.paidAt || order.tracking?._purchase?.paid_at || order.tracking?._payment?.paid_at || paidAt || order.updated_at || order.created_at;
     if (!Number.isFinite(Date.parse(date)) || Date.parse(date) < settings.start) return { state: 'before_activation' };
     const prior = order.tracking?._email || {};
     if (prior.state === 'sent') return { state: 'sent', sent_at: prior.sent_at, email_id: prior.email_id };

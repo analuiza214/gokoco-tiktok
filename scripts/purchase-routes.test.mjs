@@ -6,6 +6,7 @@ import { createHmac } from 'node:crypto';
 const code = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
 const { default: worker } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 const copy = (v) => JSON.parse(JSON.stringify(v));
+const matchesStatus = (filter, status) => !filter || (filter.startsWith('in.(') ? filter.slice(4, -1).split(',').includes(status) : filter === 'eq.' + status);
 
 test('não cria cobrança PIX sem endereço de entrega completo', async () => {
   const payload = {
@@ -27,8 +28,8 @@ function setup() {
     if (url.hostname === 'api.utmify.com.br') { state.sent.push(JSON.parse(options.body)); return Response.json({ ok: true }); }
     assert.equal(url.hostname, 'db.example');
     const params = url.searchParams;
-    if (params.has('transaction_id') && params.get('transaction_id') !== 'eq.' + state.order.transaction_id) return Response.json([]);
-    if (params.has('status') && params.get('status') !== 'eq.' + state.order.status) return Response.json([]);
+    if (params.has('transaction_id') && params.get('transaction_id') !== 'not.is.null' && params.get('transaction_id') !== 'eq.' + state.order.transaction_id) return Response.json([]);
+    if (!matchesStatus(params.get('status'), state.order.status)) return Response.json([]);
     if (params.has('status') && params.get('status') === 'eq.paid' && state.order.status !== 'paid') return Response.json([]);
     if (params.has('tracking->shipping->>code')) {
       const filter = params.get('tracking->shipping->>code');
@@ -183,8 +184,8 @@ test('admin alterna a reconciliação entre pedidos pendentes sem prender nos ma
     ...copy(f.state.order),
     id: `order-${index + 1}`,
     transaction_id: `tx-${index + 1}`,
-    created_at: `2026-10-01T00:0${index}:00.000Z`,
-    updated_at: `2026-10-01T00:0${index}:00.000Z`,
+    created_at: new Date(Date.now() - 3600000 + index * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 3600000 + index * 1000).toISOString(),
   }));
   const checked = [];
   f.fetch = async (input, options = {}) => {
@@ -200,8 +201,11 @@ test('admin alterna a reconciliação entre pedidos pendentes sem prender nos ma
     const params = url.searchParams;
     let rows = orders.filter((order) => {
       if (params.has('id') && params.get('id') !== `eq.${order.id}`) return false;
-      if (params.has('status') && params.get('status') !== `eq.${order.status}`) return false;
-      if (params.has('updated_at') && params.get('updated_at') !== `eq.${order.updated_at}`) return false;
+      if (!matchesStatus(params.get('status'), order.status)) return false;
+      if (params.has('updated_at')) {
+        const filter = params.get('updated_at');
+        if (filter.startsWith('lte.') ? order.updated_at > filter.slice(4) : filter !== `eq.${order.updated_at}`) return false;
+      }
       return true;
     });
     if (options.method === 'PATCH') {
@@ -263,6 +267,62 @@ test('fila exige segredo e modo sem credencial não quebra confirmação paga', 
     assert.equal((await f.call('/api/process-purchase-queue', { method: 'POST' })).status, 401);
     const data = await (await f.call('/api/public/pix/status?id=tx-id')).json();
     assert.equal(data.status, 'paid'); assert.equal(data.purchaseDestination, null); assert.equal(f.state.sent.length, 0);
+  });
+});
+
+test('consulta atrasada não desfaz pagamento confirmado por outra requisição', async () => {
+  const f = setup(), original = f.fetch;
+  f.fetch = async (input, options) => {
+    if (new URL(input).hostname === 'api.ironpayapp.com.br') {
+      f.state.order.status = 'paid';
+      return Response.json({ payment_status: 'PENDING' });
+    }
+    return original(input, options);
+  };
+  await using(f, async () => {
+    await f.call('/api/public/pix/status?id=tx-id');
+    assert.equal(f.state.order.status, 'paid');
+  });
+});
+
+test('reconciliação protegida recupera expirado pago e a fila envia compra uma vez', async () => {
+  const f = setup(); f.env.CRON_SECRET = 'cron-test'; f.state.order.status = 'expired';
+  await using(f, async () => {
+    assert.equal((await f.call('/api/admin/reconcile-payments', { method: 'POST' })).status, 401);
+    const options = { method: 'POST', headers: { 'x-cron-secret': 'cron-test' } };
+    const data = await (await f.call('/api/admin/reconcile-payments', options)).json();
+    assert.equal(data.paid, 1);
+    assert.equal(f.state.order.status, 'paid');
+    assert.ok(f.state.order.tracking._payment.paid_at);
+    assert.equal(f.state.sent.length, 0);
+    await f.call('/api/process-purchase-queue', options);
+    await f.call('/api/process-purchase-queue', options);
+    assert.equal(f.state.sent.length, 1);
+    assert.ok(f.state.order.tracking.shipping.code);
+  });
+});
+
+test('lote de dez pagamentos confirmados mantém até 31 chamadas externas', async () => {
+  const f = setup(); f.env.CRON_SECRET = 'cron-test';
+  const rows = Array.from({ length: 10 }, (_, i) => ({ ...copy(f.state.order), id: `order-${i}`, transaction_id: `tx-${i}`, updated_at: new Date(Date.now() - 120000).toISOString() }));
+  let calls = 0;
+  f.fetch = async (input, options = {}) => {
+    calls++;
+    const url = new URL(input), p = url.searchParams;
+    if (url.hostname === 'api.ironpayapp.com.br') return Response.json({ payment_status: 'PAID', paid_at: new Date().toISOString() });
+    assert.equal(url.hostname, 'db.example');
+    let matches = rows.filter(row => matchesStatus(p.get('status'), row.status) && (!p.has('id') || p.get('id') === `eq.${row.id}`));
+    if (options.method === 'PATCH') {
+      matches = matches.filter(row => (!p.has('updated_at') || p.get('updated_at') === `eq.${row.updated_at}`) && (!p.has('tracking') || p.get('tracking') === `eq.${JSON.stringify(row.tracking)}`));
+      for (const row of matches) Object.assign(row, JSON.parse(options.body));
+    }
+    return Response.json(copy(matches));
+  };
+  await using(f, async () => {
+    const result = await (await f.call('/api/admin/reconcile-payments', { method: 'POST', headers: { 'x-cron-secret': 'cron-test' } })).json();
+    assert.equal(result.paid, 10);
+    assert.equal(calls, 31);
+    assert.ok(rows.every(row => row.status === 'paid'));
   });
 });
 

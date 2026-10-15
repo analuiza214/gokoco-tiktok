@@ -176,6 +176,17 @@ async function load() {
   $('page-error').hidden = true;
   if (!orders.length) $('loading').hidden = false;
   try {
+    try {
+      for (let batch = 0; batch < 5; batch++) {
+        const sync = await api('reconcile-payments', { method: 'POST' });
+        if (sync.failed) { $('page-error').textContent = 'Alguns pagamentos não puderam ser consultados. O sistema tentará novamente automaticamente.'; $('page-error').hidden = false; }
+        if (sync.checked < 10) break;
+      }
+    } catch (error) {
+      if (/Sessão expirada|Não autorizado/i.test(error.message)) throw error;
+      $('page-error').textContent = 'Não foi possível sincronizar o gateway agora. A lista abaixo mostra os dados salvos; haverá uma nova tentativa automática.';
+      $('page-error').hidden = false;
+    }
     const [gatewayData, orderData, manualData] = await Promise.all([api('gateways'), api('orders'), api('external-tracking')]);
     gateways = gatewayData.gateways || [];
     orders = orderData.orders || [];
