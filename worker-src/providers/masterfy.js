@@ -180,7 +180,7 @@ export async function statusPixMasterfy(context, corsHeaders, transactionId) {
 
     if (!res.ok) {
       return new Response(
-        JSON.stringify({ error: "Erro ao consultar gateway.", details: data }),
+        JSON.stringify({ error: "Erro ao consultar gateway.", upstreamStatus: res.status }),
         { status: 502, headers: corsHeaders }
       );
     }

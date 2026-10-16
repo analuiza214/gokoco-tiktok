@@ -179,7 +179,11 @@ async function load() {
     try {
       for (let batch = 0; batch < 5; batch++) {
         const sync = await api('reconcile-payments', { method: 'POST' });
-        if (sync.failed) { $('page-error').textContent = 'Alguns pagamentos não puderam ser consultados. O sistema tentará novamente automaticamente.'; $('page-error').hidden = false; }
+        if (sync.failed) {
+          const detail = (sync.failures || []).map((item) => `${item.gateway}: ${item.reason} (${item.count})`).join('; ');
+          $('page-error').textContent = `Alguns pagamentos não puderam ser consultados${detail ? `: ${detail}` : '.'} O sistema tentará novamente automaticamente.`;
+          $('page-error').hidden = false;
+        }
         if (sync.checked < 10) break;
       }
     } catch (error) {

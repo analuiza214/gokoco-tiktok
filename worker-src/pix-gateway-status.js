@@ -13,7 +13,7 @@ export async function queryPixGatewayStatus(env, transactionId, gateway) {
   else if (gateway === "venuspay_pix") response = await statusPixVenuspay(context, headers, transactionId);
   else response = await statusPixIronpay(context, headers, transactionId);
   const data = await response.json();
-  if (!response.ok) throw new Error(data?.error || `Gateway respondeu ${response.status}.`);
+  if (!response.ok) throw new Error(`${data?.error || 'Falha na consulta ao gateway.'}${data?.upstreamStatus ? ` HTTP ${data.upstreamStatus}` : ''}`);
   const normalized = String(data.status || "").trim().toLowerCase();
   const isRefunded = Boolean(data.isRefunded) || ["refunded", "refund", "reembolsado", "reembolsada"].includes(normalized);
   return {

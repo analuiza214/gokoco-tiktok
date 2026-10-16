@@ -494,7 +494,7 @@ async function reconcilePendingPayments(env, limit = 2, deferFulfillment = false
   const since = new Date(Date.now() - 7 * 86400000).toISOString();
   const cooldown = deferFulfillment ? `&updated_at=lte.${encodeURIComponent(new Date(Date.now() - 60000).toISOString())}` : '';
   const pending = await db(env, 'gokoco_orders', `?select=id,transaction_id,gateway,status,updated_at,tracking&status=in.(pending,expired,failed)&transaction_id=not.is.null&created_at=gte.${encodeURIComponent(since)}${cooldown}&order=updated_at.asc,created_at.asc&limit=${Math.max(1, Math.min(10, Number(limit) || 2))}`);
-  const summary = { checked: 0, paid: 0, expired: 0, failed: 0 };
+  const summary = { checked: 0, paid: 0, expired: 0, failed: 0, failures: [] };
   await Promise.all(pending.filter((order) => order.transaction_id).map(async (order) => {
     let claimedAt;
     try {
@@ -528,6 +528,11 @@ async function reconcilePendingPayments(env, limit = 2, deferFulfillment = false
       }
     } catch (error) {
       summary.failed++;
+      const gateway = String(order.gateway || 'desconhecido').slice(0, 32);
+      const reason = String(error?.message || 'Falha de comunicação').slice(0, 100);
+      const entry = summary.failures.find((item) => item.gateway === gateway && item.reason === reason);
+      if (entry) entry.count++;
+      else if (summary.failures.length < 8) summary.failures.push({ gateway, reason, count: 1 });
       console.error('[payment/reconcile]', order.gateway, order.id, error?.message || error);
     }
   }));

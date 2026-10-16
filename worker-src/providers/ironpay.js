@@ -147,7 +147,7 @@ export async function statusPixIronpay(context, corsHeaders, transactionId) {
     const data = await res.json();
 
     if (!res.ok) {
-      return new Response(JSON.stringify({ error: "Erro ao consultar gateway.", details: data }), { status: 502, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: "Erro ao consultar gateway.", upstreamStatus: res.status }), { status: 502, headers: corsHeaders });
     }
 
     // IronPay usa: PAID | PENDING | CANCELED | REFUNDED
