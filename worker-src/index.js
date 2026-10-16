@@ -44,6 +44,17 @@ function cartTotal(cart) {
   return Math.max(1, sum) / 100;
 }
 
+async function nextPixAmount(env, baseAmount) {
+  const baseCents = Math.round(baseAmount * 100);
+  const recent = await db(env, 'gokoco_orders', `?amount=gte.${((baseCents + 1) / 100).toFixed(2)}&amount=lte.${((baseCents + 5) / 100).toFixed(2)}&status=neq.failed&select=amount&order=created_at.desc&limit=1`);
+  const last = recent.find((row) => {
+    const difference = Math.round(Number(row.amount) * 100) - baseCents;
+    return difference >= 1 && difference <= 5;
+  });
+  const lastOffset = last ? Math.round(Number(last.amount) * 100) - baseCents : 0;
+  return (baseCents + (lastOffset % 5) + 1) / 100;
+}
+
 async function db(env, table, query = '', method = 'GET', body) {
   const base = String(env.SUPABASE_URL || '').trim().replace(/\/+$/, '');
   const key = String(env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
@@ -128,7 +139,7 @@ async function createPix(request, env, ctx) {
       const send = deliverPendingPurchase(env, db, old.id).catch((error) => console.error('[purchase/pending]', old.id, error?.message || error));
       if (ctx?.waitUntil) ctx.waitUntil(send); else await send;
     }
-    return json({ copyPaste: old.pix_code, qrCode: old.qr_code, transactionId: old.transaction_id, gatewayTransactionId: old.transaction_id, orderId: old.id });
+    return json({ copyPaste: old.pix_code, qrCode: old.qr_code, transactionId: old.transaction_id, gatewayTransactionId: old.transaction_id, orderId: old.id, amount: Number(old.amount) });
   }
   if (previous[0] && previous[0].status !== 'failed') return json({ message: 'A cobrança anterior está em processamento. Aguarde um momento.' }, 409);
   const active = (await listGateways(env)).filter((g) => g.enabled);
@@ -154,7 +165,7 @@ async function createPix(request, env, ctx) {
     email: normalizeBuyerEmail(body.client.email),
     phone: digits(body.client.phone),
     document: digits(body.client.document),
-    amount: Number(body.amount),
+    amount: await nextPixAmount(env, cartTotal(body.cart)),
     products: Array.isArray(body.products) ? body.products.slice(0, 10) : [],
     shipping,
     tracking: await recoverCustomerAttribution(env, db, capturePurchaseTracking(request, body), body.client),
@@ -207,7 +218,7 @@ async function createPix(request, env, ctx) {
     const count = Number(await env.PIX_RATELIMIT.get(ipKey) || 0);
     await env.PIX_RATELIMIT.put(ipKey, String(count + 1), { expirationTtl: 3600 });
   }
-  return json({ copyPaste: payment.pixCode, qrCode: qr, transactionId: payment.transactionId, gatewayTransactionId: payment.transactionId, orderId: id });
+  return json({ copyPaste: payment.pixCode, qrCode: qr, transactionId: payment.transactionId, gatewayTransactionId: payment.transactionId, orderId: id, amount: order.amount });
 }
 
 async function statusPix(request, env) {

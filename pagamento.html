@@ -742,7 +742,7 @@ fbq('track','PageView');
     var _fresh=!!(_cache && _cache.cp && (Date.now()-(_cache.ts||0) < 25*60*1000));
     if(_prevTx && !localStorage.getItem('pixPaid_'+_prevTx)){
       if(_fresh && _cache.ids===_prevTx){
-        var _run=function(){ var content=document.getElementById('lv-pix-content'); if(content) content.style.display='block'; showPixCode(_cache.cp, _cache.qr); };
+        var _run=function(){ var content=document.getElementById('lv-pix-content'); if(content) content.style.display='block'; showPixCode(_cache.cp, _cache.qr); showChargedAmount(_cache.amount); };
         if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', _run); else _run();
       } else {
         try{ localStorage.removeItem('lv_pix_cache'); }catch(e){}
@@ -753,6 +753,11 @@ fbq('track','PageView');
     }
   }catch(e){}
   try{ if(!document.getElementById('lv-spin-kf')){ var _sk=document.createElement('style'); _sk.id='lv-spin-kf'; _sk.textContent='@keyframes lvspin{to{transform:rotate(360deg)}}'; document.head.appendChild(_sk); } }catch(e){}
+  function showChargedAmount(amount){
+    if(!Number.isFinite(Number(amount)) || Number(amount)<=0) return;
+    var el=document.getElementById('lv-pix-total');
+    if(el) el.innerText='R$\u00a0'+Number(amount).toFixed(2).replace('.',',');
+  }
   function createPix(){
     if(loaded) return;
     if(loading) return; loading=true;
@@ -829,6 +834,7 @@ fbq('track','PageView');
         }
 
         var cp=res.j.copyPaste;
+        showChargedAmount(res.j.amount);
         if(codeEl) codeEl.innerText=cp;
         if(qrEl){
           if(res.j.qrCode && /^data:image|^https?:/.test(res.j.qrCode)) qrEl.setAttribute('data-src', res.j.qrCode);
@@ -844,7 +850,7 @@ fbq('track','PageView');
 
         var ids=[res.j.transactionId,res.j.gatewayTransactionId].filter(Boolean).filter(function(v,i,a){return a.indexOf(v)===i;}).join(',');
         try{ localStorage.setItem('lastPixTx', ids||''); localStorage.setItem('lastPixTxAt', String(Date.now())); localStorage.setItem('lvPixNext','/upsell1'); localStorage.setItem('lastPixOrder', res.j.orderId||res.j.gatewayTransactionId||''); }catch(e){}
-        try{ localStorage.setItem('lv_pix_cache', JSON.stringify({ids:ids||'',cp:cp,qr:res.j.qrCode||'',ts:Date.now()})); }catch(e){}
+        try{ localStorage.setItem('lv_pix_cache', JSON.stringify({ids:ids||'',cp:cp,qr:res.j.qrCode||'',amount:res.j.amount,ts:Date.now()})); }catch(e){}
         showPixHelp();
         if(ids) startPolling(ids);
       })
