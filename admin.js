@@ -177,14 +177,13 @@ async function load() {
   if (!orders.length) $('loading').hidden = false;
   try {
     try {
-      for (let batch = 0; batch < 5; batch++) {
-        const sync = await api('reconcile-payments', { method: 'POST' });
-        if (sync.failed) {
-          const detail = (sync.failures || []).map((item) => `${item.gateway}: ${item.reason} (${item.count})`).join('; ');
-          $('page-error').textContent = `Alguns pagamentos não puderam ser consultados${detail ? `: ${detail}` : '.'} O sistema tentará novamente automaticamente.`;
-          $('page-error').hidden = false;
-        }
-        if (sync.checked < 10) break;
+      const sync = await api('reconcile-payments', { method: 'POST' });
+      if (sync.failed) {
+        const detail = (sync.failures || []).map((item) => `${item.gateway}: ${item.reason} (${item.count})`).join('; ');
+        $('page-error').textContent = sync.rateLimited
+          ? 'O gateway limitou as consultas por enquanto. Os pagamentos continuam sendo conferidos automaticamente; tente atualizar mais tarde.'
+          : `Alguns pagamentos não puderam ser consultados${detail ? `: ${detail}` : '.'} O sistema tentará novamente automaticamente.`;
+        $('page-error').hidden = false;
       }
     } catch (error) {
       if (/Sessão expirada|Não autorizado/i.test(error.message)) throw error;

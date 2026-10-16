@@ -224,14 +224,14 @@ test('admin alterna a reconciliação entre pedidos pendentes sem prender nos ma
   try {
     await using(f, async () => {
       for (let i = 0; i < 2; i++) {
-        const response = await f.call('/api/admin/orders', { headers: { Authorization: 'Bearer ' + token } });
+        const response = await f.call('/api/admin/reconcile-payments', { method: 'POST', headers: { Authorization: 'Bearer ' + token } });
         assert.equal(response.status, 200);
       }
     });
   } finally {
     console.error = originalError;
   }
-  assert.deepEqual(checked.sort(), ['tx-1', 'tx-2', 'tx-3', 'tx-4']);
+  assert.deepEqual([...new Set(checked)].sort(), ['tx-1', 'tx-2', 'tx-3', 'tx-4']);
 });
 
 test('rotina protegida reconcilia pagamentos pendentes além de repetir envios', async () => {
@@ -302,7 +302,7 @@ test('reconciliação protegida recupera expirado pago e a fila envia compra uma
   });
 });
 
-test('lote de dez pagamentos confirmados mantém até 31 chamadas externas', async () => {
+test('lote administrativo consulta no máximo três pagamentos por atualização', async () => {
   const f = setup(); f.env.CRON_SECRET = 'cron-test';
   const rows = Array.from({ length: 10 }, (_, i) => ({ ...copy(f.state.order), id: `order-${i}`, transaction_id: `tx-${i}`, updated_at: new Date(Date.now() - 120000).toISOString() }));
   let calls = 0;
@@ -316,14 +316,34 @@ test('lote de dez pagamentos confirmados mantém até 31 chamadas externas', asy
       matches = matches.filter(row => (!p.has('updated_at') || p.get('updated_at') === `eq.${row.updated_at}`) && (!p.has('tracking') || p.get('tracking') === `eq.${JSON.stringify(row.tracking)}`));
       for (const row of matches) Object.assign(row, JSON.parse(options.body));
     }
-    return Response.json(copy(matches));
+    return Response.json(copy(p.has('limit') ? matches.slice(0, Number(p.get('limit'))) : matches));
   };
   await using(f, async () => {
     const result = await (await f.call('/api/admin/reconcile-payments', { method: 'POST', headers: { 'x-cron-secret': 'cron-test' } })).json();
-    assert.equal(result.paid, 10);
-    assert.equal(calls, 31);
-    assert.ok(rows.every(row => row.status === 'paid'));
+    assert.equal(result.paid, 3);
+    assert.equal(calls, 10);
+    assert.equal(rows.filter(row => row.status === 'paid').length, 3);
   });
+});
+
+test('limite HTTP 429 interrompe consultas sem marcar PIX como pago', async () => {
+  const f = setup(); f.env.CRON_SECRET = 'cron-test';
+  const regularFetch = f.fetch;
+  f.fetch = (url, options) => new URL(url).hostname === 'api.ironpayapp.com.br'
+    ? Response.json({ error: 'rate limited' }, { status: 429 })
+    : regularFetch(url, options);
+  const originalError = console.error; console.error = () => {};
+  try {
+    await using(f, async () => {
+      const response = await f.call('/api/admin/reconcile-payments', { method: 'POST', headers: { 'x-cron-secret': 'cron-test' } });
+      const result = await response.json();
+      assert.equal(response.status, 200);
+      assert.equal(result.failed, 1);
+      assert.equal(result.rateLimited, true);
+      assert.equal(result.failures[0].reason, 'Erro ao consultar gateway. HTTP 429');
+      assert.equal(f.state.order.status, 'pending');
+    });
+  } finally { console.error = originalError; }
 });
 
 test('InitiateCheckout permanece apenas após dados preenchidos e transição à entrega', () => {

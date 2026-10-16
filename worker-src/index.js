@@ -462,7 +462,6 @@ async function adminGateways(request, env) {
 async function adminOrders(request, env) {
   const denied = await requireAdmin(request, env); if (denied) return denied;
   if (request.method !== 'GET') return json({ error: 'Método inválido.' }, 405);
-  await reconcilePendingPayments(env, 2, true);
   const missingTracking = encodeURIComponent('tracking->shipping->>code');
   const paidOrders = await db(env, 'gokoco_orders', `?status=eq.paid&${missingTracking}=is.null&select=id,tracking,updated_at,created_at&order=created_at.desc&limit=3`);
   await Promise.allSettled(paidOrders.map((order) =>
@@ -494,8 +493,8 @@ async function reconcilePendingPayments(env, limit = 2, deferFulfillment = false
   const since = new Date(Date.now() - 7 * 86400000).toISOString();
   const cooldown = deferFulfillment ? `&updated_at=lte.${encodeURIComponent(new Date(Date.now() - 60000).toISOString())}` : '';
   const pending = await db(env, 'gokoco_orders', `?select=id,transaction_id,gateway,status,updated_at,tracking&status=in.(pending,expired,failed)&transaction_id=not.is.null&created_at=gte.${encodeURIComponent(since)}${cooldown}&order=updated_at.asc,created_at.asc&limit=${Math.max(1, Math.min(10, Number(limit) || 2))}`);
-  const summary = { checked: 0, paid: 0, expired: 0, failed: 0, failures: [] };
-  await Promise.all(pending.filter((order) => order.transaction_id).map(async (order) => {
+  const summary = { checked: 0, paid: 0, expired: 0, failed: 0, rateLimited: false, failures: [] };
+  for (const order of pending.filter((item) => item.transaction_id)) {
     let claimedAt;
     try {
       const previousUpdatedAt = Date.parse(order.updated_at || '') || 0;
@@ -504,21 +503,21 @@ async function reconcilePendingPayments(env, limit = 2, deferFulfillment = false
         ? `updated_at=eq.${encodeURIComponent(order.updated_at)}`
         : 'updated_at=is.null';
       const claimed = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}&status=eq.${order.status}&${updateFilter}&select=id`, 'PATCH', { updated_at: claimedAt });
-      if (!claimed.length) return;
+      if (!claimed.length) continue;
       summary.checked++;
 
       const verified = await queryPixGatewayStatus(env, order.transaction_id, order.gateway);
       const status = verified.isPaid ? 'paid' : verified.isRefunded ? 'refunded' : verified.isExpired ? 'expired' : 'pending';
-      if (status === 'pending') return;
+      if (status === 'pending') continue;
 
       const updated = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}&status=eq.${order.status}&updated_at=eq.${encodeURIComponent(claimedAt)}&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=id`, 'PATCH', {
         status, updated_at: new Date().toISOString(),
         ...(status === 'paid' ? { tracking: { ...(order.tracking || {}), _payment: { paid_at: verified.paidAt || new Date().toISOString() } } } : {}),
       });
-      if (!updated.length) return;
+      if (!updated.length) continue;
       if (status === 'paid') {
         summary.paid++;
-        if (deferFulfillment) return;
+        if (deferFulfillment) continue;
         const paidAt = verified.paidAt || new Date().toISOString();
         await registerOrderTracking(env, order.id, paidAt);
         await deliverPaidPurchase(env, db, order.id, paidAt);
@@ -534,8 +533,9 @@ async function reconcilePendingPayments(env, limit = 2, deferFulfillment = false
       if (entry) entry.count++;
       else if (summary.failures.length < 8) summary.failures.push({ gateway, reason, count: 1 });
       console.error('[payment/reconcile]', order.gateway, order.id, error?.message || error);
+      if (/HTTP 429\b/.test(reason)) { summary.rateLimited = true; break; }
     }
-  }));
+  }
   return summary;
 }
 
@@ -543,9 +543,9 @@ async function reconcilePaymentsRoute(request, env) {
   const cron = Boolean(env.CRON_SECRET && request.headers.get('x-cron-secret') === env.CRON_SECRET);
   if (!cron) { const denied = await requireAdmin(request, env); if (denied) return denied; }
   if (request.method !== 'POST') return json({ error: 'Método inválido.' }, 405);
-  // Só confirma o status neste lote: no máximo 31 chamadas externas.
+  // Lote pequeno e sequencial evita o limite de consultas dos gateways.
   // Rastreio, pixel e e-mail seguem nas filas com proteção contra duplicação.
-  return json(await reconcilePendingPayments(env, 10, true));
+  return json(await reconcilePendingPayments(env, 3, true));
 }
 
 async function fulfillConfirmedPayment(env) {
