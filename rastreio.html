@@ -21,6 +21,17 @@
     @media(max-width:520px){.order-card{padding:19px 16px 12px}.timeline-card{padding:2px 16px 18px}.tracking-stage{gap:11px;min-height:74px}.stage-icon{width:36px;height:36px}.tracking-stage:not(:last-child)::before{left:17px;top:40px}.stage-title strong{font-size:14px}.stage-copy p,.stage-copy time{font-size:12px}.tracking-customer{font-size:15px}.tracking-order-heading .code{font-size:18px}.status{max-width:46%;font-size:11px;padding:6px 9px}.order-products{margin-top:12px}}
     @media(max-width:360px){.order-card{padding-left:13px;padding-right:13px}.timeline-card{padding-left:13px;padding-right:13px}.order-head{gap:8px}.tracking-order-heading .caption{font-size:11px}.tracking-order-heading .code{font-size:16px}.tracking-customer{font-size:14px}.stage-copy p,.stage-copy time{font-size:11px}.order-products{margin-top:12px}}
     .tracking-stage.simulated .stage-icon{background:#00c853;color:#fff}.tracking-stage.simulated .stage-copy time{color:#00a844}.tracking-stage.simulated .stage-badge{background:#dcfce7;color:#15803d}.tracking-stage.simulated:not(:last-child)::before,.tracking-stage.reached-next:not(:last-child)::before{background:#00c853}
+    .tracking-stage.fee-step .stage-icon{background:#00c853;color:#fff}.tracking-stage.fee-step .stage-copy time{color:#00a844}.tracking-stage.fee-step:not(:last-child)::before{background:#00c853}
+    .tracking-stage.tone-error .stage-icon{background:#ef4444}.tracking-stage.tone-error .stage-copy time{color:#dc2626}.tracking-stage.tone-warn .stage-icon{background:#f59e0b}.tracking-stage.tone-warn .stage-copy time{color:#b45309}
+    .status-fee-error{background:#fee2e2;color:#b91c1c}.status-fee-warn{background:#fef3c7;color:#92400e}.status-fee-ok{background:#dcfce7;color:#15803d}
+    .fee-card{margin-top:14px;padding:18px 20px;border:1px solid #fcd34d;border-radius:16px;background:#fffbeb;color:#78350f}.fee-card strong{display:block;font-size:16px;font-weight:800;color:#78350f}.fee-card p{margin:6px 0 0;font-size:14px;line-height:1.55}.fee-card ul{margin:10px 0 0;padding-left:18px;font-size:13px;line-height:1.7}.fee-card-ok{border-color:#86efac;background:#f0fdf4;color:#14532d}.fee-card-ok strong{color:#14532d}
+    .fee-button{display:block;width:100%;margin-top:14px;border:0;border-radius:12px;background:#00a844;color:#fff;padding:14px 16px;font-size:15px;font-weight:800;cursor:pointer}.fee-button:hover{background:#008f3a}.fee-outline{background:#fff;color:#15803d;border:2px solid #22c55e}.fee-outline:hover{background:#f0fdf4}
+    .fee-dialog{width:min(440px,calc(100vw - 24px));max-height:calc(100vh - 24px);padding:0;border:0;border-radius:18px;box-shadow:0 20px 60px #0000004d;color:#171717}.fee-dialog::backdrop{background:#0009;backdrop-filter:blur(3px)}.fee-dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 20px 8px}.fee-dialog-head h2{margin:0;font-size:17px;font-weight:900}.fee-close{width:34px;height:34px;border:0;border-radius:50%;background:#f4f4f5;color:#52525b;font-size:22px;line-height:1;cursor:pointer}.fee-dialog-body{padding:4px 20px 22px}
+    .fee-steps{display:flex;gap:6px;margin-bottom:14px}.fee-steps span{flex:1;height:4px;border-radius:9px;background:#e4e4e7}.fee-steps span.on{background:#22c55e}.fee-amount{display:flex;flex-direction:column;align-items:center;gap:2px;padding:12px;border:1px solid #bbf7d0;border-radius:12px;background:#f0fdf4;text-align:center}.fee-amount span{font-size:12px;color:#52525b}.fee-amount strong{font-size:30px;font-weight:900;color:#15803d}.fee-amount small{font-size:12px;font-weight:600;color:#16a34a}
+    .fee-qr{display:block;width:184px;height:184px;margin:16px auto 6px;padding:8px;border:2px solid #bbf7d0;border-radius:14px;object-fit:contain;background:#fff}.fee-hint{margin:8px 0 0;text-align:center;color:#71717a;font-size:12px;line-height:1.5}.fee-copy{display:flex;gap:8px;margin-top:10px}.fee-copy input{flex:1;min-width:0;border:1px solid #e4e4e7;border-radius:10px;background:#fafafa;padding:11px;font:12px ui-monospace,monospace;color:#3f3f46}.fee-copy button{border:0;border-radius:10px;background:#15803d;color:#fff;padding:0 16px;font-size:13px;font-weight:800;cursor:pointer}
+    .fee-text{margin:0;font-size:14px;line-height:1.55;color:#3f3f46}.fee-drop{display:flex;flex-direction:column;align-items:center;gap:4px;margin-top:14px;padding:30px 16px;border:2px dashed #86efac;border-radius:14px;background:#f0fdf4;text-align:center;cursor:pointer}.fee-drop:hover{background:#dcfce7}.fee-drop input{position:absolute;width:1px;height:1px;opacity:0}.fee-drop strong{font-size:14px;color:#14532d}.fee-drop span{font-size:12px;color:#71717a}.fee-upload-error{min-height:16px;margin:8px 0 0;color:#dc2626;font-size:12px;text-align:center}
+    .fee-link{display:block;margin:10px auto 0;border:0;background:none;color:#52525b;font-size:13px;font-weight:700;text-decoration:underline;cursor:pointer}.fee-loading{display:flex;flex-direction:column;align-items:center;gap:12px;padding:34px 0;color:#52525b;font-weight:600}.fee-spinner{width:32px;height:32px;border:3px solid #bbf7d0;border-top-color:#15803d;border-radius:50%;animation:fee-spin .8s linear infinite}@keyframes fee-spin{to{transform:rotate(360deg)}}.fee-error{padding:16px;border:1px solid #fecaca;border-radius:12px;background:#fef2f2;color:#b91c1c;text-align:center;font-size:14px}.fee-error p{margin:0}
+    .fee-confirmed{display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px 0 6px;text-align:center}.fee-check{display:grid;place-items:center;width:72px;height:72px;border-radius:50%;background:#22c55e;color:#fff}.fee-check svg{width:36px;height:36px}.fee-confirmed strong{font-size:20px;font-weight:900}.fee-confirmed p{margin:0;max-width:320px;color:#52525b;font-size:14px;line-height:1.55}
   </style>
 </head>
 <body>
@@ -32,6 +43,11 @@
     <div class="skeleton" id="loading" hidden></div>
     <section class="order-card" id="order" hidden></section>
     <section class="timeline-card" id="timeline" hidden></section>
+    <section class="fee-card" id="fee" aria-live="polite" hidden></section>
+    <dialog class="fee-dialog" id="fee-dialog" aria-labelledby="fee-dialog-title">
+      <div class="fee-dialog-head"><h2 id="fee-dialog-title">Pagar taxa de reenvio</h2><button type="button" class="fee-close" id="fee-close" aria-label="Fechar">×</button></div>
+      <div class="fee-dialog-body" id="fee-dialog-body"></div>
+    </dialog>
     <p class="help">Precisa de ajuda? <a href="https://wa.me/5583991297085" target="_blank" rel="noopener noreferrer">Fale com nosso atendimento</a></p>
   </main>
   <script>
@@ -43,7 +59,8 @@
       const date=(value)=>new Intl.DateTimeFormat('pt-BR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}).format(new Date(value));
       const trackingDay=(value)=>new Intl.DateTimeFormat('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'}).format(new Date(value));
       const trackingTime=(value)=>new Intl.DateTimeFormat('pt-BR',{hour:'2-digit',minute:'2-digit'}).format(new Date(value));
-      const stageIcon=(status)=>{const paths={confirmed:'<path d="m5 12 4 4L19 6"/>',preparing:'<path d="m7.5 4.3 9 5.2M21 8l-9 5-9-5m9 14V12"/><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7Z"/>',packed:'<path d="m7.5 4.3 9 5.2M21 8l-9 5-9-5m9 14V12"/><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7Z"/>',shipped:'<path d="M10 17h4V5H2v12h3m12 0h2.5a1.5 1.5 0 0 0 1.5-1.5V11l-3-4h-4v10h1m-9 0a2 2 0 1 0 4 0m5 0a2 2 0 1 0 4 0"/>',in_transit:'<path d="M10 17h4V5H2v12h3m12 0h2.5a1.5 1.5 0 0 0 1.5-1.5V11l-3-4h-4v10h1m-9 0a2 2 0 1 0 4 0m5 0a2 2 0 1 0 4 0"/>',in_transit_2:'<path d="M10 17h4V5H2v12h3m12 0h2.5a1.5 1.5 0 0 0 1.5-1.5V11l-3-4h-4v10h1m-9 0a2 2 0 1 0 4 0m5 0a2 2 0 1 0 4 0"/>',out_for_delivery:'<path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/>',delivered:'<path d="m5 12 4 4L19 6"/>'};return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[status]||paths.preparing}</svg>`;};
+      const stageIcon=(status)=>{const paths={confirmed:'<path d="m5 12 4 4L19 6"/>',preparing:'<path d="m7.5 4.3 9 5.2M21 8l-9 5-9-5m9 14V12"/><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7Z"/>',packed:'<path d="m7.5 4.3 9 5.2M21 8l-9 5-9-5m9 14V12"/><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7Z"/>',shipped:'<path d="M10 17h4V5H2v12h3m12 0h2.5a1.5 1.5 0 0 0 1.5-1.5V11l-3-4h-4v10h1m-9 0a2 2 0 1 0 4 0m5 0a2 2 0 1 0 4 0"/>',in_transit:'<path d="M10 17h4V5H2v12h3m12 0h2.5a1.5 1.5 0 0 0 1.5-1.5V11l-3-4h-4v10h1m-9 0a2 2 0 1 0 4 0m5 0a2 2 0 1 0 4 0"/>',in_transit_2:'<path d="M10 17h4V5H2v12h3m12 0h2.5a1.5 1.5 0 0 0 1.5-1.5V11l-3-4h-4v10h1m-9 0a2 2 0 1 0 4 0m5 0a2 2 0 1 0 4 0"/>',out_for_delivery:'<path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/>',delivered:'<path d="m5 12 4 4L19 6"/>'};return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[status]||FEE_ICONS[status]||paths.preparing}</svg>`;};
+      const FEE_ICONS={failed:'<path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/>',retry:'<path d="M10 17h4V5H2v12h3m12 0h2.5a1.5 1.5 0 0 0 1.5-1.5V11l-3-4h-4v10h1m-9 0a2 2 0 1 0 4 0m5 0a2 2 0 1 0 4 0"/>',returning:'<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>',warehouse:'<path d="M3 21V8l9-5 9 5v13"/><path d="M7 21v-8h10v8M7 17h10"/>',waiting_fee:'<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/>',reship_confirmed:'<path d="m5 12 4 4L19 6"/>',reship_preparing:'<path d="m7.5 4.3 9 5.2M21 8l-9 5-9-5m9 14V12"/><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7Z"/>',reship_out:'<path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/>',reship_delivered:'<path d="m5 12 4 4L19 6"/>'};
       let currentData=null;
       function show(data){
         currentData=data;
@@ -63,10 +80,102 @@
           {status:'out_for_delivery',rank:5,offset:H(48,22),label:'Previsão: Saiu para entrega',detail:data.manual?'Etapa prevista de saída para entrega.':clientCity?`Previsão de saída para entrega em ${clientCity}.`:'Saída para entrega estimada no endereço informado.'},
           {status:'delivered',rank:6,offset:H(360,0),label:'Previsão: Entrega estimada',detail:data.manual?'Estimativa de conclusão; não confirma entrega.':'Entrega prevista; pode variar.'},
         ].filter(item=>item.rank>currentRank&&!actualStatuses.has(item.status)).map(item=>({...item,at:new Date(origin+item.offset).toISOString(),kind:'forecast'})).filter(item=>!['out_for_delivery','delivered'].includes(item.status)||Date.parse(item.at)<=now);
-        const timeline=[...actual,...planned].sort((a,b)=>Date.parse(a.at)-Date.parse(b.at));
-        timelineBox.innerHTML=`<div class="tracking-stages">${timeline.map((event,index)=>{const done=event.kind==='actual'&&event.status!==status,active=event.kind==='actual'&&event.status===status,simulated=event.kind==='forecast'&&Date.parse(event.at)<=now,reachedNext=timeline[index+1]?.kind==='forecast'&&Date.parse(timeline[index+1].at)<=now,label=(event.label||labels[event.status]||'Atualização do pedido').replace(/^Previsão:\s*/,'');return `<div class="tracking-stage ${done?'done':''} ${active?'active':''} ${event.kind==='forecast'?'forecast':''} ${simulated?'simulated':''} ${reachedNext?'reached-next':''}"><span class="stage-icon">${stageIcon(event.status)}</span><div class="stage-copy"><div class="stage-title"><strong>${escapeHtml(label)}</strong>${event.kind==='forecast'?`<span class="stage-badge">${simulated?'Previsão':'Previsão'}</span>`:''}</div><p>${escapeHtml(event.detail||details[event.status]||'')}</p><time>${escapeHtml(trackingDay(event.at||data.createdAt))} — ${escapeHtml(trackingTime(event.at||data.createdAt))}</time></div></div>`}).join('')}</div>`;
+        const fee=data.reshipping,extra=[];
+        if(fee){
+          const base=Date.parse(fee.outForDeliveryAt),M=60000,where=clientCity?` em ${clientCity}`:'',feePaid=fee.status==='paid'||fee.status==='receipt_sent';
+          const failureSteps=[
+            [1440,'failed','error','Falha na tentativa de entrega',`A transportadora tentou realizar a entrega${where}, mas não havia ninguém para receber no endereço.`],
+            [1475,'retry','warn','Nova tentativa de entrega',`Uma nova tentativa de entrega foi programada${where}.`],
+            [1640,'failed','error','Falha na 2ª tentativa de entrega','Nenhum responsável encontrado no endereço. Limite de tentativas atingido.'],
+            [2818,'returning','warn','Retornando ao Centro de Distribuição',`Seu pedido está retornando para ${hub}.`],
+            [4272,'warehouse','warn','Pedido no Centro de Distribuição',`Pedido recebido no Centro de Distribuição — ${hub}.`],
+            [4281,'waiting_fee',feePaid?'ok':'warn','Aguardando taxa de reenvio',`Para reenviar o pedido é necessário o pagamento da taxa de reenvio de ${money(fee.amount)}.`],
+          ];
+          for(const [m,st,tone,label,detail] of failureSteps){const at=base+m*M;if(at<=now)extra.push({status:st,tone,label,detail,at:new Date(at).toISOString(),kind:'fee'});}
+          const confirmed=Date.parse(fee.confirmedAt||'');
+          if(feePaid&&Number.isFinite(confirmed)){
+            const firstName=String(data.buyerName||'').trim().split(/\s+/)[0]||'';
+            [[0,'reship_confirmed','Taxa de reenvio confirmada','Pagamento recebido. Seu pedido foi liberado para reenvio com prioridade.'],
+             [120,'reship_preparing','Em separação para reenvio',`Pedido separado para reenvio no Centro de Distribuição — ${hub}.`],
+             [1440,'reship_out','Saiu para entrega',clientCity?`Seu pedido saiu para entrega em ${clientCity}.`:'Seu pedido saiu para entrega no endereço informado.'],
+             [2880,'reship_delivered',firstName?`Entregue a ${firstName}`:'Pedido entregue','Entrega do reenvio concluída.']].forEach(([m,st,label,detail])=>{const at=confirmed+m*M,past=at<=now;extra.push({status:st,tone:'ok',label:past?label:`Previsão: ${label}`,detail,at:new Date(at).toISOString(),kind:past?'fee':'forecast'});});
+          }
+        }
+        const timeline=[...actual,...planned.filter(item=>!(fee&&item.status==='delivered')),...extra].sort((a,b)=>Date.parse(a.at)-Date.parse(b.at));
+        timelineBox.innerHTML=`<div class="tracking-stages">${timeline.map((event,index)=>{const done=event.kind==='actual'&&event.status!==status,active=event.kind==='actual'&&event.status===status,simulated=event.kind==='forecast'&&Date.parse(event.at)<=now,reachedNext=timeline[index+1]?.kind==='forecast'&&Date.parse(timeline[index+1].at)<=now,label=(event.label||labels[event.status]||'Atualização do pedido').replace(/^Previsão:\s*/,'');return `<div class="tracking-stage ${event.kind==='fee'?'fee-step tone-'+escapeHtml(event.tone||'ok'):''} ${done?'done':''} ${active?'active':''} ${event.kind==='forecast'?'forecast':''} ${simulated?'simulated':''} ${reachedNext?'reached-next':''}"><span class="stage-icon">${stageIcon(event.status)}</span><div class="stage-copy"><div class="stage-title"><strong>${escapeHtml(label)}</strong>${event.kind==='forecast'?`<span class="stage-badge">${simulated?'Previsão':'Previsão'}</span>`:''}</div><p>${escapeHtml(event.detail||details[event.status]||'')}</p><time>${escapeHtml(trackingDay(event.at||data.createdAt))} — ${escapeHtml(trackingTime(event.at||data.createdAt))}</time></div></div>`}).join('')}</div>`;
+        const lastFeeStep=[...timeline].reverse().find(event=>event.kind==='fee'),statusPill=orderBox.querySelector('.status');
+        if(lastFeeStep&&statusPill){statusPill.textContent=lastFeeStep.label;statusPill.className=`status status-fee-${lastFeeStep.tone||'ok'}`;}
         orderBox.hidden=false;timelineBox.hidden=false;
-      }      async function search(code,updateUrl){if(!code)return;input.value=code.toUpperCase();message.textContent='Buscando seu pedido…';message.className='message';loading.hidden=false;orderBox.hidden=true;timelineBox.hidden=true;form.querySelector('button').disabled=true;try{const response=await fetch('/api/public/order-tracking?code='+encodeURIComponent(code.toUpperCase()),{headers:{Accept:'application/json'},cache:'no-store'});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Não encontramos esse código. Confira e tente novamente.');show(data);message.textContent='Estas são as atualizações disponíveis para o seu pedido.';if(updateUrl)history.replaceState(null,'','/rastreio.html?codigo='+encodeURIComponent(data.code));}catch(error){message.textContent=error.message||'Não foi possível buscar o pedido. Tente novamente.';message.className='message error';}finally{loading.hidden=true;form.querySelector('button').disabled=false;}}
+        renderFee(data);
+      }
+      const feeBox=document.getElementById('fee'),feeDialog=document.getElementById('fee-dialog'),feeDialogBody=document.getElementById('fee-dialog-body'),feeDialogTitle=document.getElementById('fee-dialog-title');
+      const money=(value)=>Number(value||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+      const qrSource=(value)=>{const qr=String(value||'');if(!qr)return '';if(/^(https?:|data:image\/)/i.test(qr))return qr;return 'data:image/png;base64,'+qr;};
+      let feePollTimer=null,feeCode='',feeAmountValue=0;
+      function renderFee(data){
+        const fee=data.reshipping;
+        if(!fee||!fee.available){feeBox.hidden=true;feeBox.innerHTML='';return;}
+        if(fee.status==='paid'||fee.status==='receipt_sent'){
+          feeBox.className='fee-card fee-card-ok';
+          feeBox.innerHTML=`<strong>Taxa de reenvio confirmada</strong><p>Seu pedido foi liberado para reenvio com prioridade e chega em até <b>2 dias úteis</b>. Acompanhe as atualizações na linha do tempo acima.</p>`;
+        }else{
+          feeBox.className='fee-card';
+          feeBox.innerHTML=`<strong>Pedido aguardando taxa de reenvio</strong><p>Não conseguimos entregar seu pedido após duas tentativas e ele retornou ao Centro de Distribuição. Para reenviar, pague a taxa de reenvio de <b>${escapeHtml(money(fee.amount))}</b> via PIX.</p><ul><li>Entrega garantida em até 2 dias úteis após a confirmação</li><li>Reenvio com prioridade para o mesmo endereço</li></ul><button type="button" class="fee-button" id="fee-open">Pagar taxa de reenvio · ${escapeHtml(money(fee.amount))}</button>`;
+          document.getElementById('fee-open').addEventListener('click',()=>openFeeDialog(data.code,fee.amount));
+        }
+        feeBox.hidden=false;
+      }
+      function stopFeePolling(){if(feePollTimer){clearInterval(feePollTimer);feePollTimer=null;}}
+      function feeLoading(text){feeDialogBody.innerHTML=`<div class="fee-loading"><span class="fee-spinner" aria-hidden="true"></span><p>${escapeHtml(text)}</p></div>`;}
+      function feeError(text,retry){feeDialogBody.innerHTML=`<div class="fee-error" role="alert"><p>${escapeHtml(text)}</p><button type="button" class="fee-link" id="fee-retry">Tentar novamente</button></div>`;document.getElementById('fee-retry').addEventListener('click',retry);}
+      function openFeeDialog(code,amount){feeCode=code;feeAmountValue=amount;feeDialog.showModal();loadFeePix();}
+      async function loadFeePix(){
+        stopFeePolling();feeDialogTitle.textContent='Pagar taxa de reenvio';feeLoading('Gerando PIX…');
+        try{
+          const response=await fetch('/api/public/reshipping-fee/pix',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({code:feeCode})});
+          const pix=await response.json().catch(()=>({}));
+          if(!response.ok)throw new Error(pix.error||'Não foi possível gerar o PIX.');
+          if(pix.status==='paid'||pix.status==='receipt_sent')return showFeeConfirmed();
+          showFeePix(pix);
+        }catch(error){feeError(error.message||'Não foi possível gerar o PIX.',loadFeePix);}
+      }
+      function showFeePix(pix){
+        const qr=qrSource(pix.qrCode);
+        feeDialogTitle.textContent='Pagar taxa de reenvio';
+        feeDialogBody.innerHTML=`<div class="fee-steps" aria-hidden="true"><span class="on"></span><span></span></div><div class="fee-amount"><span>Taxa de reenvio</span><strong>${escapeHtml(money(pix.amount||feeAmountValue))}</strong><small>Entrega garantida em até 2 dias úteis após a confirmação</small></div>${qr?`<img class="fee-qr" src="${escapeHtml(qr)}" alt="QR Code PIX da taxa de reenvio">`:''}<p class="fee-hint">Escaneie o QR Code no app do seu banco ou copie o código abaixo.</p><div class="fee-copy"><input id="fee-pix-code" readonly value="${escapeHtml(pix.pixCode)}" aria-label="Código PIX copia e cola"><button type="button" id="fee-copy">Copiar</button></div><button type="button" class="fee-button fee-outline" id="fee-paid">Já paguei — enviar comprovante</button><p class="fee-hint" id="fee-watch" aria-live="polite">Aguardando confirmação do pagamento…</p>`;
+        document.getElementById('fee-copy').addEventListener('click',async(event)=>{const field=document.getElementById('fee-pix-code');try{await navigator.clipboard.writeText(field.value);}catch{field.select();document.execCommand('copy');}event.currentTarget.textContent='Copiado!';setTimeout(()=>{const button=document.getElementById('fee-copy');if(button)button.textContent='Copiar';},3000);});
+        document.getElementById('fee-paid').addEventListener('click',showFeeReceipt);
+        feePollTimer=setInterval(checkFeeStatus,5000);
+      }
+      async function checkFeeStatus(){
+        try{const response=await fetch('/api/public/reshipping-fee/status?code='+encodeURIComponent(feeCode),{headers:{Accept:'application/json'},cache:'no-store'});const result=await response.json().catch(()=>({}));if(response.ok&&(result.status==='paid'||result.status==='receipt_sent'))showFeeConfirmed();}catch{}
+      }
+      function showFeeReceipt(){
+        feeDialogTitle.textContent='Confirmar pagamento';
+        feeDialogBody.innerHTML=`<div class="fee-steps" aria-hidden="true"><span class="on"></span><span class="on"></span></div><p class="fee-text">Envie o <b>comprovante do PIX</b> de ${escapeHtml(money(feeAmountValue))}. Assim que recebermos, seu pedido é despachado com prioridade e chega em até <b>2 dias úteis</b>.</p><label class="fee-drop"><input type="file" id="fee-file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf"><strong>Toque para anexar o comprovante</strong><span>Print, foto ou PDF · até 8 MB</span></label><p class="fee-upload-error" id="fee-upload-error" role="alert"></p><button type="button" class="fee-link" id="fee-back">← Voltar ao QR Code</button>`;
+        document.getElementById('fee-back').addEventListener('click',loadFeePix);
+        document.getElementById('fee-file').addEventListener('change',(event)=>{const file=event.target.files?.[0];if(file)uploadFeeReceipt(file);});
+      }
+      async function uploadFeeReceipt(file){
+        if(file.size>8*1024*1024){document.getElementById('fee-upload-error').textContent='O arquivo deve ter no máximo 8 MB.';return;}
+        stopFeePolling();feeLoading('Enviando comprovante…');
+        try{
+          const body=new FormData();body.append('code',feeCode);body.append('file',file);
+          const response=await fetch('/api/public/reshipping-fee/receipt',{method:'POST',body});
+          const result=await response.json().catch(()=>({}));
+          if(!response.ok)throw new Error(result.error||'Não foi possível enviar o comprovante.');
+          showFeeConfirmed();
+        }catch(error){showFeeReceipt();document.getElementById('fee-upload-error').textContent=error.message||'Não foi possível enviar o comprovante.';}
+      }
+      function showFeeConfirmed(){
+        stopFeePolling();feeDialogTitle.textContent='Pagamento confirmado';
+        feeDialogBody.innerHTML=`<div class="fee-confirmed"><span class="fee-check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></span><strong>Reenvio aprovado!</strong><p>Seu pedido será despachado com prioridade e chegará em até <b>2 dias úteis</b>. Acompanhe o reenvio na linha do tempo.</p></div>`;
+        search(feeCode,false);
+        setTimeout(()=>{if(feeDialog.open)feeDialog.close();},3500);
+      }
+      document.getElementById('fee-close').addEventListener('click',()=>feeDialog.close());
+      feeDialog.addEventListener('close',stopFeePolling);
+      feeDialog.addEventListener('click',(event)=>{if(event.target===feeDialog)feeDialog.close();});      async function search(code,updateUrl){if(!code)return;input.value=code.toUpperCase();message.textContent='Buscando seu pedido…';message.className='message';loading.hidden=false;orderBox.hidden=true;timelineBox.hidden=true;form.querySelector('button').disabled=true;try{const response=await fetch('/api/public/order-tracking?code='+encodeURIComponent(code.toUpperCase()),{headers:{Accept:'application/json'},cache:'no-store'});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Não encontramos esse código. Confira e tente novamente.');show(data);message.textContent='Estas são as atualizações disponíveis para o seu pedido.';if(updateUrl)history.replaceState(null,'','/rastreio.html?codigo='+encodeURIComponent(data.code));}catch(error){message.textContent=error.message||'Não foi possível buscar o pedido. Tente novamente.';message.className='message error';}finally{loading.hidden=true;form.querySelector('button').disabled=false;}}
       form.addEventListener('submit',event=>{event.preventDefault();search(input.value.trim(),true);});const code=new URLSearchParams(location.search).get('codigo')||'';if(code)search(code,false);
       setInterval(()=>{if(currentData&&!timelineBox.hidden)show(currentData);},10000);
     })();

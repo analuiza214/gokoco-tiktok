@@ -8,6 +8,7 @@ import { queryPixGatewayStatus } from './pix-gateway-status.js';
 import { capturePurchaseTracking, recoverCustomerAttribution, purchaseDestination, purchaseSummary, deliverPaidPurchase, deliverPendingPurchase } from './purchase-tracking.js';
 import { deliverPaidEmail, retryPaidEmails, sendManualOrderEmail } from './order-email.js';
 import { processRecoveryQueue } from './recovery-email.js';
+import { handleReshippingRoute, publicReshipping } from './reshipping-fee.js';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
 const gateways = [
@@ -350,7 +351,7 @@ async function publicOrderTracking(request, env) {
   const rows = await db(env, 'gokoco_orders', `?tracking->shipping->>code=eq.${encodeURIComponent(code)}&select=id,name,status,created_at,updated_at,products,shipping,tracking&limit=1`);
   const order = rows[0];
   if (!order || (order.status !== 'paid' && !(order.status === 'tracking_only' && order.tracking?.manualExternal))) return json({ error: 'Código inválido ou não encontrado.' }, 404);
-  if (order.tracking?.manualExternal) return json({ code, manual: true, createdAt: order.tracking.shipping.created_at || order.created_at, shipping: order.tracking.shipping });
+  if (order.tracking?.manualExternal) return json({ code, manual: true, createdAt: order.tracking.shipping.created_at || order.created_at, shipping: order.tracking.shipping, reshipping: publicReshipping(env, order) });
   return json({
     code,
       buyerName: String(order.name || '').trim().slice(0, 100),
@@ -358,6 +359,7 @@ async function publicOrderTracking(request, env) {
     products: publicTrackingProducts(order.products),
     destination: { city: String(order.shipping?.cidade || '').slice(0, 80), state: String(order.shipping?.uf || '').slice(0, 2) },
     shipping: order.tracking.shipping,
+    reshipping: publicReshipping(env, order),
   });
 }
 
@@ -480,7 +482,7 @@ async function adminOrders(request, env) {
   ));
   await retryPaidPurchases(env);
   const rows = await db(env, 'gokoco_orders', '?gateway=neq.manual_tracking&select=id,created_at,name,email,phone,amount,products,gateway,status,transaction_id,shipping,tracking&order=created_at.desc&limit=200');
-  return json({ orders: rows.map(({ tracking, ...order }) => ({ ...order, shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, recovery: tracking?._recovery || null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
+  return json({ orders: rows.map(({ tracking, ...order }) => ({ ...order, shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, recovery: tracking?._recovery || null, reshipping: tracking?.reshipping ? { status: tracking.reshipping.status, amount: tracking.reshipping.amount, confirmed_at: tracking.reshipping.confirmed_at || null, hasReceipt: !!tracking.reshipping.receipt?.path } : null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
 }
 
 async function adminSendOrderEmail(request, env) {
@@ -603,6 +605,13 @@ export default {
       if (path === '/api/admin/generate-tracking') return await adminGenerateTracking(request, env);
       if (path === '/api/admin/external-tracking') return await adminCreateExternalTracking(request, env);
       if (path === '/api/public/order-tracking' && request.method === 'GET') return await publicOrderTracking(request, env);
+      if (path.startsWith('/api/public/reshipping-fee/') || path === '/api/admin/reshipping-receipt') {
+        const handled = await handleReshippingRoute(path, request, env, {
+          db, json, listGateways, requireAdmin, queryPixGatewayStatus,
+          providers: { ironpay: createPixIronpay, masterfy: createPixMasterfy, umbrellapag: createPixUmbrellapag, venuspay_pix: createPixVenuspay },
+        });
+        if (handled) return handled;
+      }
       if (path === '/api/process-purchase-queue' && request.method === 'POST') {
         const secret = String(env.CRON_SECRET || '');
         if (!secret || request.headers.get('x-cron-secret') !== secret) return json({ error: 'Não autorizado.' }, 401);
