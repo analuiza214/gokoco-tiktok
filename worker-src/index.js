@@ -124,6 +124,20 @@ function validateShipping(shipping) {
   return null;
 }
 
+// The gateway only receives placeholder contact data; the real e-mail/phone stay in gokoco_orders for the admin.
+// A unique alias per order avoids antifraud flags caused by many charges sharing one e-mail.
+// Set GATEWAY_MASK_CUSTOMER=false to send the real data again.
+function maskedGatewayContact(env, orderId, order) {
+  if (String(env.GATEWAY_MASK_CUSTOMER || '').toLowerCase() === 'false') return { email: order.email, phone: order.phone };
+  let domain = String(env.GATEWAY_MASK_EMAIL_DOMAIN || '').trim().replace(/^@/, '');
+  if (!domain) {
+    try { domain = new URL(env.SITE_URL).hostname; } catch { domain = 'gokoco-tiktok.pages.dev'; }
+  }
+  const ref = String(orderId).replace(/[^a-z0-9]/gi, '').slice(0, 12).toLowerCase() || 'cliente';
+  const phone = digits(env.GATEWAY_MASK_PHONE) || '11999999999';
+  return { email: `pedido-${ref}@${domain}`, phone };
+}
+
 async function createPix(request, env, ctx) {
   const body = await request.json().catch(() => null);
   if (body?.client) body.client.email = normalizeBuyerEmail(body.client.email);
@@ -179,8 +193,9 @@ async function createPix(request, env, ctx) {
     : await db(env, 'gokoco_orders', '?select=id', 'POST', order);
   const id = saved?.[0]?.id;
   if (!id) return json({ message: 'A cobrança já está em processamento. Aguarde um momento.' }, 409);
+  const gatewayContact = maskedGatewayContact(env, id, order);
   const payload = {
-    amount: order.amount, name: order.name, email: order.email, phone: order.phone,
+    amount: order.amount, name: order.name, email: gatewayContact.email, phone: gatewayContact.phone,
     document: order.document,
     productName: order.products.map((p) => p.name).filter(Boolean).join(' + ').slice(0, 255) || 'Escova Modeladora GOKOCO',
     address: {
