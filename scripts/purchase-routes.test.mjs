@@ -55,6 +55,27 @@ function setup() {
 }
 async function using(f, fn) { const original = globalThis.fetch; globalThis.fetch = f.fetch; try { await fn(); } finally { globalThis.fetch = original; } }
 
+test('admin busca lotes antigos além dos 200 pedidos mais recentes', async () => {
+  const f = setup(), requested = [];
+  const originalFetch = f.fetch;
+  f.fetch = async (url, options) => {
+    if (new URL(url).hostname === 'db.example') requested.push(new URL(url));
+    return originalFetch(url, options);
+  };
+  const payload = Buffer.from(JSON.stringify({ exp: Date.now() + 60000 })).toString('base64');
+  const token = payload + '.' + createHmac('sha256', f.env.ADMIN_SESSION_SECRET).update(payload).digest('hex');
+  const before = f.state.order.created_at;
+  await using(f, async () => {
+    const response = await f.call(`/api/admin/orders?offset=200&before=${encodeURIComponent(before)}`, { headers: { Authorization: 'Bearer ' + token } });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).orders.length, 1);
+    assert.equal(requested.length, 1);
+    assert.equal(requested[0].searchParams.get('offset'), '200');
+    assert.equal(requested[0].searchParams.get('created_at'), `lte.${before}`);
+    assert.equal((await f.call('/api/admin/orders?offset=1', { headers: { Authorization: 'Bearer ' + token } })).status, 400);
+  });
+});
+
 test('consulta de status confirma no gateway e envia sem depender do cliente', async () => {
   const f = setup();
   await using(f, async () => {

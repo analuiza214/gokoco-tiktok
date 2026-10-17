@@ -197,9 +197,18 @@ async function load() {
     $('external-tracking-history').hidden = !codes.length;
     $('external-tracking-history').innerHTML = codes.length ? `<span>Códigos recentes</span>${codes.map((item) => `<a href="/rastreio.html?codigo=${encodeURIComponent(item.code)}" target="_blank" rel="noopener noreferrer">${esc(item.code)}</a>`).join('')}` : '';
     renderStats(); renderGateways(); renderOrders();
+    const before = orders[0]?.created_at;
+    let batchLength = orders.length;
+    while (batchLength === 200) {
+      const next = await api(`orders?offset=${orders.length}&before=${encodeURIComponent(before)}`);
+      const batch = next.orders || [];
+      batchLength = batch.length;
+      orders.push(...batch);
+      renderStats(); renderOrders();
+    }
   } catch (error) {
     if (/Sessão expirada|Não autorizado/i.test(error.message)) showLogin();
-    else { $('page-error').textContent = error.message; $('page-error').hidden = false; $('loading').hidden = true; if (!orders.length) $('empty').hidden = false; }
+    else { $('page-error').textContent = orders.length ? `Parte do histórico não carregou. Clique em Atualizar para tentar novamente. ${error.message}` : error.message; $('page-error').hidden = false; $('loading').hidden = true; if (!orders.length) $('empty').hidden = false; }
   } finally {
     busy = false;
     $('refresh').disabled = false;

@@ -490,13 +490,20 @@ async function adminGateways(request, env) {
 async function adminOrders(request, env) {
   const denied = await requireAdmin(request, env); if (denied) return denied;
   if (request.method !== 'GET') return json({ error: 'Método inválido.' }, 405);
-  const missingTracking = encodeURIComponent('tracking->shipping->>code');
-  const paidOrders = await db(env, 'gokoco_orders', `?status=eq.paid&${missingTracking}=is.null&select=id,tracking,updated_at,created_at&order=created_at.desc&limit=3`);
-  await Promise.allSettled(paidOrders.map((order) =>
-    registerOrderTracking(env, order.id, order.updated_at || order.created_at),
-  ));
-  await retryPaidPurchases(env);
-  const rows = await db(env, 'gokoco_orders', '?gateway=neq.manual_tracking&select=id,created_at,name,email,phone,amount,products,gateway,status,transaction_id,shipping,tracking&order=created_at.desc&limit=200');
+  const params = new URL(request.url).searchParams;
+  const offset = Number(params.get('offset') || 0);
+  if (!Number.isSafeInteger(offset) || offset < 0 || offset % 200 !== 0) return json({ error: 'Página de pedidos inválida.' }, 400);
+  const before = params.get('before');
+  if (before && !Number.isFinite(Date.parse(before))) return json({ error: 'Data de consulta inválida.' }, 400);
+  if (offset === 0) {
+    const missingTracking = encodeURIComponent('tracking->shipping->>code');
+    const paidOrders = await db(env, 'gokoco_orders', `?status=eq.paid&${missingTracking}=is.null&select=id,tracking,updated_at,created_at&order=created_at.desc&limit=3`);
+    await Promise.allSettled(paidOrders.map((order) =>
+      registerOrderTracking(env, order.id, order.updated_at || order.created_at),
+    ));
+    await retryPaidPurchases(env);
+  }
+  const rows = await db(env, 'gokoco_orders', `?gateway=neq.manual_tracking${before ? `&created_at=lte.${encodeURIComponent(before)}` : ''}&select=id,created_at,name,email,phone,amount,products,gateway,status,transaction_id,shipping,tracking&order=created_at.desc,id.desc&limit=200&offset=${offset}`);
   return json({ orders: rows.map(({ tracking, ...order }) => ({ ...order, shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, recovery: tracking?._recovery || null, reshipping: tracking?.reshipping ? { status: tracking.reshipping.status, amount: tracking.reshipping.amount, confirmed_at: tracking.reshipping.confirmed_at || null, hasReceipt: !!tracking.reshipping.receipt?.path } : null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
 }
 
