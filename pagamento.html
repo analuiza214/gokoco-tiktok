@@ -1,4 +1,5 @@
 <!DOCTYPE html><html lang="pt-BR"><head>
+<script src="/js/google-ads.js"></script>
 <!-- Meta Pixel -->
 <script>
 !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){
@@ -632,6 +633,9 @@ fbq('track','PageView');
           // Mesmo orderId do PIX -> eventID do Pixel (dedup) e uma única vez.
           var _order=null; try{ _order=localStorage.getItem('lastPixOrder'); }catch(e){}
           var _eid=_order||txId||String(Date.now());
+          if(typeof window.trackGoogleAdsPurchase==='function'){
+            window.trackGoogleAdsPurchase(_amt, _order||txId);
+          }
           // O envio pela UTMify usa sua própria identificação de evento.
           // No modo Meta direto, servidor e navegador usam o mesmo eventID.
           if(j.purchaseDestination!=='utmify'){
