@@ -524,10 +524,12 @@ async function adminSendOrderEmail(request, env) {
   return json({ ok: true, email_id: result.email_id });
 }
 
-async function reconcilePendingPayments(env, limit = 2, deferFulfillment = false) {
+async function reconcilePendingPayments(env, limit = 2, deferFulfillment = false, newestFirst = false) {
   const since = new Date(Date.now() - 7 * 86400000).toISOString();
-  const cooldown = deferFulfillment ? `&updated_at=lte.${encodeURIComponent(new Date(Date.now() - 60000).toISOString())}` : '';
-  const pending = await db(env, 'gokoco_orders', `?select=id,transaction_id,gateway,status,updated_at,tracking&status=in.(pending,expired,failed)&transaction_id=not.is.null&created_at=gte.${encodeURIComponent(since)}${cooldown}&order=updated_at.asc,created_at.asc&limit=${Math.max(1, Math.min(10, Number(limit) || 2))}`);
+  const cooldownMs = newestFirst ? 20000 : deferFulfillment ? 60000 : 0;
+  const cooldown = cooldownMs ? `&updated_at=lte.${encodeURIComponent(new Date(Date.now() - cooldownMs).toISOString())}` : '';
+  const order = newestFirst ? 'created_at.desc' : 'updated_at.asc,created_at.asc';
+  const pending = await db(env, 'gokoco_orders', `?select=id,transaction_id,gateway,status,updated_at,tracking&status=in.(pending,expired,failed)&transaction_id=not.is.null&created_at=gte.${encodeURIComponent(since)}${cooldown}&order=${order}&limit=${Math.max(1, Math.min(10, Number(limit) || 2))}`);
   const summary = { checked: 0, paid: 0, expired: 0, failed: 0, rateLimited: false, failures: [] };
   for (const order of pending.filter((item) => item.transaction_id)) {
     let claimedAt;
@@ -580,7 +582,8 @@ async function reconcilePaymentsRoute(request, env) {
   if (request.method !== 'POST') return json({ error: 'Método inválido.' }, 405);
   // Lote pequeno e sequencial evita o limite de consultas dos gateways.
   // Rastreio, pixel e e-mail seguem nas filas com proteção contra duplicação.
-  return json(await reconcilePendingPayments(env, 3, true));
+  // No admin, confira primeiro os pedidos recentes; a rotina agendada percorre os mais antigos.
+  return json(await reconcilePendingPayments(env, 3, true, !cron));
 }
 
 async function fulfillConfirmedPayment(env) {

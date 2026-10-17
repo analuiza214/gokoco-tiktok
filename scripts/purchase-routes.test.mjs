@@ -347,6 +347,26 @@ test('lote administrativo consulta no máximo três pagamentos por atualização
   });
 });
 
+test('admin prioriza PIX recentes enquanto a rotina automática percorre os antigos', async () => {
+  const f = setup(); f.env.CRON_SECRET = 'cron-test'; f.state.gatewayPaid = false;
+  f.state.order.updated_at = new Date(Date.now() - 120000).toISOString();
+  const queries = [];
+  const originalFetch = f.fetch;
+  f.fetch = async (input, options) => {
+    const url = new URL(input);
+    if (url.hostname === 'db.example' && url.searchParams.has('status') && url.searchParams.has('order')) queries.push(url.searchParams);
+    return originalFetch(input, options);
+  };
+  const payload = Buffer.from(JSON.stringify({ exp: Date.now() + 60000 })).toString('base64');
+  const token = payload + '.' + createHmac('sha256', f.env.ADMIN_SESSION_SECRET).update(payload).digest('hex');
+  await using(f, async () => {
+    await f.call('/api/admin/reconcile-payments', { method: 'POST', headers: { Authorization: 'Bearer ' + token } });
+    await f.call('/api/admin/reconcile-payments', { method: 'POST', headers: { 'x-cron-secret': 'cron-test' } });
+  });
+  assert.equal(queries[0].get('order'), 'created_at.desc');
+  assert.equal(queries[1].get('order'), 'updated_at.asc,created_at.asc');
+});
+
 test('limite HTTP 429 interrompe consultas sem marcar PIX como pago', async () => {
   const f = setup(); f.env.CRON_SECRET = 'cron-test';
   const regularFetch = f.fetch;
