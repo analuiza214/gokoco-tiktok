@@ -9,11 +9,11 @@ const env = {
 const path = async (url) => (await worker.fetch(new Request(url), env)).text();
 
 assert.equal(await path('https://gokoco.example/loja.html'), '/loja.html');
-assert.equal(await path('https://gokoco.example/tl'), '/tl/index.html');
-assert.equal(await path('https://gokoco.example/tl/cep'), '/tl/index.html');
+assert.equal(await path('https://gokoco.example/tl'), '/tl/__entry.txt');
+assert.equal(await path('https://gokoco.example/tl/cep'), '/tl/__entry.txt');
 assert.equal(await path('https://gokoco.example/tl/assets/store.js'), '/tl/assets/store.js');
-assert.equal(await path('https://gokoco.example/video/checkout'), '/video/index.html');
-assert.equal(await path('https://gokoco.example/video/checkout/'), '/video/index.html');
+assert.equal(await path('https://gokoco.example/video/checkout'), '/video/__entry.txt');
+assert.equal(await path('https://gokoco.example/video/checkout/'), '/video/__entry.txt');
 assert.equal(await path('https://gokoco.example/video/images/logo.png'), '/video/images/logo.png');
 assert.equal(await path('https://gokoco.example/assets/store.js'), '/assets/store.js');
 

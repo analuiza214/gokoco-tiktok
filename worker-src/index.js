@@ -387,9 +387,14 @@ async function siteAsset(request, env) {
   const site = marketSiteRequest(url, env) ? 'tl' : bellaSiteRequest(url, env) ? 'video' : null;
   if (!site) return env.ASSETS.fetch(request);
   let pathname = url.pathname.replace(new RegExp(`^/${site}(?=/|$)`), '') || '/';
-  if (!/\.[a-z0-9]+$/i.test(pathname)) pathname = '/index.html';
+  const spaRoute = !/\.[a-z0-9]+$/i.test(pathname) || pathname === '/index.html';
+  if (spaRoute) pathname = '/__entry.txt';
   url.pathname = `/${site}${pathname}`;
-  return env.ASSETS.fetch(new Request(url, request));
+  const asset = await env.ASSETS.fetch(new Request(url, request));
+  if (!spaRoute) return asset;
+  const headers = new Headers(asset.headers);
+  headers.set('Content-Type', 'text/html; charset=utf-8');
+  return new Response(asset.body, { status: asset.status, headers });
 }
 
 async function statusPix(request, env) {

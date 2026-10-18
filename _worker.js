@@ -4476,9 +4476,14 @@ async function siteAsset(request2, env) {
   const site = marketSiteRequest(url, env) ? "tl" : bellaSiteRequest(url, env) ? "video" : null;
   if (!site) return env.ASSETS.fetch(request2);
   let pathname = url.pathname.replace(new RegExp(`^/${site}(?=/|$)`), "") || "/";
-  if (!/\.[a-z0-9]+$/i.test(pathname)) pathname = "/index.html";
+  const spaRoute = !/\.[a-z0-9]+$/i.test(pathname) || pathname === "/index.html";
+  if (spaRoute) pathname = "/__entry.txt";
   url.pathname = `/${site}${pathname}`;
-  return env.ASSETS.fetch(new Request(url, request2));
+  const asset = await env.ASSETS.fetch(new Request(url, request2));
+  if (!spaRoute) return asset;
+  const headers6 = new Headers(asset.headers);
+  headers6.set("Content-Type", "text/html; charset=utf-8");
+  return new Response(asset.body, { status: asset.status, headers: headers6 });
 }
 async function statusPix(request2, env) {
   const id = new URL(request2.url).searchParams.get("id");

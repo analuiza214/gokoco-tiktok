@@ -19,9 +19,11 @@ if (!fs.existsSync(path.join(mercadoDist, 'index.html'))) {
   throw new Error('Build da loja Mercado Livre não encontrado.');
 }
 fs.cpSync(mercadoDist, path.join(output, 'tl'), { recursive: true, filter: (source) => !['_worker.js', 'admin.html', 'admin.css', 'admin.js'].includes(path.basename(source)) });
+fs.copyFileSync(path.join(output, 'tl', 'index.html'), path.join(output, 'tl', '__entry.txt'));
 const bellaDist = path.join(root, 'sites', 'bella', 'dist', 'public');
 if (!fs.existsSync(path.join(bellaDist, 'index.html'))) {
   throw new Error('Build da loja Bella Mix não encontrado.');
 }
 fs.cpSync(bellaDist, path.join(output, 'video'), { recursive: true, filter: (source) => path.basename(source) !== '_worker.js' });
+fs.copyFileSync(path.join(output, 'video', 'index.html'), path.join(output, 'video', '__entry.txt'));
 console.log(`Assets de publicação preparados em ${output}`);
