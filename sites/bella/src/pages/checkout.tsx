@@ -237,6 +237,18 @@ export default function Checkout() {
     }
     setProcessing(true);
 
+    try {
+      const healthResponse = await fetch(import.meta.env.BASE_URL + "api/checkout-health", { cache: "no-store" });
+      const health = await healthResponse.json() as { ok?: boolean; databaseProject?: string };
+      if (!healthResponse.ok || !health.ok || health.databaseProject !== "gezqdbzrqjhobahwaydm") {
+        throw new Error("Pagamento temporariamente indisponível. Tente novamente mais tarde.");
+      }
+    } catch (error) {
+      setProcessing(false);
+      toast({ title: "Pagamento indisponível", description: error instanceof Error ? error.message : "Tente novamente mais tarde.", variant: "destructive" });
+      return;
+    }
+
     localStorage.setItem("bellamix_buyer", JSON.stringify(buyer));
     localStorage.setItem("bellamix_address_loja", JSON.stringify(address));
 
