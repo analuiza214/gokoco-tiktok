@@ -1,54 +1,146 @@
-// Gerado por build-worker.mjs. Edite worker-src/.
-
-const { createPixIronpay, statusPixIronpay } = (() => {
-// Provider PIX — IronPay
-// API: https://api.ironpayapp.com.br/api/public/v1/transactions
-// Variáveis de ambiente (Cloudflare Pages):
-//   IRONPAY_API_TOKEN, IRONPAY_OFFER_HASH, IRONPAY_PRODUCT_HASH
-
-/**
- * Gera um CPF válido aleatório (dígitos verificadores corretos).
- * Usado quando o cliente não fornece CPF.
- */
-function gerarCpfAleatorio() {
-  const rand = () => Math.floor(Math.random() * 9);
-  const d = Array.from({ length: 9 }, rand);
-  let sum = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
-  d.push(((sum * 10) % 11) % 10);
-  sum = d.reduce((acc, v, i) => acc + v * (11 - i), 0);
-  d.push(((sum * 10) % 11) % 10);
-  return d.join("");
+// worker-src/admin-login.js
+var CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Content-Type": "application/json"
+};
+var TOKEN_TTL_MS = 8 * 60 * 60 * 1e3;
+async function hmacSign(payload, secret) {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(payload));
+  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+function timingSafeEqual(a, b) {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  if (a.length !== b.length) {
+    let dummy = 0;
+    for (let i = 0; i < a.length; i++) dummy |= a.charCodeAt(i);
+    return false;
+  }
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}
+async function onRequest(context) {
+  const { request: request2, env } = context;
+  if (request2.method === "OPTIONS") {
+    return new Response("", { status: 204, headers: CORS });
+  }
+  if (request2.method !== "POST") {
+    return new Response(
+      JSON.stringify({ error: "Method not allowed" }),
+      { status: 405, headers: CORS }
+    );
+  }
+  const ADMIN_USER = env.ADMIN_USER;
+  const ADMIN_PASS = env.ADMIN_PASS;
+  const ADMIN_SESSION_SECRET = env.ADMIN_SESSION_SECRET;
+  if (!ADMIN_USER || !ADMIN_PASS || !ADMIN_SESSION_SECRET) {
+    console.error("[admin-login] Vari\xE1veis de ambiente n\xE3o configuradas.");
+    return new Response(
+      JSON.stringify({ error: "Servidor n\xE3o configurado corretamente." }),
+      { status: 500, headers: CORS }
+    );
+  }
+  let body;
+  try {
+    body = await request2.json();
+  } catch {
+    return new Response(
+      JSON.stringify({ error: "JSON inv\xE1lido" }),
+      { status: 400, headers: CORS }
+    );
+  }
+  const { usuario, senha } = body ?? {};
+  const userOk = timingSafeEqual(String(usuario ?? ""), ADMIN_USER);
+  const passOk = timingSafeEqual(String(senha ?? ""), ADMIN_PASS);
+  if (!userOk || !passOk) {
+    await new Promise((r) => setTimeout(r, 1500));
+    return new Response(
+      JSON.stringify({ error: "Usu\xE1rio ou senha incorretos." }),
+      { status: 401, headers: CORS }
+    );
+  }
+  const exp = Date.now() + TOKEN_TTL_MS;
+  const payload = JSON.stringify({ exp });
+  const payloadB64 = btoa(payload);
+  const sig = await hmacSign(payloadB64, ADMIN_SESSION_SECRET);
+  const token = `${payloadB64}.${sig}`;
+  return new Response(JSON.stringify({ token }), { status: 200, headers: CORS });
 }
 
-async function createPixIronpay(context, corsHeaders, body) {
-  const { env } = context;
+// worker-src/admin-auth.js
+async function hmacSign2(payload, secret) {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(payload));
+  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+function timingSafeEqual2(a, b) {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+async function verifyAdminToken(request2, env) {
+  const secret = env.ADMIN_SESSION_SECRET;
+  if (!secret) return { valid: false, error: "Servidor n\xE3o configurado." };
+  const auth = request2.headers.get("Authorization") ?? "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : null;
+  if (!token) return { valid: false, error: "N\xE3o autorizado." };
+  const dot = token.lastIndexOf(".");
+  if (dot === -1) return { valid: false, error: "Token inv\xE1lido." };
+  const payloadB64 = token.slice(0, dot);
+  const providedSig = token.slice(dot + 1);
+  const expectedSig = await hmacSign2(payloadB64, secret);
+  if (!timingSafeEqual2(expectedSig, providedSig)) {
+    return { valid: false, error: "Token inv\xE1lido." };
+  }
+  let payload;
+  try {
+    payload = JSON.parse(atob(payloadB64));
+  } catch {
+    return { valid: false, error: "Token inv\xE1lido." };
+  }
+  if (!payload.exp || Date.now() > payload.exp) {
+    return { valid: false, error: "Sess\xE3o expirada." };
+  }
+  return { valid: true };
+}
 
-  // ── Credenciais IronPay ──────────────────────────────────────────────────────
+// worker-src/providers/ironpay.js
+async function createPixIronpay(context, corsHeaders11, body) {
+  const { env } = context;
   const apiToken = env.IRONPAY_API_TOKEN;
   const offerHash = env.IRONPAY_OFFER_HASH;
   const productHash = env.IRONPAY_PRODUCT_HASH;
-
   if (!apiToken || !offerHash || !productHash) {
-    return new Response(JSON.stringify({ error: "Gateway de pagamento nao configurado." }), { status: 500, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: "Gateway de pagamento nao configurado." }), { status: 500, headers: corsHeaders11 });
   }
-
   const { amount, name, document, productName, email, phone, address } = body;
-
   if (!amount || !name) {
-    return new Response(JSON.stringify({ error: "Campos obrigatorios: amount, name." }), { status: 400, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: "Campos obrigatorios: amount, name." }), { status: 400, headers: corsHeaders11 });
   }
-
-  // ── CPF: usa o informado (se válido) ou gera automaticamente ────────────────
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
   const payerDocument = [11, 14].includes(cpfDigits.length) ? cpfDigits : "";
-
-  // ── URL do webhook (IronPay chama /api/pix/webhook quando o PIX é pago) ─────
   const siteUrl = env.SITE_URL || "";
-  const webhookUrl = siteUrl ? `${siteUrl}/api/pix/webhook` : undefined;
-
-  // ── Valor em centavos ────────────────────────────────────────────────────────
+  const webhookUrl = siteUrl ? `${siteUrl}/api/pix/webhook` : void 0;
   const amountInCents = Math.round(Number(amount) * 100);
-
   const payload = {
     amount: amountInCents,
     offer_hash: offerHash,
@@ -64,7 +156,7 @@ async function createPixIronpay(context, corsHeaders, body) {
       neighborhood: String(address.neighborhood).trim(),
       city: String(address.city).trim(),
       state: String(address.state).trim().toUpperCase(),
-      zip_code: String(address.zipCode).replace(/\D/g, ""),
+      zip_code: String(address.zipCode).replace(/\D/g, "")
     },
     cart: [
       {
@@ -74,49 +166,37 @@ async function createPixIronpay(context, corsHeaders, body) {
         price: amountInCents,
         quantity: 1,
         operation_type: 1,
-        tangible: true,
-      },
+        tangible: true
+      }
     ],
     expire_in_days: 1,
     transaction_origin: "api",
-    ...(webhookUrl ? { postback_url: webhookUrl } : {}),
+    ...webhookUrl ? { postback_url: webhookUrl } : {}
   };
-
-  // ── Chamada à API IronPay ───────────────────────────────────────────────────
   try {
     const res = await fetch(
       `https://api.ironpayapp.com.br/api/public/v1/transactions?api_token=${encodeURIComponent(apiToken)}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payload)
       }
     );
-
     const data = await res.json();
-
     if (!res.ok) {
-      return new Response(JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: data }), { status: 502, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: data }), { status: 502, headers: corsHeaders11 });
     }
-
     const transactionId = data.hash || data.transaction_hash;
-
     if (!transactionId) {
-      return new Response(JSON.stringify({ error: "Resposta invalida do gateway: hash ausente.", rawResponse: data }), { status: 502, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: "Resposta invalida do gateway: hash ausente.", rawResponse: data }), { status: 502, headers: corsHeaders11 });
     }
-
-    // ── Extração do QR Code / copia-e-cola ────────────────────────────────────
     const pix = data.pix || {};
     const pixCode = pix.pix_qr_code || pix.qr_code || pix.code || pix.copy_paste || null;
     const qrCodeBase64 = pix.qr_code_base64 || pix.base64 || null;
-    const qrCodeImage = pixCode
-      ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`
-      : pix.pix_url || null;
-
+    const qrCodeImage = pixCode ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}` : pix.pix_url || null;
     if (!pixCode) {
-      return new Response(JSON.stringify({ error: "QR Code PIX nao gerado.", rawResponse: data }), { status: 502, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: "QR Code PIX nao gerado.", rawResponse: data }), { status: 502, headers: corsHeaders11 });
     }
-
     return new Response(
       JSON.stringify({
         transactionId,
@@ -124,40 +204,32 @@ async function createPixIronpay(context, corsHeaders, body) {
         status: data.payment_status || "PENDENTE",
         pixCode,
         qrCodeBase64: qrCodeBase64 || null,
-        qrCodeImage: qrCodeImage || null,
+        qrCodeImage: qrCodeImage || null
       }),
-      { status: 200, headers: corsHeaders }
+      { status: 200, headers: corsHeaders11 }
     );
   } catch {
-    return new Response(JSON.stringify({ error: "Erro de comunicacao com o gateway." }), { status: 502, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: "Erro de comunicacao com o gateway." }), { status: 502, headers: corsHeaders11 });
   }
 }
-
-async function statusPixIronpay(context, corsHeaders, transactionId) {
+async function statusPixIronpay(context, corsHeaders11, transactionId) {
   const { env } = context;
   const apiToken = env.IRONPAY_API_TOKEN;
-
   if (!apiToken) {
-    return new Response(JSON.stringify({ error: "Gateway nao configurado" }), { status: 500, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: "Gateway nao configurado" }), { status: 500, headers: corsHeaders11 });
   }
-
   try {
     const res = await fetch(
       `https://api.ironpayapp.com.br/api/public/v1/transactions/${encodeURIComponent(transactionId)}?api_token=${encodeURIComponent(apiToken)}`,
-      { method: "GET", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(12000) }
+      { method: "GET", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(12e3) }
     );
-
     const data = await res.json();
-
     if (!res.ok) {
-      return new Response(JSON.stringify({ error: "Erro ao consultar gateway.", upstreamStatus: res.status }), { status: 502, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: "Erro ao consultar gateway.", upstreamStatus: res.status }), { status: 502, headers: corsHeaders11 });
     }
-
-    // IronPay usa: PAID | PENDING | CANCELED | REFUNDED
     const rawStatus = (data.payment_status || data.status || "").toUpperCase();
     const isPaid = rawStatus === "PAID";
     const isExpired = rawStatus === "CANCELED" || rawStatus === "REFUNDED";
-
     return new Response(
       JSON.stringify({
         transactionId,
@@ -165,155 +237,104 @@ async function statusPixIronpay(context, corsHeaders, transactionId) {
         status: rawStatus.toLowerCase(),
         isPaid,
         isExpired,
-        payedAt: data.paid_at || null,
+        payedAt: data.paid_at || null
       }),
-      { status: 200, headers: corsHeaders }
+      { status: 200, headers: corsHeaders11 }
     );
   } catch {
-    return new Response(JSON.stringify({ error: "Erro ao consultar status do pagamento." }), { status: 502, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: "Erro ao consultar status do pagamento." }), { status: 502, headers: corsHeaders11 });
   }
 }
 
-
-return { createPixIronpay, statusPixIronpay };
-})();
-
-const { createPixMasterfy, statusPixMasterfy } = (() => {
-// Provider PIX — MasterFy Pagamentos
-// API: https://api.masterfypagamentos.com/v1/payment
-// Variável de ambiente (Cloudflare Pages):
-//   MASTERFY_API_KEY  ← chave Bearer da sua conta MasterFy
-//
-// Rate limiting fica em /api/pix/create.js (compartilhado entre todos os gateways PIX).
-
-/**
- * Gera um CPF válido aleatório (dígitos verificadores corretos).
- * Usado quando o cliente não fornece CPF — a MasterFy exige taxId para BRL.
- */
-function gerarCpfAleatorio() {
-  const rand = () => Math.floor(Math.random() * 9);
-  const d = Array.from({ length: 9 }, rand);
-  let s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
-  d.push(((s1 * 10) % 11) % 10);
-  let s2 = d.reduce((acc, v, i) => acc + v * (11 - i), 0);
-  d.push(((s2 * 10) % 11) % 10);
-  return d.join("");
-}
-
-async function createPixMasterfy(context, corsHeaders, body) {
+// worker-src/providers/masterfy.js
+async function createPixMasterfy(context, corsHeaders11, body) {
   const { env } = context;
-
-  // ── Variável de ambiente obrigatória ────────────────────────────────────────
   const apiKey = env.MASTERFY_API_KEY;
   if (!apiKey) {
     return new Response(
-      JSON.stringify({ error: "Gateway de pagamento não configurado. Configure MASTERFY_API_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders }
+      JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado. Configure MASTERFY_API_KEY no Cloudflare." }),
+      { status: 500, headers: corsHeaders11 }
     );
   }
-
   const { amount, name, email, phone, productName, address, document } = body;
-
   if (!amount || !name) {
     return new Response(
-      JSON.stringify({ error: "Campos obrigatórios: amount, name." }),
-      { status: 400, headers: corsHeaders }
+      JSON.stringify({ error: "Campos obrigat\xF3rios: amount, name." }),
+      { status: 400, headers: corsHeaders11 }
     );
   }
-
-  // ── CPF: usa o informado (se válido) ou gera automaticamente ────────────────
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
   const taxId = [11, 14].includes(cpfDigits.length) ? cpfDigits : "";
-
-  // ── URL do webhook (MasterFy chama /api/pix/webhook quando o PIX é pago) ────
   const siteUrl = env.SITE_URL || "";
-  const notificationUrl = siteUrl ? `${siteUrl}/api/pix/webhook` : undefined;
-
-  // ── Valor em centavos ────────────────────────────────────────────────────────
+  const notificationUrl = siteUrl ? `${siteUrl}/api/pix/webhook` : void 0;
   const amountInCents = Math.round(Number(amount) * 100);
-
-  // ── Endereço de entrega (obrigatório para produtos PHYSICAL) ─────────────────
   const hasAddress = address && address.street && address.city;
-  const delivery = hasAddress
-    ? {
-        fee: 0,
-        address: {
-          street: String(address.street),
-          number: String(address.number || "S/N"),
-          complement: String(address.complement || ""),
-          district: String(address.neighborhood || address.district || ""),
-          city: String(address.city),
-          state: String(address.state || ""),
-          zipCode: String(address.zipCode || address.cep || "").replace(/\D/g, ""),
-          country: "BR",
-        },
-      }
-    : undefined;
-
-  // ── Payload MasterFy ─────────────────────────────────────────────────────────
+  const delivery = hasAddress ? {
+    fee: 0,
+    address: {
+      street: String(address.street),
+      number: String(address.number || "S/N"),
+      complement: String(address.complement || ""),
+      district: String(address.neighborhood || address.district || ""),
+      city: String(address.city),
+      state: String(address.state || ""),
+      zipCode: String(address.zipCode || address.cep || "").replace(/\D/g, ""),
+      country: "BR"
+    }
+  } : void 0;
   const payload = {
     amount: amountInCents,
     currency: "BRL",
     method: "PIX",
     description: productName || "Pedido",
-    ...(notificationUrl ? { notificationUrl } : {}),
+    ...notificationUrl ? { notificationUrl } : {},
     payer: {
       name: String(name),
       taxId,
       email: email ? String(email) : "cliente@email.com",
-      phone: phone ? String(phone).replace(/\D/g, "") || "00000000000" : "00000000000",
+      phone: phone ? String(phone).replace(/\D/g, "") || "00000000000" : "00000000000"
     },
     items: [
       {
         name: productName || "Pedido",
         quantity: 1,
         price: amountInCents,
-        type: hasAddress ? "PHYSICAL" : "DIGITAL",
-      },
+        type: hasAddress ? "PHYSICAL" : "DIGITAL"
+      }
     ],
-    ...(delivery ? { delivery } : {}),
+    ...delivery ? { delivery } : {}
   };
-
-  // ── Chamada à API MasterFy ───────────────────────────────────────────────────
   try {
     const res = await fetch("https://api.masterfypagamentos.com/v1/payment", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(payload)
     });
-
     const data = await res.json();
-
     if (!res.ok) {
       return new Response(
         JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: data }),
-        { status: 502, headers: corsHeaders }
+        { status: 502, headers: corsHeaders11 }
       );
     }
-
-    // ── Extração do resultado ─────────────────────────────────────────────────
     const transactionId = data.id;
     if (!transactionId) {
       return new Response(
-        JSON.stringify({ error: "Resposta inválida do gateway: id ausente.", rawResponse: data }),
-        { status: 502, headers: corsHeaders }
+        JSON.stringify({ error: "Resposta inv\xE1lida do gateway: id ausente.", rawResponse: data }),
+        { status: 502, headers: corsHeaders11 }
       );
     }
-
-    const pixCode = (data.data && data.data.copypaste) || null;
-
+    const pixCode = data.data && data.data.copypaste || null;
     if (!pixCode) {
       return new Response(
-        JSON.stringify({ error: "QR Code PIX não gerado.", rawResponse: data }),
-        { status: 502, headers: corsHeaders }
+        JSON.stringify({ error: "QR Code PIX n\xE3o gerado.", rawResponse: data }),
+        { status: 502, headers: corsHeaders11 }
       );
     }
-
     const qrCodeImage = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`;
-
     return new Response(
       JSON.stringify({
         transactionId,
@@ -321,56 +342,48 @@ async function createPixMasterfy(context, corsHeaders, body) {
         status: data.status || "PENDING",
         pixCode,
         qrCodeBase64: null,
-        qrCodeImage,
+        qrCodeImage
       }),
-      { status: 200, headers: corsHeaders }
+      { status: 200, headers: corsHeaders11 }
     );
   } catch {
     return new Response(
-      JSON.stringify({ error: "Erro de comunicação com o gateway." }),
-      { status: 502, headers: corsHeaders }
+      JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway." }),
+      { status: 502, headers: corsHeaders11 }
     );
   }
 }
-
-async function statusPixMasterfy(context, corsHeaders, transactionId) {
+async function statusPixMasterfy(context, corsHeaders11, transactionId) {
   const { env } = context;
   const apiKey = env.MASTERFY_API_KEY;
-
   if (!apiKey) {
     return new Response(
-      JSON.stringify({ error: "Gateway não configurado. Configure MASTERFY_API_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders }
+      JSON.stringify({ error: "Gateway n\xE3o configurado. Configure MASTERFY_API_KEY no Cloudflare." }),
+      { status: 500, headers: corsHeaders11 }
     );
   }
-
   try {
     const res = await fetch(
       `https://api.masterfypagamentos.com/v1/payment/${encodeURIComponent(transactionId)}`,
       {
         method: "GET",
-        signal: AbortSignal.timeout(12000),
+        signal: AbortSignal.timeout(12e3),
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
+          Authorization: `Bearer ${apiKey}`
+        }
       }
     );
-
     const data = await res.json();
-
     if (!res.ok) {
       return new Response(
         JSON.stringify({ error: "Erro ao consultar gateway.", upstreamStatus: res.status }),
-        { status: 502, headers: corsHeaders }
+        { status: 502, headers: corsHeaders11 }
       );
     }
-
-    // MasterFy usa: PENDING | PAID | CANCELLED | REFUNDED | EXPIRED
     const rawStatus = (data.status || "").toUpperCase();
     const isPaid = rawStatus === "PAID";
     const isExpired = rawStatus === "CANCELLED" || rawStatus === "EXPIRED" || rawStatus === "REFUNDED";
-
     return new Response(
       JSON.stringify({
         transactionId,
@@ -378,57 +391,27 @@ async function statusPixMasterfy(context, corsHeaders, transactionId) {
         status: rawStatus.toLowerCase(),
         isPaid,
         isExpired,
-        payedAt: data.paidAt || null,
+        payedAt: data.paidAt || null
       }),
-      { status: 200, headers: corsHeaders }
+      { status: 200, headers: corsHeaders11 }
     );
   } catch {
     return new Response(
       JSON.stringify({ error: "Erro ao consultar status do pagamento." }),
-      { status: 502, headers: corsHeaders }
+      { status: 502, headers: corsHeaders11 }
     );
   }
 }
 
-
-return { createPixMasterfy, statusPixMasterfy };
-})();
-
-const { createPixUmbrellapag, statusPixUmbrellapag } = (() => {
-// Provider PIX — UmbrellaPag (Liberpay)
-// Documentação: https://docs.umbrellapag.com/
-// API: POST /api/user/transactions  |  GET /api/user/transactions/{id}
-// Base URL: https://api-gateway.umbrellapag.com/api
-//
-// Variável de ambiente (Cloudflare Pages):
-//   UMBRELLAPAG_API_KEY  ← chave x-api-key da sua conta UmbrellaPag
-//
-// Headers obrigatórios em todas as chamadas:
-//   x-api-key: {UMBRELLAPAG_API_KEY}
-//   User-Agent: UMBRELLAB2B/1.0
-
-const API_BASE = "https://api-gateway.umbrellapag.com/api";
-
+// worker-src/providers/umbrellapag.js
+var API_BASE = "https://api-gateway.umbrellapag.com/api";
 function apiHeaders(apiKey) {
   return {
     "Content-Type": "application/json",
     "x-api-key": apiKey,
-    "User-Agent": "UMBRELLAB2B/1.0",
+    "User-Agent": "UMBRELLAB2B/1.0"
   };
 }
-
-/** Gera CPF válido aleatório quando o cliente não informa documento. */
-function gerarCpfAleatorio() {
-  const rand = () => Math.floor(Math.random() * 9);
-  const d = Array.from({ length: 9 }, rand);
-  let s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
-  d.push(((s1 * 10) % 11) % 10);
-  let s2 = d.reduce((acc, v, i) => acc + v * (11 - i), 0);
-  d.push(((s2 * 10) % 11) % 10);
-  return d.join("");
-}
-
-/** Monta endereço no formato exigido pela UmbrellaPag. */
 function buildAddress(address) {
   const hasStreet = address && address.street;
   return {
@@ -439,75 +422,53 @@ function buildAddress(address) {
     neighborhood: String(address?.neighborhood || address?.district || "Centro"),
     city: String(address?.city || "Sao Paulo"),
     state: String(address?.state || "SP").slice(0, 2).toUpperCase(),
-    country: "BR",
+    country: "BR"
   };
 }
-
-/** Extrai o código copia-e-cola PIX da resposta da UmbrellaPag. */
 function extractPixCode(data) {
   if (!data || typeof data !== "object") return null;
-
   if (typeof data.qrCode === "string" && data.qrCode.startsWith("00020")) {
     return data.qrCode;
   }
-
   const pix = data.pix;
   if (pix && typeof pix === "object") {
-    const fromPix =
-      pix.qrCode ||
-      pix.copyPaste ||
-      pix.copypaste ||
-      pix.emv ||
-      pix.code ||
-      null;
+    const fromPix = pix.qrCode || pix.copyPaste || pix.copypaste || pix.emv || pix.code || null;
     if (fromPix) return String(fromPix);
   }
-
   if (typeof data.qrCode === "string" && data.qrCode.length > 20) {
     return data.qrCode;
   }
-
   return null;
 }
-
-async function createPixUmbrellapag(context, corsHeaders, body) {
-  const { request, env } = context;
-
+async function createPixUmbrellapag(context, corsHeaders11, body) {
+  const { request: request2, env } = context;
   const apiKey = env.UMBRELLAPAG_API_KEY;
   if (!apiKey) {
     return new Response(
-      JSON.stringify({ error: "Gateway de pagamento não configurado. Configure UMBRELLAPAG_API_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders }
+      JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado. Configure UMBRELLAPAG_API_KEY no Cloudflare." }),
+      { status: 500, headers: corsHeaders11 }
     );
   }
-
   const { amount, name, email, phone, productName, address, document } = body;
-
   if (!amount || !name) {
     return new Response(
-      JSON.stringify({ error: "Campos obrigatórios: amount, name." }),
-      { status: 400, headers: corsHeaders }
+      JSON.stringify({ error: "Campos obrigat\xF3rios: amount, name." }),
+      { status: 400, headers: corsHeaders11 }
     );
   }
-
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
   const taxId = [11, 14].includes(cpfDigits.length) ? cpfDigits : "";
   const amountInCents = Math.round(Number(amount) * 100);
   const customerAddress = buildAddress(address);
   const siteUrl = (env.SITE_URL || "").trim().replace(/\/+$/, "");
-  const postbackUrl = siteUrl ? `${siteUrl}/api/pix/webhook` : undefined;
-
-  const clientIp =
-    request.headers.get("CF-Connecting-IP") ||
-    request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() ||
-    "127.0.0.1";
-
+  const postbackUrl = siteUrl ? `${siteUrl}/api/pix/webhook` : void 0;
+  const clientIp = request2.headers.get("CF-Connecting-IP") || request2.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() || "127.0.0.1";
   const payload = {
     amount: amountInCents,
     currency: "BRL",
     paymentMethod: "PIX",
     installments: 1,
-    ...(postbackUrl ? { postbackUrl } : {}),
+    ...postbackUrl ? { postbackUrl } : {},
     metadata: JSON.stringify({ source: "gokoco-tiktok", product: productName || "Pedido" }),
     traceable: true,
     ip: clientIp,
@@ -516,15 +477,15 @@ async function createPixUmbrellapag(context, corsHeaders, body) {
       email: email ? String(email) : "cliente@email.com",
       document: {
         number: taxId,
-        type: "CPF",
+        type: "CPF"
       },
       phone: phone ? String(phone).replace(/\D/g, "") || "11999999999" : "11999999999",
       externalRef: email ? String(email) : taxId,
-      address: customerAddress,
+      address: customerAddress
     },
     shipping: {
       fee: 0,
-      address: customerAddress,
+      address: customerAddress
     },
     items: [
       {
@@ -532,49 +493,42 @@ async function createPixUmbrellapag(context, corsHeaders, body) {
         unitPrice: amountInCents,
         quantity: 1,
         tangible: !!(address && address.street),
-        externalRef: "item-1",
-      },
+        externalRef: "item-1"
+      }
     ],
     pix: {
-      expiresInDays: 1,
-    },
+      expiresInDays: 1
+    }
   };
-
   try {
     const res = await fetch(`${API_BASE}/user/transactions`, {
       method: "POST",
       headers: apiHeaders(apiKey),
-      body: JSON.stringify(payload),
+      body: JSON.stringify(payload)
     });
-
-    const json = await res.json();
-    const data = json.data || json;
-
+    const json4 = await res.json();
+    const data = json4.data || json4;
     if (!res.ok) {
       return new Response(
-        JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: json }),
-        { status: 502, headers: corsHeaders }
+        JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: json4 }),
+        { status: 502, headers: corsHeaders11 }
       );
     }
-
     const transactionId = data.id;
     if (!transactionId) {
       return new Response(
-        JSON.stringify({ error: "Resposta inválida do gateway: id ausente.", rawResponse: json }),
-        { status: 502, headers: corsHeaders }
+        JSON.stringify({ error: "Resposta inv\xE1lida do gateway: id ausente.", rawResponse: json4 }),
+        { status: 502, headers: corsHeaders11 }
       );
     }
-
     const pixCode = extractPixCode(data);
     if (!pixCode) {
       return new Response(
-        JSON.stringify({ error: "QR Code PIX não gerado.", rawResponse: json }),
-        { status: 502, headers: corsHeaders }
+        JSON.stringify({ error: "QR Code PIX n\xE3o gerado.", rawResponse: json4 }),
+        { status: 502, headers: corsHeaders11 }
       );
     }
-
     const qrCodeImage = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`;
-
     return new Response(
       JSON.stringify({
         transactionId,
@@ -582,58 +536,46 @@ async function createPixUmbrellapag(context, corsHeaders, body) {
         status: (data.status || "WAITING_PAYMENT").toLowerCase(),
         pixCode,
         qrCodeBase64: null,
-        qrCodeImage,
+        qrCodeImage
       }),
-      { status: 200, headers: corsHeaders }
+      { status: 200, headers: corsHeaders11 }
     );
   } catch {
     return new Response(
-      JSON.stringify({ error: "Erro de comunicação com o gateway." }),
-      { status: 502, headers: corsHeaders }
+      JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway." }),
+      { status: 502, headers: corsHeaders11 }
     );
   }
 }
-
-async function statusPixUmbrellapag(context, corsHeaders, transactionId) {
+async function statusPixUmbrellapag(context, corsHeaders11, transactionId) {
   const { env } = context;
   const apiKey = env.UMBRELLAPAG_API_KEY;
-
   if (!apiKey) {
     return new Response(
-      JSON.stringify({ error: "Gateway não configurado. Configure UMBRELLAPAG_API_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders }
+      JSON.stringify({ error: "Gateway n\xE3o configurado. Configure UMBRELLAPAG_API_KEY no Cloudflare." }),
+      { status: 500, headers: corsHeaders11 }
     );
   }
-
   try {
     const res = await fetch(
       `${API_BASE}/user/transactions/${encodeURIComponent(transactionId)}`,
       {
         method: "GET",
-        signal: AbortSignal.timeout(12000),
-        headers: apiHeaders(apiKey),
+        signal: AbortSignal.timeout(12e3),
+        headers: apiHeaders(apiKey)
       }
     );
-
-    const json = await res.json();
-    const data = json.data || json;
-
+    const json4 = await res.json();
+    const data = json4.data || json4;
     if (!res.ok) {
       return new Response(
-        JSON.stringify({ error: "Erro ao consultar gateway.", details: json }),
-        { status: 502, headers: corsHeaders }
+        JSON.stringify({ error: "Erro ao consultar gateway.", details: json4 }),
+        { status: 502, headers: corsHeaders11 }
       );
     }
-
-    // UmbrellaPag: WAITING_PAYMENT | PROCESSING | PAID | CANCELED | REFUSED | REFUNDED | ...
     const rawStatus = String(data.status || "").toUpperCase();
     const isPaid = rawStatus === "PAID" || rawStatus === "AUTHORIZED";
-    const isExpired =
-      rawStatus === "CANCELED" ||
-      rawStatus === "REFUSED" ||
-      rawStatus === "REFUNDED" ||
-      rawStatus === "CHARGEDBACK";
-
+    const isExpired = rawStatus === "CANCELED" || rawStatus === "REFUSED" || rawStatus === "REFUNDED" || rawStatus === "CHARGEDBACK";
     return new Response(
       JSON.stringify({
         transactionId,
@@ -641,134 +583,71 @@ async function statusPixUmbrellapag(context, corsHeaders, transactionId) {
         status: rawStatus.toLowerCase(),
         isPaid,
         isExpired,
-        payedAt: data.paidAt || null,
+        payedAt: data.paidAt || null
       }),
-      { status: 200, headers: corsHeaders }
+      { status: 200, headers: corsHeaders11 }
     );
   } catch {
     return new Response(
       JSON.stringify({ error: "Erro ao consultar status do pagamento." }),
-      { status: 502, headers: corsHeaders }
+      { status: 502, headers: corsHeaders11 }
     );
   }
 }
 
-
-return { createPixUmbrellapag, statusPixUmbrellapag };
-})();
-
-const { createPixVenuspay, statusPixVenuspay } = (() => {
-// Provider PIX — VenusPay
-// Documentação: https://venuspay.com.br/docs
-//
-// Criar cobrança:  POST https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/process-payment
-// Consultar status: GET  https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/check-payment-status?transaction_id={UUID}
-//
-// É o MESMO endpoint e a MESMA credencial do cartão (VENUS_PAY_SECRET_KEY);
-// muda apenas o payment_method. No painel admin o id deste gateway é
-// "venuspay_pix", enquanto "venuspay" continua sendo o cartão.
-//
-// Variável de ambiente (Cloudflare Pages):
-//   VENUS_PAY_SECRET_KEY  ← mesma chave sk_live_... já usada no cartão
-//
-// Atenção ao payload: no PIX a VenusPay espera os campos do cliente SOLTOS na
-// raiz (amount, name, email, document, phone) — não dentro de "customer" como
-// no cartão. Ver "Criar Pagamento PIX" na documentação.
-//
-// O webhook NÃO é enviado por requisição (não existe postback_url): a URL é
-// cadastrada uma vez em Dashboard → API → Webhooks no painel da VenusPay.
-//
-// Rate limiting fica em /api/pix/create.js (compartilhado entre todos os PIX).
-
-const CREATE_URL =
-  "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/process-payment";
-const STATUS_URL =
-  "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/check-payment-status";
-
-/** Limites de valor exigidos pela VenusPay (em reais). */
-const MIN_AMOUNT = 5;
-const MAX_AMOUNT = 1000000;
-
-/** Gera CPF válido aleatório quando o cliente não informa documento. */
-function gerarCpfAleatorio() {
-  const rand = () => Math.floor(Math.random() * 9);
-  const d = Array.from({ length: 9 }, rand);
-  const s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
-  d.push(((s1 * 10) % 11) % 10);
-  const s2 = d.reduce((acc, v, i) => acc + v * (11 - i), 0);
-  d.push(((s2 * 10) % 11) % 10);
-  return d.join("");
-}
-
-/**
- * Código copia-e-cola PIX (string EMV).
- * Campo documentado: pix_copy_paste. Os outros nomes são só segurança extra.
- */
-function extractPixCode(data) {
+// worker-src/providers/venuspay.js
+var CREATE_URL = "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/process-payment";
+var STATUS_URL = "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/check-payment-status";
+var MIN_AMOUNT = 5;
+var MAX_AMOUNT = 1e6;
+function extractPixCode2(data) {
   const candidatos = [
     data.pix_copy_paste,
     data.pixCopyPaste,
     data.pix_code,
-    data.qr_code,
+    data.qr_code
   ];
   for (const c of candidatos) {
     if (typeof c === "string" && c.length > 20) return c;
   }
   return null;
 }
-
-/**
- * Imagem PNG do QR Code em base64 (a VenusPay já devolve como data URI,
- * pronta para usar em <img src="...">).
- */
 function extractQrImage(data) {
   const candidatos = [
     data.qr_code_base64,
     data.pix_qr_code_base64,
-    data.qrCodeBase64,
+    data.qrCodeBase64
   ];
   for (const c of candidatos) {
     if (typeof c === "string" && c.length > 40) return c;
   }
   return null;
 }
-
-async function createPixVenuspay(context, corsHeaders, body) {
+async function createPixVenuspay(context, corsHeaders11, body) {
   const { env } = context;
-
-  // ── Credencial obrigatória (a mesma do cartão) ──────────────────────────────
   const secretKey = env.VENUS_PAY_SECRET_KEY;
   if (!secretKey) {
     return new Response(
-      JSON.stringify({ error: "Gateway de pagamento não configurado. Configure VENUS_PAY_SECRET_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders }
+      JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado. Configure VENUS_PAY_SECRET_KEY no Cloudflare." }),
+      { status: 500, headers: corsHeaders11 }
     );
   }
-
   const { amount, name, email, phone, productName, address, document } = body;
-
   if (!amount || !name) {
     return new Response(
-      JSON.stringify({ error: "Campos obrigatórios: amount, name." }),
-      { status: 400, headers: corsHeaders }
+      JSON.stringify({ error: "Campos obrigat\xF3rios: amount, name." }),
+      { status: 400, headers: corsHeaders11 }
     );
   }
-
-  // ── Valor: BRL decimal (R$ 29,90 = 29.90), NÃO centavos ────────────────────
   const amountDecimal = Number(Number(amount).toFixed(2));
-
   if (amountDecimal < MIN_AMOUNT || amountDecimal > MAX_AMOUNT) {
     return new Response(
-      JSON.stringify({ error: `A VenusPay aceita PIX de R$ ${MIN_AMOUNT},00 até R$ ${MAX_AMOUNT.toLocaleString("pt-BR")},00.` }),
-      { status: 400, headers: corsHeaders }
+      JSON.stringify({ error: `A VenusPay aceita PIX de R$ ${MIN_AMOUNT},00 at\xE9 R$ ${MAX_AMOUNT.toLocaleString("pt-BR")},00.` }),
+      { status: 400, headers: corsHeaders11 }
     );
   }
-
-  // ── CPF: usa o informado (se válido) ou gera automaticamente ────────────────
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
   const cpfFinal = [11, 14].includes(cpfDigits.length) ? cpfDigits : "";
-
-  // ── Payload conforme "Criar Pagamento PIX": campos na raiz ─────────────────
   const payload = {
     amount: amountDecimal,
     payment_method: "pix",
@@ -777,7 +656,7 @@ async function createPixVenuspay(context, corsHeaders, body) {
     document: cpfFinal,
     phone: phone ? String(phone).replace(/\D/g, "") || "11999999999" : "11999999999",
     description: productName || "Pedido",
-    ...(env.VENUS_PAY_PRODUCT_ID ? { product_id: env.VENUS_PAY_PRODUCT_ID } : {}),
+    ...env.VENUS_PAY_PRODUCT_ID ? { product_id: env.VENUS_PAY_PRODUCT_ID } : {},
     // metadata volta no webhook — serve para casar o pagamento com o pedido
     metadata: {
       source: "gokoco-tiktok",
@@ -791,12 +670,10 @@ async function createPixVenuspay(context, corsHeaders, body) {
         neighborhood: String(address.neighborhood).trim(),
         city: String(address.city).trim(),
         state: String(address.state).trim().toUpperCase(),
-        zip_code: String(address.zipCode).replace(/\D/g, ""),
-      },
-    },
+        zip_code: String(address.zipCode).replace(/\D/g, "")
+      }
+    }
   };
-
-  // ── Chamada à API VenusPay ─────────────────────────────────────────────────
   try {
     const res = await fetch(CREATE_URL, {
       method: "POST",
@@ -804,61 +681,44 @@ async function createPixVenuspay(context, corsHeaders, body) {
         "Content-Type": "application/json",
         // A documentação aceita x-api-key OU Authorization: Bearer.
         // Usamos Bearer para ficar igual à integração de cartão já em produção.
-        Authorization: `Bearer ${secretKey}`,
+        Authorization: `Bearer ${secretKey}`
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(payload)
     });
-
     const data = await res.json();
-
     console.log(JSON.stringify({
       event: "VENUSPAY_PIX_RESPONSE",
       httpStatus: res.status,
       success: data.success,
       status: data.status,
       gateway: data.gateway || null,
-      errors: data.error || null,
+      errors: data.error || null
     }));
-
     if (!res.ok || data.success === false) {
       return new Response(
         JSON.stringify({
-          error: Array.isArray(data.error?.message)
-            ? data.error.message.join(", ")
-            : typeof data.error === "string"
-              ? data.error
-              : Array.isArray(data.message)
-                ? data.message.join(", ")
-                : typeof data.message === "string"
-                  ? data.message
-                  : "Erro ao gerar PIX. Confira seus dados e tente novamente.",
-          details: data,
+          error: Array.isArray(data.error?.message) ? data.error.message.join(", ") : typeof data.error === "string" ? data.error : Array.isArray(data.message) ? data.message.join(", ") : typeof data.message === "string" ? data.message : "Erro ao gerar PIX. Confira seus dados e tente novamente.",
+          details: data
         }),
-        { status: 502, headers: corsHeaders }
+        { status: 502, headers: corsHeaders11 }
       );
     }
-
     const transactionId = data.transaction_id || null;
     if (!transactionId) {
       return new Response(
-        JSON.stringify({ error: "Resposta inválida do gateway: transaction_id ausente.", rawResponse: data }),
-        { status: 502, headers: corsHeaders }
+        JSON.stringify({ error: "Resposta inv\xE1lida do gateway: transaction_id ausente.", rawResponse: data }),
+        { status: 502, headers: corsHeaders11 }
       );
     }
-
-    const pixCode = extractPixCode(data);
+    const pixCode = extractPixCode2(data);
     if (!pixCode) {
       return new Response(
-        JSON.stringify({ error: "QR Code PIX não gerado.", rawResponse: data }),
-        { status: 502, headers: corsHeaders }
+        JSON.stringify({ error: "QR Code PIX n\xE3o gerado.", rawResponse: data }),
+        { status: 502, headers: corsHeaders11 }
       );
     }
-
-    // A VenusPay sempre devolve a imagem em base64; o link do qrserver fica
-    // apenas como reserva caso algum dia venha vazia.
     const qrCodeBase64 = extractQrImage(data);
     const qrCodeImage = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`;
-
     return new Response(
       JSON.stringify({
         transactionId,
@@ -867,56 +727,39 @@ async function createPixVenuspay(context, corsHeaders, body) {
         pixCode,
         qrCodeBase64: qrCodeBase64 || null,
         qrCodeImage,
-        expiresAt: data.expiration_date || null,
+        expiresAt: data.expiration_date || null
       }),
-      { status: 200, headers: corsHeaders }
+      { status: 200, headers: corsHeaders11 }
     );
   } catch {
     return new Response(
-      JSON.stringify({ error: "Erro de comunicação com o gateway." }),
-      { status: 502, headers: corsHeaders }
+      JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway." }),
+      { status: 502, headers: corsHeaders11 }
     );
   }
 }
-
-/**
- * Consulta o status da transação.
- * Endpoint público (não pede chave) — é o mesmo que o checkout da VenusPay usa.
- * Statuses: pending | approved | failed | expired | refunded | chargeback
- */
-async function statusPixVenuspay(context, corsHeaders, transactionId) {
+async function statusPixVenuspay(context, corsHeaders11, transactionId) {
   try {
     const res = await fetch(
       `${STATUS_URL}?transaction_id=${encodeURIComponent(transactionId)}`,
-      { method: "GET", headers: { Accept: "application/json" }, signal: AbortSignal.timeout(12000) }
+      { method: "GET", headers: { Accept: "application/json" }, signal: AbortSignal.timeout(12e3) }
     );
-
     const data = await res.json();
-
-    // 404 = transação ainda não visível na VenusPay. Responde "pending" para o
-    // site continuar aguardando em vez de mostrar erro na tela do cliente.
     if (res.status === 404) {
       return new Response(
         JSON.stringify({ transactionId, gateway: "venuspay_pix", status: "pending", isPaid: false, isExpired: false, payedAt: null }),
-        { status: 200, headers: corsHeaders }
+        { status: 200, headers: corsHeaders11 }
       );
     }
-
     if (!res.ok) {
       return new Response(
         JSON.stringify({ error: "Erro ao consultar gateway.", details: data }),
-        { status: 502, headers: corsHeaders }
+        { status: 502, headers: corsHeaders11 }
       );
     }
-
     const rawStatus = String(data.status || "pending").toLowerCase();
     const isPaid = rawStatus === "approved";
-    const isExpired =
-      rawStatus === "expired" ||
-      rawStatus === "failed" ||
-      rawStatus === "refunded" ||
-      rawStatus === "chargeback";
-
+    const isExpired = rawStatus === "expired" || rawStatus === "failed" || rawStatus === "refunded" || rawStatus === "chargeback";
     return new Response(
       JSON.stringify({
         transactionId,
@@ -924,26 +767,20 @@ async function statusPixVenuspay(context, corsHeaders, transactionId) {
         status: rawStatus,
         isPaid,
         isExpired,
-        payedAt: isPaid ? data.paid_at || data.created_at || null : null,
+        payedAt: isPaid ? data.paid_at || data.created_at || null : null
       }),
-      { status: 200, headers: corsHeaders }
+      { status: 200, headers: corsHeaders11 }
     );
   } catch {
     return new Response(
       JSON.stringify({ error: "Erro ao consultar status do pagamento." }),
-      { status: 502, headers: corsHeaders }
+      { status: 502, headers: corsHeaders11 }
     );
   }
 }
 
-
-return { createPixVenuspay, statusPixVenuspay };
-})();
-
-const { queryPixGatewayStatus } = (() => {
-
-const headers = { "Content-Type": "application/json" };
-
+// worker-src/pix-gateway-status.js
+var headers = { "Content-Type": "application/json" };
 async function queryPixGatewayStatus(env, transactionId, gateway) {
   let response;
   const context = { env };
@@ -952,7 +789,7 @@ async function queryPixGatewayStatus(env, transactionId, gateway) {
   else if (gateway === "venuspay_pix") response = await statusPixVenuspay(context, headers, transactionId);
   else response = await statusPixIronpay(context, headers, transactionId);
   const data = await response.json();
-  if (!response.ok) throw new Error(`${data?.error || 'Falha na consulta ao gateway.'}${data?.upstreamStatus ? ` HTTP ${data.upstreamStatus}` : ''}`);
+  if (!response.ok) throw new Error(`${data?.error || "Falha na consulta ao gateway."}${data?.upstreamStatus ? ` HTTP ${data.upstreamStatus}` : ""}`);
   const normalized = String(data.status || "").trim().toLowerCase();
   const isRefunded = Boolean(data.isRefunded) || ["refunded", "refund", "reembolsado", "reembolsada"].includes(normalized);
   return {
@@ -961,747 +798,3177 @@ async function queryPixGatewayStatus(env, transactionId, gateway) {
     isPaid: Boolean(data.isPaid) || ["paid", "approved", "pago"].includes(normalized),
     isRefunded,
     isExpired: !isRefunded && (Boolean(data.isExpired) || ["expired", "cancelled", "canceled"].includes(normalized)),
-    paidAt: data.paidAt || data.payedAt || null,
+    paidAt: data.paidAt || data.payedAt || null
   };
 }
 
-return { queryPixGatewayStatus };
-})();
-
-const { verifyAdminToken } = (() => {
-/** Valida token Bearer emitido por /api/admin-login (mesmo formato de admin-verify). */
-
-async function hmacSign(payload, secret) {
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(payload));
-  return Array.from(new Uint8Array(sig))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-function timingSafeEqual(a, b) {
-  if (typeof a !== "string" || typeof b !== "string") return false;
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
-
-async function verifyAdminToken(request, env) {
-  const secret = env.ADMIN_SESSION_SECRET;
-  if (!secret) return { valid: false, error: "Servidor não configurado." };
-
-  const auth = request.headers.get("Authorization") ?? "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : null;
-  if (!token) return { valid: false, error: "Não autorizado." };
-
-  const dot = token.lastIndexOf(".");
-  if (dot === -1) return { valid: false, error: "Token inválido." };
-
-  const payloadB64 = token.slice(0, dot);
-  const providedSig = token.slice(dot + 1);
-  const expectedSig = await hmacSign(payloadB64, secret);
-  if (!timingSafeEqual(expectedSig, providedSig)) {
-    return { valid: false, error: "Token inválido." };
-  }
-
-  let payload;
-  try {
-    payload = JSON.parse(atob(payloadB64));
-  } catch {
-    return { valid: false, error: "Token inválido." };
-  }
-
-  if (!payload.exp || Date.now() > payload.exp) {
-    return { valid: false, error: "Sessão expirada." };
-  }
-
-  return { valid: true };
-}
-
-return { verifyAdminToken };
-})();
-
-const { capturePurchaseTracking, recoverCustomerAttribution, purchaseDestination, purchaseSummary, deliverPaidPurchase, deliverPendingPurchase } = (() => {
-// Adaptado do envio de pedidos pagos da loja Top Mix.
-// O estado de envio usa o JSON tracking existente; não exige migração do banco.
-const ATTRIBUTION_KEYS = ['src', 'sck', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'fbclid', 'gclid', 'ttclid'];
-const text = (value, limit = 500) => typeof value === 'string' ? value.slice(0, limit) : '';
-const utc = (value) => new Date(value).toISOString().slice(0, 19).replace('T', ' ');
-
-function capturePurchaseTracking(request, body) {
+// worker-src/purchase-tracking.js
+var ATTRIBUTION_KEYS = ["src", "sck", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "fbclid", "gclid", "ttclid"];
+var text = (value, limit = 500) => typeof value === "string" ? value.slice(0, limit) : "";
+var utc = (value) => new Date(value).toISOString().slice(0, 19).replace("T", " ");
+function capturePurchaseTracking(request2, body) {
   const tracking = Object.fromEntries(ATTRIBUTION_KEYS.map((key) => [key, text(body.tracking?.[key]) || null]));
   const fb = body.fb || {};
   const fbp = text(fb.fbp, 200);
   const fbc = text(fb.fbc, 300);
-  const origin = new URL(request.url).origin;
+  const origin = new URL(request2.url).origin;
   let sourceUrl = `${origin}/pagamento`;
-  try { const url = new URL(body.tracking?.event_source_url); if (url.origin === origin) sourceUrl = url.href.slice(0, 2000); } catch {}
+  try {
+    const url = new URL(body.tracking?.event_source_url);
+    if (url.origin === origin) sourceUrl = url.href.slice(0, 2e3);
+  } catch {
+  }
   tracking._browser = {
     fbp: /^fb\.\d+\.\d+\./.test(fbp) ? fbp : null,
-    fbc: /^fb\.\d+\.\d+\./.test(fbc) ? fbc : (tracking.fbclid ? `fb.1.${Date.now()}.${tracking.fbclid}` : null),
-    ip: request.headers.get('CF-Connecting-IP') || null,
-    user_agent: request.headers.get('User-Agent') || null,
-    source_url: sourceUrl,
+    fbc: /^fb\.\d+\.\d+\./.test(fbc) ? fbc : tracking.fbclid ? `fb.1.${Date.now()}.${tracking.fbclid}` : null,
+    ip: request2.headers.get("CF-Connecting-IP") || null,
+    user_agent: request2.headers.get("User-Agent") || null,
+    source_url: sourceUrl
   };
   return tracking;
 }
-
-async function recoverCustomerAttribution(env, db, tracking, buyer) {
+async function recoverCustomerAttribution(env, db2, tracking, buyer) {
   const current = Object.fromEntries(ATTRIBUTION_KEYS.map((key) => [key, tracking?.[key] || null]));
-  const hasAttribution = (values) => ATTRIBUTION_KEYS.some((key) => Boolean(values?.[key]));
-  if (hasAttribution(current)) return { ...tracking, attribution_source: 'current_visit' };
-
-  const since = new Date(Date.now() - 30 * 86400000).toISOString();
-  const email = String(buyer?.email || '').trim().toLowerCase();
-  const phone = String(buyer?.phone || '').replace(/\D/g, '');
+  const hasAttribution2 = (values) => ATTRIBUTION_KEYS.some((key) => Boolean(values?.[key]));
+  if (hasAttribution2(current)) return { ...tracking, attribution_source: "current_visit" };
+  const since = new Date(Date.now() - 30 * 864e5).toISOString();
+  const email = String(buyer?.email || "").trim().toLowerCase();
+  const phone = String(buyer?.phone || "").replace(/\D/g, "");
   const filters = [email ? `email=eq.${encodeURIComponent(email)}` : null, phone ? `phone=eq.${encodeURIComponent(phone)}` : null].filter(Boolean);
-  if (!filters.length) return { ...tracking, attribution_source: 'unattributed' };
+  if (!filters.length) return { ...tracking, attribution_source: "unattributed" };
   try {
-    const results = await Promise.all(filters.map((filter) => db(env, 'gokoco_orders', `?${filter}&created_at=gte.${encodeURIComponent(since)}&select=tracking,created_at&order=created_at.desc&limit=5`)));
-    const previous = results.flat().filter((order) => hasAttribution(order?.tracking)).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0]?.tracking;
-    if (!previous) return { ...tracking, attribution_source: 'unattributed' };
+    const results = await Promise.all(filters.map((filter) => db2(env, "gokoco_orders", `?${filter}&created_at=gte.${encodeURIComponent(since)}&select=tracking,created_at&order=created_at.desc&limit=5`)));
+    const previous = results.flat().filter((order) => hasAttribution2(order?.tracking)).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0]?.tracking;
+    if (!previous) return { ...tracking, attribution_source: "unattributed" };
     const recovered = Object.fromEntries(ATTRIBUTION_KEYS.map((key) => [key, previous[key] || null]));
-    return { ...tracking, ...recovered, first_touch: recovered, last_touch: null, attribution_source: 'recovered_customer_history' };
+    return { ...tracking, ...recovered, first_touch: recovered, last_touch: null, attribution_source: "recovered_customer_history" };
   } catch (error) {
-    console.warn('[attribution] Não foi possível consultar histórico do cliente:', error?.message || error);
-    return { ...tracking, attribution_source: 'unattributed' };
+    console.warn("[attribution] N\xE3o foi poss\xEDvel consultar hist\xF3rico do cliente:", error?.message || error);
+    return { ...tracking, attribution_source: "unattributed" };
   }
 }
-
 function purchaseDestination(env) {
-  const mode = String(env.PURCHASE_DELIVERY_MODE || 'auto').trim().toLowerCase();
-  if (mode === 'utmify') return 'utmify';
-  if (mode === 'meta') return 'meta';
-  if (mode !== 'auto') return null;
-  if (String(env.UTMIFY_API_TOKEN || '').trim()) return 'utmify';
-  if (String(env.FB_ACCESS_TOKEN || '').trim()) return 'meta';
+  const mode = String(env.PURCHASE_DELIVERY_MODE || "auto").trim().toLowerCase();
+  if (mode === "utmify") return "utmify";
+  if (mode === "meta") return "meta";
+  if (mode !== "auto") return null;
+  if (String(env.UTMIFY_API_TOKEN || "").trim()) return "utmify";
+  if (String(env.FB_ACCESS_TOKEN || "").trim()) return "meta";
   return null;
 }
-
 function purchaseSummary(env, order) {
   const destination = purchaseDestination(env);
   const state = destination ? order.tracking?._purchase?.[destination] : null;
   return {
     destination,
-    state: destination ? state?.state || 'pending' : 'not_configured',
+    state: destination ? state?.state || "pending" : "not_configured",
     sent_at: state?.sent_at || null,
     error: state?.error || null,
-    event_id: `pix_${order.id}`,
+    event_id: `pix_${order.id}`
   };
 }
-
 function products(order) {
   const rows = (Array.isArray(order.products) ? order.products : []).map((p, i) => ({
-    id: `gokoco_${i}`, name: text(p.name, 255) || 'Escova Modeladora GOKOCO',
-    planId: null, planName: null,
+    id: `gokoco_${i}`,
+    name: text(p.name, 255) || "Escova Modeladora GOKOCO",
+    planId: null,
+    planName: null,
     quantity: Math.max(1, Math.round(Number(p.quantity) || 1)),
-    priceInCents: Math.max(0, Math.round(Number(p.price) * 100) || 0),
+    priceInCents: Math.max(0, Math.round(Number(p.price) * 100) || 0)
   }));
   if (rows.length && rows.reduce((sum, p) => sum + p.priceInCents * p.quantity, 0) === Math.round(Number(order.amount) * 100)) return rows;
-  return [{ id: 'gokoco_escova', name: 'Escova Modeladora GOKOCO', planId: null, planName: null, quantity: 1, priceInCents: Math.round(Number(order.amount) * 100) }];
+  return [{ id: "gokoco_escova", name: "Escova Modeladora GOKOCO", planId: null, planName: null, quantity: 1, priceInCents: Math.round(Number(order.amount) * 100) }];
 }
-
 async function sendUtmify(env, order, status, paidAt = null) {
-  const token = String(env.UTMIFY_API_TOKEN || '').trim();
-  if (!token) throw new Error('UTMIFY_API_TOKEN não configurado.');
+  const token = String(env.UTMIFY_API_TOKEN || "").trim();
+  if (!token) throw new Error("UTMIFY_API_TOKEN n\xE3o configurado.");
   const cents = Math.round(Number(order.amount) * 100);
   const payload = {
-    orderId: String(order.transaction_id || order.id), platform: 'BellaMix', paymentMethod: 'pix', status,
-    createdAt: utc(order.created_at), approvedDate: paidAt ? utc(paidAt) : null, refundedAt: null,
-    customer: { name: order.name, email: order.email, phone: order.phone || null, document: order.document || null, country: 'BR', ...(order.tracking?._browser?.ip ? { ip: order.tracking._browser.ip } : {}) },
+    orderId: String(order.transaction_id || order.id),
+    platform: "BellaMix",
+    paymentMethod: "pix",
+    status,
+    createdAt: utc(order.created_at),
+    approvedDate: paidAt ? utc(paidAt) : null,
+    refundedAt: null,
+    customer: { name: order.name, email: order.email, phone: order.phone || null, document: order.document || null, country: "BR", ...order.tracking?._browser?.ip ? { ip: order.tracking._browser.ip } : {} },
     products: products(order),
     trackingParameters: Object.fromEntries(ATTRIBUTION_KEYS.slice(0, 7).map((key) => [key, order.tracking?.[key] || null])),
-    commission: { totalPriceInCents: cents, gatewayFeeInCents: 0, userCommissionInCents: cents, currency: 'BRL' },
-    isTest: false,
+    commission: { totalPriceInCents: cents, gatewayFeeInCents: 0, userCommissionInCents: cents, currency: "BRL" },
+    isTest: false
   };
-  const response = await fetch('https://api.utmify.com.br/api-credentials/orders', {
-    method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-token': token },
-    body: JSON.stringify(payload), signal: AbortSignal.timeout(12000),
+  const response = await fetch("https://api.utmify.com.br/api-credentials/orders", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-api-token": token },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(12e3)
   });
   if (!response.ok) throw new Error(`UTMify respondeu HTTP ${response.status}. Confira a credencial e os dados do pedido.`);
   return { http_status: response.status };
 }
-
-async function deliverPendingPurchase(env, db, orderId) {
-  if (purchaseDestination(env) !== 'utmify') return { state: 'not_configured' };
+async function deliverPendingPurchase(env, db2, orderId) {
+  if (purchaseDestination(env) !== "utmify") return { state: "not_configured" };
   for (let attempt = 0; attempt < 3; attempt++) {
-    const rows = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(orderId)}&status=eq.pending&select=*&limit=1`);
+    const rows = await db2(env, "gokoco_orders", `?id=eq.${encodeURIComponent(orderId)}&status=eq.pending&select=*&limit=1`);
     const order = rows?.[0];
-    if (!order?.transaction_id) return { state: 'not_pending' };
+    if (!order?.transaction_id) return { state: "not_pending" };
     const prior = order.tracking?._purchase?.utmify_pending || {};
-    if (prior.state === 'sent') return { state: 'sent' };
-    if (prior.state === 'sending' && Date.parse(prior.lease_until) > Date.now()) return { state: 'sending' };
-    if (Date.parse(prior.retry_at) > Date.now()) return { state: 'retry_pending' };
-    const claim = crypto.randomUUID();
-    const tracking = { ...order.tracking, _purchase: { ...order.tracking?._purchase, utmify_pending: { state: 'sending', claim, attempts: (Number(prior.attempts) || 0) + 1, lease_until: new Date(Date.now() + 120000).toISOString() } } };
-    const claimed = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}&status=eq.pending&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=*`, 'PATCH', { tracking });
+    if (prior.state === "sent") return { state: "sent" };
+    if (prior.state === "sending" && Date.parse(prior.lease_until) > Date.now()) return { state: "sending" };
+    if (Date.parse(prior.retry_at) > Date.now()) return { state: "retry_pending" };
+    const claim2 = crypto.randomUUID();
+    const tracking = { ...order.tracking, _purchase: { ...order.tracking?._purchase, utmify_pending: { state: "sending", claim: claim2, attempts: (Number(prior.attempts) || 0) + 1, lease_until: new Date(Date.now() + 12e4).toISOString() } } };
+    const claimed = await db2(env, "gokoco_orders", `?id=eq.${encodeURIComponent(order.id)}&status=eq.pending&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=*`, "PATCH", { tracking });
     if (!claimed?.[0]) continue;
     let result;
     try {
-      const receipt = await sendUtmify(env, claimed[0], 'waiting_payment');
-      result = { state: 'sent', claim, attempts: tracking._purchase.utmify_pending.attempts, sent_at: new Date().toISOString(), ...receipt };
+      const receipt = await sendUtmify(env, claimed[0], "waiting_payment");
+      result = { state: "sent", claim: claim2, attempts: tracking._purchase.utmify_pending.attempts, sent_at: (/* @__PURE__ */ new Date()).toISOString(), ...receipt };
     } catch (error) {
-      result = { state: 'failed', claim, attempts: tracking._purchase.utmify_pending.attempts, retry_at: new Date(Date.now() + 60000).toISOString(), error: error.name === 'TimeoutError' ? 'Tempo limite ao enviar o PIX pendente.' : text(error.message, 250) };
-      console.error('[purchase/pending]', order.id, result.error);
+      result = { state: "failed", claim: claim2, attempts: tracking._purchase.utmify_pending.attempts, retry_at: new Date(Date.now() + 6e4).toISOString(), error: error.name === "TimeoutError" ? "Tempo limite ao enviar o PIX pendente." : text(error.message, 250) };
+      console.error("[purchase/pending]", order.id, result.error);
     }
-    const completed = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}&status=eq.pending&tracking=eq.${encodeURIComponent(JSON.stringify(claimed[0].tracking || {}))}&select=id`, 'PATCH', { tracking: { ...tracking, _purchase: { ...tracking._purchase, utmify_pending: result } } });
-    return completed?.length ? result : { state: 'status_changed' };
+    const completed = await db2(env, "gokoco_orders", `?id=eq.${encodeURIComponent(order.id)}&status=eq.pending&tracking=eq.${encodeURIComponent(JSON.stringify(claimed[0].tracking || {}))}&select=id`, "PATCH", { tracking: { ...tracking, _purchase: { ...tracking._purchase, utmify_pending: result } } });
+    return completed?.length ? result : { state: "status_changed" };
   }
-  return { state: 'busy' };
+  return { state: "busy" };
 }
-
 async function hash(value) {
-  if (!value) return undefined;
-  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(value).trim().toLowerCase()));
-  return Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, '0')).join('');
+  if (!value) return void 0;
+  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(value).trim().toLowerCase()));
+  return Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, "0")).join("");
 }
-
 async function sendMeta(env, order, paidAt) {
-  const token = String(env.FB_ACCESS_TOKEN || '').trim();
-  const pixel = String(env.FB_PIXEL_ID || '1542362403143695').trim();
-  if (!token) throw new Error('FB_ACCESS_TOKEN não configurado.');
-  if (!/^\d+$/.test(pixel)) throw new Error('FB_PIXEL_ID inválido.');
-  const version = String(env.FB_API_VERSION || 'v25.0').trim();
-  if (!/^v\d+\.0$/.test(version)) throw new Error('FB_API_VERSION inválida.');
-  const phone = String(order.phone || '').replace(/\D/g, '');
-  const names = String(order.name || '').trim().split(/\s+/);
+  const token = String(env.FB_ACCESS_TOKEN || "").trim();
+  const pixel = String(env.FB_PIXEL_ID || "1542362403143695").trim();
+  if (!token) throw new Error("FB_ACCESS_TOKEN n\xE3o configurado.");
+  if (!/^\d+$/.test(pixel)) throw new Error("FB_PIXEL_ID inv\xE1lido.");
+  const version = String(env.FB_API_VERSION || "v25.0").trim();
+  if (!/^v\d+\.0$/.test(version)) throw new Error("FB_API_VERSION inv\xE1lida.");
+  const phone = String(order.phone || "").replace(/\D/g, "");
+  const names = String(order.name || "").trim().split(/\s+/);
   const browser = order.tracking?._browser || {};
   const payload = {
     data: [{
-      event_name: 'Purchase', event_id: `pix_${order.id}`, event_time: Math.floor(new Date(paidAt).getTime() / 1000),
-      action_source: 'website', event_source_url: browser.source_url || `${String(env.SITE_URL || '').replace(/\/+$/, '')}/pagamento`,
+      event_name: "Purchase",
+      event_id: `pix_${order.id}`,
+      event_time: Math.floor(new Date(paidAt).getTime() / 1e3),
+      action_source: "website",
+      event_source_url: browser.source_url || `${String(env.SITE_URL || "").replace(/\/+$/, "")}/pagamento`,
       user_data: {
-        em: [await hash(order.email)], ph: phone ? [await hash(phone.length <= 11 ? `55${phone}` : phone)] : undefined,
-        fn: names[0] ? [await hash(names[0])] : undefined,
-        ln: names.length > 1 ? [await hash(names.slice(1).join(' '))] : undefined,
-        external_id: [await hash(order.id)], country: [await hash('br')],
-        fbc: browser.fbc || undefined, fbp: browser.fbp || undefined,
-        client_ip_address: browser.ip || undefined, client_user_agent: browser.user_agent || undefined,
+        em: [await hash(order.email)],
+        ph: phone ? [await hash(phone.length <= 11 ? `55${phone}` : phone)] : void 0,
+        fn: names[0] ? [await hash(names[0])] : void 0,
+        ln: names.length > 1 ? [await hash(names.slice(1).join(" "))] : void 0,
+        external_id: [await hash(order.id)],
+        country: [await hash("br")],
+        fbc: browser.fbc || void 0,
+        fbp: browser.fbp || void 0,
+        client_ip_address: browser.ip || void 0,
+        client_user_agent: browser.user_agent || void 0
       },
-      custom_data: { value: Number(order.amount), currency: 'BRL', order_id: order.id, content_type: 'product', content_name: products(order).map((p) => p.name).join(' + '), num_items: products(order).reduce((sum, p) => sum + p.quantity, 0) },
+      custom_data: { value: Number(order.amount), currency: "BRL", order_id: order.id, content_type: "product", content_name: products(order).map((p) => p.name).join(" + "), num_items: products(order).reduce((sum, p) => sum + p.quantity, 0) }
     }],
-    ...(env.FB_TEST_EVENT_CODE ? { test_event_code: env.FB_TEST_EVENT_CODE } : {}),
+    ...env.FB_TEST_EVENT_CODE ? { test_event_code: env.FB_TEST_EVENT_CODE } : {}
   };
   const response = await fetch(`https://graph.facebook.com/${version}/${pixel}/events`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify(payload), signal: AbortSignal.timeout(12000),
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(12e3)
   });
   const result = await response.json().catch(() => ({}));
-  if (!response.ok || result.error || Number(result.events_received) < 1 || result.events_received === undefined) throw new Error(`Meta não confirmou o evento (HTTP ${response.status}${result.error?.code ? `, código ${result.error.code}` : ''}). Confira o token e o pixel.`);
+  if (!response.ok || result.error || Number(result.events_received) < 1 || result.events_received === void 0) throw new Error(`Meta n\xE3o confirmou o evento (HTTP ${response.status}${result.error?.code ? `, c\xF3digo ${result.error.code}` : ""}). Confira o token e o pixel.`);
   return { http_status: response.status, events_received: result.events_received };
 }
-
-// Compare-and-swap no JSON impede dois webhooks/admin/status de enviar ao mesmo tempo.
-async function swapTracking(db, env, order, tracking) {
+async function swapTracking(db2, env, order, tracking) {
   const query = `?id=eq.${encodeURIComponent(order.id)}&status=eq.paid&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=*`;
-  const rows = await db(env, 'gokoco_orders', query, 'PATCH', { tracking });
+  const rows = await db2(env, "gokoco_orders", query, "PATCH", { tracking });
   return rows?.[0] || null;
 }
-
-async function deliverPaidPurchase(env, db, orderId, paidAt) {
+async function deliverPaidPurchase(env, db2, orderId, paidAt) {
   const destination = purchaseDestination(env);
-  if (!destination) return { state: 'not_configured' };
+  if (!destination) return { state: "not_configured" };
   for (let attempt = 0; attempt < 3; attempt++) {
-    const rows = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(orderId)}&status=eq.paid&select=*&limit=1`);
+    const rows = await db2(env, "gokoco_orders", `?id=eq.${encodeURIComponent(orderId)}&status=eq.paid&select=*&limit=1`);
     const order = rows?.[0];
-    if (!order) return { state: 'not_paid' };
-    if (order.tracking?.manualExternal) return { state: 'external_tracking' };
+    if (!order) return { state: "not_paid" };
+    if (order.tracking?.manualExternal) return { state: "external_tracking" };
     const metadata = order.tracking?._purchase || {};
     const prior = metadata[destination] || {};
-    if (prior.state === 'sent') return purchaseSummary(env, order);
-    if (destination === 'utmify' && metadata.utmify_pending?.state === 'sending' && Date.parse(metadata.utmify_pending.lease_until) > Date.now()) return { state: 'pending_sending' };
-    if (prior.state === 'sending' && Date.parse(prior.lease_until) > Date.now()) return { state: 'sending' };
-    if (Date.parse(prior.retry_at) > Date.now()) return { state: 'retry_pending' };
+    if (prior.state === "sent") return purchaseSummary(env, order);
+    if (destination === "utmify" && metadata.utmify_pending?.state === "sending" && Date.parse(metadata.utmify_pending.lease_until) > Date.now()) return { state: "pending_sending" };
+    if (prior.state === "sending" && Date.parse(prior.lease_until) > Date.now()) return { state: "sending" };
+    if (Date.parse(prior.retry_at) > Date.now()) return { state: "retry_pending" };
     const date = metadata.paid_at || order.tracking?._payment?.paid_at || paidAt || order.updated_at || order.created_at;
-    if (!Number.isFinite(Date.parse(date))) throw new Error('Data de pagamento inválida.');
-    const claim = crypto.randomUUID();
-    const tracking = { ...order.tracking, _purchase: { ...metadata, paid_at: date, [destination]: { state: 'sending', claim, attempts: (Number(prior.attempts) || 0) + 1, lease_until: new Date(Date.now() + 120000).toISOString() } } };
-    const claimed = await swapTracking(db, env, order, tracking);
+    if (!Number.isFinite(Date.parse(date))) throw new Error("Data de pagamento inv\xE1lida.");
+    const claim2 = crypto.randomUUID();
+    const tracking = { ...order.tracking, _purchase: { ...metadata, paid_at: date, [destination]: { state: "sending", claim: claim2, attempts: (Number(prior.attempts) || 0) + 1, lease_until: new Date(Date.now() + 12e4).toISOString() } } };
+    const claimed = await swapTracking(db2, env, order, tracking);
     if (!claimed) continue;
     let result;
     try {
-      const receipt = destination === 'utmify' ? await sendUtmify(env, claimed, 'paid', date) : await sendMeta(env, claimed, date);
-      result = { state: 'sent', claim, attempts: tracking._purchase[destination].attempts, sent_at: new Date().toISOString(), ...receipt };
+      const receipt = destination === "utmify" ? await sendUtmify(env, claimed, "paid", date) : await sendMeta(env, claimed, date);
+      result = { state: "sent", claim: claim2, attempts: tracking._purchase[destination].attempts, sent_at: (/* @__PURE__ */ new Date()).toISOString(), ...receipt };
     } catch (error) {
-      // Não registrar respostas do fornecedor: podem conter dados pessoais ou tokens.
-      result = { state: 'failed', claim, attempts: tracking._purchase[destination].attempts, retry_at: new Date(Date.now() + 60000).toISOString(), error: error.name === 'TimeoutError' ? 'Tempo limite ao enviar a compra. Uma nova tentativa será feita.' : text(error.message, 250) };
-      console.error('[purchase]', destination, order.id, result.error);
+      result = { state: "failed", claim: claim2, attempts: tracking._purchase[destination].attempts, retry_at: new Date(Date.now() + 6e4).toISOString(), error: error.name === "TimeoutError" ? "Tempo limite ao enviar a compra. Uma nova tentativa ser\xE1 feita." : text(error.message, 250) };
+      console.error("[purchase]", destination, order.id, result.error);
     }
-    const completed = await swapTracking(db, env, claimed, { ...tracking, _purchase: { ...tracking._purchase, [destination]: result } });
-    if (!completed) throw new Error('Não foi possível registrar o resultado do envio.');
+    const completed = await swapTracking(db2, env, claimed, { ...tracking, _purchase: { ...tracking._purchase, [destination]: result } });
+    if (!completed) throw new Error("N\xE3o foi poss\xEDvel registrar o resultado do envio.");
     return purchaseSummary(env, completed);
   }
-  return { state: 'busy' };
+  return { state: "busy" };
 }
 
-return { capturePurchaseTracking, recoverCustomerAttribution, purchaseDestination, purchaseSummary, deliverPaidPurchase, deliverPendingPurchase };
-})();
-
-const { deliverPaidEmail, retryPaidEmails, sendManualOrderEmail } = (() => {
-// Envia uma única confirmação por pedido pago, usando o estado de rastreio já salvo.
-const emailText = (value, limit = 300) => String(value || '').trim().slice(0, limit);
-const emailAddress = (value) => /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(value);
-const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
-const EMAIL_ACTIVATION_AT = Date.parse('2026-10-14T19:56:21Z');
-
+// worker-src/order-email.js
+var emailText = (value, limit = 300) => String(value || "").trim().slice(0, limit);
+var emailAddress = (value) => /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(value);
+var escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
+var EMAIL_ACTIVATION_AT = Date.parse("2026-10-14T19:56:21Z");
 function emailSettings(env) {
   const key = emailText(env.RESEND_API_KEY, 300);
   const from = emailText(env.RESEND_FROM_EMAIL, 254);
   let site;
-  try { site = new URL(String(env.SITE_URL || '')); } catch { return null; }
-  if (!key || !emailAddress(from) || site.protocol !== 'https:') return null;
+  try {
+    site = new URL(String(env.SITE_URL || ""));
+  } catch {
+    return null;
+  }
+  if (!key || !emailAddress(from) || site.protocol !== "https:") return null;
   return { key, from, replyTo: from, start: EMAIL_ACTIVATION_AT, site: site.origin };
 }
-
-function brandedOrderEmail(title, content, code, settings) {
-  const trackingUrl = `${settings.site}/rastreio.html?codigo=${encodeURIComponent(code || '')}`;
+function brandedOrderEmail(title, content, code, settings2) {
+  const trackingUrl = `${settings2.site}/rastreio.html?codigo=${encodeURIComponent(code || "")}`;
   return `<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title></head>
 <body style="margin:0;padding:0;background-color:#f3f4f6;color:#24252b;font-family:Arial,Helvetica,sans-serif">
-<div style="display:none;max-height:0;overflow:hidden;mso-hide:all">${escapeHtml(title)} — novidades sobre seu pedido GOKOCO.</div>
+<div style="display:none;max-height:0;overflow:hidden;mso-hide:all">${escapeHtml(title)} \u2014 novidades sobre seu pedido GOKOCO.</div>
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#f3f4f6"><tr><td align="center" style="padding:32px 12px">
 <!--[if mso]><table role="presentation" width="600"><tr><td><![endif]-->
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;background-color:#ffffff;border-radius:16px;overflow:hidden">
-<tr><td bgcolor="#17181f" style="padding:30px 28px;border-bottom:4px solid #ef3456"><a href="${escapeHtml(settings.site)}" style="color:#ffffff;text-decoration:none;font-size:28px;font-weight:800;letter-spacing:3px">GOKOCO<span style="color:#ff5976">.</span></a><p style="margin:9px 0 0;color:#d1d5db;font-size:12px;letter-spacing:1px">CUIDADO EM CADA DETALHE</p></td></tr>
+<tr><td bgcolor="#17181f" style="padding:30px 28px;border-bottom:4px solid #ef3456"><a href="${escapeHtml(settings2.site)}" style="color:#ffffff;text-decoration:none;font-size:28px;font-weight:800;letter-spacing:3px">GOKOCO<span style="color:#ff5976">.</span></a><p style="margin:9px 0 0;color:#d1d5db;font-size:12px;letter-spacing:1px">CUIDADO EM CADA DETALHE</p></td></tr>
 <tr><td style="padding:32px 28px 12px"><p style="margin:0 0 12px;color:#c52646;font-size:11px;font-weight:bold;letter-spacing:1.5px">SOBRE SEU PEDIDO</p><h1 style="margin:0 0 24px;font-size:25px;line-height:1.3;color:#17181f;overflow-wrap:anywhere">${escapeHtml(title)}</h1><div style="font-size:16px;line-height:1.75;color:#4b5563;overflow-wrap:anywhere;word-break:break-word">${content}</div></td></tr>
-${code ? `<tr><td style="padding:12px 28px 28px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#fff2f5" style="border:1px solid #ffd6df;border-radius:12px"><tr><td align="center" style="padding:24px 16px"><p style="margin:0 0 10px;color:#9d2440;font-size:11px;font-weight:bold;letter-spacing:1.5px">SEU CÓDIGO DE RASTREIO</p><p style="margin:0 0 22px;font-family:Courier New,monospace;font-size:24px;font-weight:bold;letter-spacing:2px;color:#17181f;word-break:break-all">${escapeHtml(code)}</p><table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr><td align="center" bgcolor="#d92a4b" style="border-radius:8px;mso-padding-alt:15px 24px"><a href="${escapeHtml(trackingUrl)}" style="display:inline-block;padding:15px 24px;color:#ffffff;text-decoration:none;font-size:15px;font-weight:bold">Acompanhar meu pedido &rarr;</a></td></tr></table></td></tr></table></td></tr>` : ''}
+${code ? `<tr><td style="padding:12px 28px 28px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#fff2f5" style="border:1px solid #ffd6df;border-radius:12px"><tr><td align="center" style="padding:24px 16px"><p style="margin:0 0 10px;color:#9d2440;font-size:11px;font-weight:bold;letter-spacing:1.5px">SEU C\xD3DIGO DE RASTREIO</p><p style="margin:0 0 22px;font-family:Courier New,monospace;font-size:24px;font-weight:bold;letter-spacing:2px;color:#17181f;word-break:break-all">${escapeHtml(code)}</p><table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr><td align="center" bgcolor="#d92a4b" style="border-radius:8px;mso-padding-alt:15px 24px"><a href="${escapeHtml(trackingUrl)}" style="display:inline-block;padding:15px 24px;color:#ffffff;text-decoration:none;font-size:15px;font-weight:bold">Acompanhar meu pedido &rarr;</a></td></tr></table></td></tr></table></td></tr>` : ""}
 <tr><td style="padding:22px 28px;border-top:1px solid #edf0f3;background-color:#fafafa"><p style="margin:0 0 6px;font-size:14px;font-weight:bold;color:#17181f">Conte com a gente.</p><p style="margin:0;font-size:13px;line-height:1.7;color:#6b7280">Precisa de ajuda? Responda a este e-mail ou <a href="https://wa.me/5583991297085" style="color:#a72340;text-decoration:underline">fale com nosso atendimento</a>.</p></td></tr>
-</table><p style="max-width:550px;margin:20px auto 0;color:#777e8b;font-size:11px;line-height:1.7;text-align:center">GOKOCO &bull; Atendimento ao cliente<br>Esta mensagem é referente ao seu pedido em nossa loja.</p>
+</table><p style="max-width:550px;margin:20px auto 0;color:#777e8b;font-size:11px;line-height:1.7;text-align:center">GOKOCO &bull; Atendimento ao cliente<br>Esta mensagem \xE9 referente ao seu pedido em nossa loja.</p>
 <!--[if mso]></td></tr></table><![endif]-->
 </td></tr></table></body></html>`;
 }
-
-function composeEmail(order, code, settings) {
-  const firstName = emailText(order.name, 100).split(/\s+/)[0] || 'cliente';
-  const url = `${settings.site}/rastreio.html?codigo=${encodeURIComponent(code)}`;
+function composeEmail(order, code, settings2) {
+  const firstName = emailText(order.name, 100).split(/\s+/)[0] || "cliente";
+  const url = `${settings2.site}/rastreio.html?codigo=${encodeURIComponent(code)}`;
   const questions = [
-    'Por qual motivo você comprou com a gente?',
-    'Gostou do nosso site?',
-    'Gostou do meu atendimento?',
-    'O que te chamou atenção para comprar pelo nosso anúncio e não pelo dos concorrentes?',
+    "Por qual motivo voc\xEA comprou com a gente?",
+    "Gostou do nosso site?",
+    "Gostou do meu atendimento?",
+    "O que te chamou aten\xE7\xE3o para comprar pelo nosso an\xFAncio e n\xE3o pelo dos concorrentes?"
   ];
-  const intro = `Olá, ${firstName}!\n\nSeu pagamento da escova GOKOCO foi confirmado. Seu código de rastreio é ${code}.\nAcompanhe seu pedido: ${url}\n\nPosso te fazer algumas perguntas simples para nos ajudar a entender melhor nossos clientes? Se quiser, responda diretamente a este e-mail:\n\n`;
-  const text = intro + questions.map((question, index) => `${index + 1}. ${question}`).join('\n') + '\n\nObrigado por comprar com a gente!\nEquipe GOKOCO';
-  const html = brandedOrderEmail(`Pagamento confirmado, ${firstName}!`, `<p style="margin:0 0 20px">Recebemos o pagamento da sua escova GOKOCO. Obrigado por escolher nossa loja!</p><p style="margin:0 0 16px">Queremos conhecer você melhor. Se quiser, responda a este e-mail contando:</p><ol style="padding-left:22px;margin:0 0 24px">${questions.map((question) => `<li style="margin-bottom:8px">${escapeHtml(question)}</li>`).join('')}</ol>`, code, settings);
-  return { from: `GOKOCO <${settings.from}>`, to: [emailText(order.email, 254)], reply_to: settings.replyTo, subject: `Seu pedido GOKOCO foi confirmado · rastreio ${code}`, text, html };
-}
+  const intro = `Ol\xE1, ${firstName}!
 
-async function swapEmailState(db, env, order, tracking) {
+Seu pagamento da escova GOKOCO foi confirmado. Seu c\xF3digo de rastreio \xE9 ${code}.
+Acompanhe seu pedido: ${url}
+
+Posso te fazer algumas perguntas simples para nos ajudar a entender melhor nossos clientes? Se quiser, responda diretamente a este e-mail:
+
+`;
+  const text2 = intro + questions.map((question, index) => `${index + 1}. ${question}`).join("\n") + "\n\nObrigado por comprar com a gente!\nEquipe GOKOCO";
+  const html = brandedOrderEmail(`Pagamento confirmado, ${firstName}!`, `<p style="margin:0 0 20px">Recebemos o pagamento da sua escova GOKOCO. Obrigado por escolher nossa loja!</p><p style="margin:0 0 16px">Queremos conhecer voc\xEA melhor. Se quiser, responda a este e-mail contando:</p><ol style="padding-left:22px;margin:0 0 24px">${questions.map((question) => `<li style="margin-bottom:8px">${escapeHtml(question)}</li>`).join("")}</ol>`, code, settings2);
+  return { from: `GOKOCO <${settings2.from}>`, to: [emailText(order.email, 254)], reply_to: settings2.replyTo, subject: `Seu pedido GOKOCO foi confirmado \xB7 rastreio ${code}`, text: text2, html };
+}
+async function swapEmailState(db2, env, order, tracking) {
   const query = `?id=eq.${encodeURIComponent(order.id)}&status=eq.paid&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=*`;
-  const rows = await db(env, 'gokoco_orders', query, 'PATCH', { tracking });
+  const rows = await db2(env, "gokoco_orders", query, "PATCH", { tracking });
   return rows?.[0] || null;
 }
-
-async function deliverPaidEmail(env, db, orderId, paidAt) {
-  const settings = emailSettings(env);
-  if (!settings) return { state: 'not_configured' };
+async function deliverPaidEmail(env, db2, orderId, paidAt) {
+  const settings2 = emailSettings(env);
+  if (!settings2) return { state: "not_configured" };
   for (let attempt = 0; attempt < 3; attempt++) {
-    const rows = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(orderId)}&status=eq.paid&select=*&limit=1`);
+    const rows = await db2(env, "gokoco_orders", `?id=eq.${encodeURIComponent(orderId)}&status=eq.paid&select=*&limit=1`);
     const order = rows?.[0];
-    if (!order) return { state: 'not_paid' };
-    if (order.tracking?.manualExternal) return { state: 'external_tracking' };
+    if (!order) return { state: "not_paid" };
+    if (order.tracking?.manualExternal) return { state: "external_tracking" };
     const code = emailText(order.tracking?.shipping?.code, 40);
-    if (!/^[A-Z0-9]{8,40}$/.test(code)) return { state: 'tracking_pending' };
-    if (!emailAddress(String(order.email || ''))) return { state: 'invalid_email' };
+    if (!/^[A-Z0-9]{8,40}$/.test(code)) return { state: "tracking_pending" };
+    if (!emailAddress(String(order.email || ""))) return { state: "invalid_email" };
     const date = order.tracking?.manualPayment?.paidAt || order.tracking?._purchase?.paid_at || order.tracking?._payment?.paid_at || paidAt || order.updated_at || order.created_at;
-    if (!Number.isFinite(Date.parse(date)) || Date.parse(date) < settings.start) return { state: 'before_activation' };
+    if (!Number.isFinite(Date.parse(date)) || Date.parse(date) < settings2.start) return { state: "before_activation" };
     const prior = order.tracking?._email || {};
-    if (prior.state === 'sent') return { state: 'sent', sent_at: prior.sent_at, email_id: prior.email_id };
-    if (prior.state === 'sending' && Date.parse(prior.lease_until) > Date.now()) return { state: 'sending' };
-    if (Date.parse(prior.retry_at) > Date.now()) return { state: 'retry_pending' };
-    const claim = crypto.randomUUID();
-    const sending = { state: 'sending', claim, attempts: (Number(prior.attempts) || 0) + 1, lease_until: new Date(Date.now() + 120000).toISOString() };
+    if (prior.state === "sent") return { state: "sent", sent_at: prior.sent_at, email_id: prior.email_id };
+    if (prior.state === "sending" && Date.parse(prior.lease_until) > Date.now()) return { state: "sending" };
+    if (Date.parse(prior.retry_at) > Date.now()) return { state: "retry_pending" };
+    const claim2 = crypto.randomUUID();
+    const sending = { state: "sending", claim: claim2, attempts: (Number(prior.attempts) || 0) + 1, lease_until: new Date(Date.now() + 12e4).toISOString() };
     const tracking = { ...order.tracking, _email: sending };
-    const claimed = await swapEmailState(db, env, order, tracking);
+    const claimed = await swapEmailState(db2, env, order, tracking);
     if (!claimed) continue;
     let result;
     try {
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${settings.key}`, 'Content-Type': 'application/json', 'Idempotency-Key': `gokoco-paid-${order.id}` },
-        body: JSON.stringify(composeEmail(claimed, code, settings)),
-        signal: AbortSignal.timeout(12000),
+      const response = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${settings2.key}`, "Content-Type": "application/json", "Idempotency-Key": `gokoco-paid-${order.id}` },
+        body: JSON.stringify(composeEmail(claimed, code, settings2)),
+        signal: AbortSignal.timeout(12e3)
       });
       const receipt = await response.json().catch(() => ({}));
-      if (!response.ok || !receipt.id) throw new Error(`Resend não confirmou o envio (HTTP ${response.status}).`);
-      result = { state: 'sent', claim, attempts: sending.attempts, sent_at: new Date().toISOString(), email_id: String(receipt.id) };
+      if (!response.ok || !receipt.id) throw new Error(`Resend n\xE3o confirmou o envio (HTTP ${response.status}).`);
+      result = { state: "sent", claim: claim2, attempts: sending.attempts, sent_at: (/* @__PURE__ */ new Date()).toISOString(), email_id: String(receipt.id) };
     } catch (error) {
-      result = { state: 'failed', claim, attempts: sending.attempts, retry_at: new Date(Date.now() + 60000).toISOString(), error: error.name === 'TimeoutError' ? 'Tempo limite ao enviar o e-mail.' : emailText(error.message, 160) };
-      console.error('[order-email]', order.id, result.error);
+      result = { state: "failed", claim: claim2, attempts: sending.attempts, retry_at: new Date(Date.now() + 6e4).toISOString(), error: error.name === "TimeoutError" ? "Tempo limite ao enviar o e-mail." : emailText(error.message, 160) };
+      console.error("[order-email]", order.id, result.error);
     }
-    const completed = await swapEmailState(db, env, claimed, { ...tracking, _email: result });
-    if (!completed) throw new Error('Não foi possível registrar o resultado do envio do e-mail.');
+    const completed = await swapEmailState(db2, env, claimed, { ...tracking, _email: result });
+    if (!completed) throw new Error("N\xE3o foi poss\xEDvel registrar o resultado do envio do e-mail.");
     return result;
   }
-  return { state: 'busy' };
+  return { state: "busy" };
 }
-
-async function retryPaidEmails(env, db, limit = 1) {
-  const settings = emailSettings(env);
-  if (!settings) return { configured: false, processed: 0 };
-  const path = 'tracking->_email->>state';
-  const codePath = encodeURIComponent('tracking->shipping->>code');
-  const rows = await db(env, 'gokoco_orders', `?status=eq.paid&gateway=neq.manual_tracking&${codePath}=not.is.null&updated_at=gte.${encodeURIComponent(new Date(settings.start).toISOString())}&or=(${path}.is.null,${path}.neq.sent)&select=id&order=created_at.desc&limit=${Math.max(1, Math.min(3, limit))}`);
-  const results = await Promise.allSettled(rows.map((order) => deliverPaidEmail(env, db, order.id)));
-  return { configured: true, processed: rows.length, sent: results.filter((r) => r.status === 'fulfilled' && r.value.state === 'sent').length, failed: results.filter((r) => r.status === 'rejected' || r.value?.state === 'failed').length };
+async function retryPaidEmails(env, db2, limit = 1) {
+  const settings2 = emailSettings(env);
+  if (!settings2) return { configured: false, processed: 0 };
+  const path = "tracking->_email->>state";
+  const codePath = encodeURIComponent("tracking->shipping->>code");
+  const rows = await db2(env, "gokoco_orders", `?status=eq.paid&gateway=neq.manual_tracking&${codePath}=not.is.null&updated_at=gte.${encodeURIComponent(new Date(settings2.start).toISOString())}&or=(${path}.is.null,${path}.neq.sent)&select=id&order=created_at.desc&limit=${Math.max(1, Math.min(3, limit))}`);
+  const results = await Promise.allSettled(rows.map((order) => deliverPaidEmail(env, db2, order.id)));
+  return { configured: true, processed: rows.length, sent: results.filter((r) => r.status === "fulfilled" && r.value.state === "sent").length, failed: results.filter((r) => r.status === "rejected" || r.value?.state === "failed").length };
 }
-
 async function sendManualOrderEmail(env, order, subject, message) {
-  const settings = emailSettings(env);
-  if (!settings) return { state: 'not_configured' };
+  const settings2 = emailSettings(env);
+  if (!settings2) return { state: "not_configured" };
   const recipient = emailText(order.email, 254);
   const title = emailText(subject, 150);
-  const body = emailText(message, 5000);
-  if (!emailAddress(recipient) || !title || !body) return { state: 'invalid_input' };
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${settings.key}`, 'Content-Type': 'application/json' },
+  const body = emailText(message, 5e3);
+  if (!emailAddress(recipient) || !title || !body) return { state: "invalid_input" };
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${settings2.key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      from: `GOKOCO <${settings.from}>`, to: [recipient], reply_to: settings.replyTo,
-      subject: title, text: body,
-      html: brandedOrderEmail(title, `<p style="margin:0 0 20px">${escapeHtml(body).replace(/\r?\n/g, '<br>')}</p>`, order.status === 'paid' ? order.tracking?.shipping?.code : null, settings),
+      from: `GOKOCO <${settings2.from}>`,
+      to: [recipient],
+      reply_to: settings2.replyTo,
+      subject: title,
+      text: body,
+      html: brandedOrderEmail(title, `<p style="margin:0 0 20px">${escapeHtml(body).replace(/\r?\n/g, "<br>")}</p>`, order.status === "paid" ? order.tracking?.shipping?.code : null, settings2)
     }),
-    signal: AbortSignal.timeout(12000),
+    signal: AbortSignal.timeout(12e3)
   });
   const receipt = await response.json().catch(() => ({}));
-  if (!response.ok || !receipt.id) return { state: 'failed' };
-  return { state: 'sent', email_id: String(receipt.id) };
+  if (!response.ok || !receipt.id) return { state: "failed" };
+  return { state: "sent", email_id: String(receipt.id) };
 }
 
-return { deliverPaidEmail, retryPaidEmails, sendManualOrderEmail };
-})();
-
-const { processRecoveryQueue } = (() => {
-// Recuperação de PIX não pago: até três mensagens por cliente, com estado no pedido.
-const RECOVERY_ACTIVATION_AT = '2026-10-14T22:28:59Z';
-const RECOVERY_DELAYS = [30 * 60000, 4 * 3600000, 24 * 3600000];
-const recoveryText = (value, limit = 200) => String(value || '').trim().slice(0, limit);
-const recoveryEmail = (value) => /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(value);
-const recoveryHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char]);
-
+// worker-src/recovery-email.js
+var RECOVERY_ACTIVATION_AT = "2026-10-14T22:28:59Z";
+var RECOVERY_DELAYS = [30 * 6e4, 4 * 36e5, 24 * 36e5];
+var recoveryText = (value, limit = 200) => String(value || "").trim().slice(0, limit);
+var recoveryEmail = (value) => /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(value);
+var recoveryHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[char]);
 function recoverySettings(env) {
   const key = recoveryText(env.RESEND_API_KEY, 300);
   const from = recoveryText(env.RESEND_FROM_EMAIL, 254);
   let site;
-  try { site = new URL(String(env.SITE_URL || '')); } catch { return null; }
-  if (!key || !recoveryEmail(from) || site.protocol !== 'https:') return null;
+  try {
+    site = new URL(String(env.SITE_URL || ""));
+  } catch {
+    return null;
+  }
+  if (!key || !recoveryEmail(from) || site.protocol !== "https:") return null;
   return { key, from, site: site.origin };
 }
-
-function recoveryMessage(order, number, settings) {
-  const name = recoveryText(order.name, 100).split(/\s+/)[0] || 'cliente';
-  const items = Array.isArray(order.products) ? order.products.map((item) => recoveryText(item.name, 120)).filter(Boolean).join(', ') : '';
-  const amount = Number(order.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  const link = `${settings.site}/?utm_source=recovery&utm_medium=email&utm_campaign=email${number}`;
+function recoveryMessage(order, number, settings2) {
+  const name = recoveryText(order.name, 100).split(/\s+/)[0] || "cliente";
+  const items = Array.isArray(order.products) ? order.products.map((item) => recoveryText(item.name, 120)).filter(Boolean).join(", ") : "";
+  const amount = Number(order.amount).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const link = `${settings2.site}/?utm_source=recovery&utm_medium=email&utm_campaign=email${number}`;
   const messages = [
-    `Seu PIX foi gerado, mas ainda não identificamos o pagamento. Se quiser concluir a compra da sua escova GOKOCO, acesse a loja. Caso já tenha pago, desconsidere esta mensagem.`,
-    `Seu pedido da escova GOKOCO ainda aparece sem pagamento confirmado. Você pode voltar à loja para concluir a compra. Caso já tenha pago, desconsidere esta mensagem.`,
-    `Este é nosso último lembrete sobre o pedido da escova GOKOCO que ainda aparece sem pagamento confirmado. Se quiser, você pode concluir a compra na loja. Caso já tenha pago, desconsidere esta mensagem.`,
+    `Seu PIX foi gerado, mas ainda n\xE3o identificamos o pagamento. Se quiser concluir a compra da sua escova GOKOCO, acesse a loja. Caso j\xE1 tenha pago, desconsidere esta mensagem.`,
+    `Seu pedido da escova GOKOCO ainda aparece sem pagamento confirmado. Voc\xEA pode voltar \xE0 loja para concluir a compra. Caso j\xE1 tenha pago, desconsidere esta mensagem.`,
+    `Este \xE9 nosso \xFAltimo lembrete sobre o pedido da escova GOKOCO que ainda aparece sem pagamento confirmado. Se quiser, voc\xEA pode concluir a compra na loja. Caso j\xE1 tenha pago, desconsidere esta mensagem.`
   ];
-  const subject = [`Seu pedido GOKOCO ainda está aguardando pagamento`, `Ainda quer sua escova GOKOCO?`, `Último lembrete sobre seu pedido GOKOCO`][number - 1];
+  const subject = [`Seu pedido GOKOCO ainda est\xE1 aguardando pagamento`, `Ainda quer sua escova GOKOCO?`, `\xDAltimo lembrete sobre seu pedido GOKOCO`][number - 1];
   const body = messages[number - 1];
-  const text = `Olá, ${name}!\n\n${body}\n\n${items ? `Produto: ${items}\n` : ''}Valor do pedido: ${amount}\n\nVoltar à loja: ${link}\n\nEquipe GOKOCO`;
-  const html = `<div style="max-width:560px;margin:auto;font-family:Arial,sans-serif;color:#17212b;line-height:1.6"><h1 style="font-size:22px">Olá, ${recoveryHtml(name)}!</h1><p>${recoveryHtml(body)}</p>${items ? `<p><strong>Produto:</strong> ${recoveryHtml(items)}</p>` : ''}<p><strong>Valor do pedido:</strong> ${recoveryHtml(amount)}</p><p><a href="${recoveryHtml(link)}" style="display:inline-block;padding:12px 20px;border-radius:8px;background:#15803d;color:#fff;text-decoration:none;font-weight:bold">Voltar à loja</a></p><p>Equipe GOKOCO</p></div>`;
-  return { from: `GOKOCO <${settings.from}>`, to: [order.email], reply_to: settings.from, subject, text, html };
-}
+  const text2 = `Ol\xE1, ${name}!
 
-async function recoverySwap(db, env, order, state) {
+${body}
+
+${items ? `Produto: ${items}
+` : ""}Valor do pedido: ${amount}
+
+Voltar \xE0 loja: ${link}
+
+Equipe GOKOCO`;
+  const html = `<div style="max-width:560px;margin:auto;font-family:Arial,sans-serif;color:#17212b;line-height:1.6"><h1 style="font-size:22px">Ol\xE1, ${recoveryHtml(name)}!</h1><p>${recoveryHtml(body)}</p>${items ? `<p><strong>Produto:</strong> ${recoveryHtml(items)}</p>` : ""}<p><strong>Valor do pedido:</strong> ${recoveryHtml(amount)}</p><p><a href="${recoveryHtml(link)}" style="display:inline-block;padding:12px 20px;border-radius:8px;background:#15803d;color:#fff;text-decoration:none;font-weight:bold">Voltar \xE0 loja</a></p><p>Equipe GOKOCO</p></div>`;
+  return { from: `GOKOCO <${settings2.from}>`, to: [order.email], reply_to: settings2.from, subject, text: text2, html };
+}
+async function recoverySwap(db2, env, order, state) {
   const query = `?id=eq.${encodeURIComponent(order.id)}&status=eq.pending&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=*`;
-  const rows = await db(env, 'gokoco_orders', query, 'PATCH', { tracking: { ...(order.tracking || {}), _recovery: state } });
+  const rows = await db2(env, "gokoco_orders", query, "PATCH", { tracking: { ...order.tracking || {}, _recovery: state } });
   return rows?.[0] || null;
 }
-
-async function stopRecovery(db, env, order, count, reason) {
-  await recoverySwap(db, env, order, { ...(order.tracking?._recovery || {}), count, state: 'stopped', reason });
+async function stopRecovery(db2, env, order, count, reason) {
+  await recoverySwap(db2, env, order, { ...order.tracking?._recovery || {}, count, state: "stopped", reason });
   return { state: reason, count };
 }
-
-async function processRecoveryOrder(env, db, verifyPayment, orderId, now = Date.now()) {
-  const settings = recoverySettings(env);
-  if (!settings) return { state: 'not_configured' };
+async function processRecoveryOrder(env, db2, verifyPayment, orderId, now = Date.now()) {
+  const settings2 = recoverySettings(env);
+  if (!settings2) return { state: "not_configured" };
   for (let attempt = 0; attempt < 3; attempt++) {
-    const rows = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(orderId)}&select=*&limit=1`);
+    const rows = await db2(env, "gokoco_orders", `?id=eq.${encodeURIComponent(orderId)}&select=*&limit=1`);
     const order = rows?.[0];
-    if (!order || order.status !== 'pending' || !order.transaction_id || order.gateway === 'manual_tracking') return { state: 'not_pending' };
+    if (!order || order.status !== "pending" || !order.transaction_id || order.gateway === "manual_tracking") return { state: "not_pending" };
     const email = recoveryText(order.email, 254).toLowerCase();
-    if (!recoveryEmail(email)) return { state: 'invalid_email' };
-    if (Date.parse(order.created_at) < Date.parse(RECOVERY_ACTIVATION_AT)) return { state: 'before_activation' };
+    if (!recoveryEmail(email)) return { state: "invalid_email" };
+    if (Date.parse(order.created_at) < Date.parse(RECOVERY_ACTIVATION_AT)) return { state: "before_activation" };
     const prior = order.tracking?._recovery || {};
     const count = Number(prior.count) || 0;
-    if (count >= 3 || prior.state === 'stopped') return { state: prior.state || 'complete', count };
+    if (count >= 3 || prior.state === "stopped") return { state: prior.state || "complete", count };
     const dueAt = count ? Date.parse(prior.next_at) : Date.parse(order.created_at) + RECOVERY_DELAYS[0];
-    if (!Number.isFinite(dueAt) || dueAt > now) return { state: 'scheduled', count };
-    if (prior.state === 'sending' && Date.parse(prior.lease_until) > now) return { state: 'sending', count };
-    if (Date.parse(prior.retry_at) > now) return { state: 'retry_pending', count };
-
-    // Um cliente com outro pedido já pago ou em recuperação não recebe nova sequência.
-    const paid = await db(env, 'gokoco_orders', `?email=eq.${encodeURIComponent(email)}&status=eq.paid&select=id&limit=1`);
-    if (paid?.length) return stopRecovery(db, env, order, count, 'customer_paid');
+    if (!Number.isFinite(dueAt) || dueAt > now) return { state: "scheduled", count };
+    if (prior.state === "sending" && Date.parse(prior.lease_until) > now) return { state: "sending", count };
+    if (Date.parse(prior.retry_at) > now) return { state: "retry_pending", count };
+    const paid = await db2(env, "gokoco_orders", `?email=eq.${encodeURIComponent(email)}&status=eq.paid&select=id&limit=1`);
+    if (paid?.length) return stopRecovery(db2, env, order, count, "customer_paid");
     if (!count) {
-      const latest = await db(env, 'gokoco_orders', `?email=eq.${encodeURIComponent(email)}&status=eq.pending&select=id&order=created_at.desc&limit=1`);
-      if (latest?.[0]?.id !== order.id) return stopRecovery(db, env, order, count, 'newer_order');
-      const others = await db(env, 'gokoco_orders', `?email=eq.${encodeURIComponent(email)}&id=neq.${encodeURIComponent(order.id)}&tracking->_recovery->>count=gte.1&select=id&limit=1`);
-      if (others?.length) return stopRecovery(db, env, order, count, 'already_contacted');
+      const latest = await db2(env, "gokoco_orders", `?email=eq.${encodeURIComponent(email)}&status=eq.pending&select=id&order=created_at.desc&limit=1`);
+      if (latest?.[0]?.id !== order.id) return stopRecovery(db2, env, order, count, "newer_order");
+      const others = await db2(env, "gokoco_orders", `?email=eq.${encodeURIComponent(email)}&id=neq.${encodeURIComponent(order.id)}&tracking->_recovery->>count=gte.1&select=id&limit=1`);
+      if (others?.length) return stopRecovery(db2, env, order, count, "already_contacted");
     }
-
-    // O banco pode ainda dizer pendente quando o gateway já recebeu o PIX.
     const payment = await verifyPayment(env, order.transaction_id, order.gateway);
-    if (payment.isPaid || payment.isRefunded || payment.isExpired) return stopRecovery(db, env, order, count, 'payment_changed');
+    if (payment.isPaid || payment.isRefunded || payment.isExpired) return stopRecovery(db2, env, order, count, "payment_changed");
     const number = count + 1;
-    const sending = { ...prior, count, state: 'sending', number, claim: crypto.randomUUID(), lease_until: new Date(now + 120000).toISOString() };
-    const claimed = await recoverySwap(db, env, order, sending);
+    const sending = { ...prior, count, state: "sending", number, claim: crypto.randomUUID(), lease_until: new Date(now + 12e4).toISOString() };
+    const claimed = await recoverySwap(db2, env, order, sending);
     if (!claimed) continue;
-    const stillPending = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}&status=eq.pending&select=id&limit=1`);
-    if (!stillPending?.length) return { state: 'payment_changed', count };
+    const stillPending = await db2(env, "gokoco_orders", `?id=eq.${encodeURIComponent(order.id)}&status=eq.pending&select=id&limit=1`);
+    if (!stillPending?.length) return { state: "payment_changed", count };
     let result;
     try {
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${settings.key}`, 'Content-Type': 'application/json', 'Idempotency-Key': `gokoco-recovery-${order.id}-${number}` },
-        body: JSON.stringify(recoveryMessage(claimed, number, settings)),
-        signal: AbortSignal.timeout(12000),
+      const response = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${settings2.key}`, "Content-Type": "application/json", "Idempotency-Key": `gokoco-recovery-${order.id}-${number}` },
+        body: JSON.stringify(recoveryMessage(claimed, number, settings2)),
+        signal: AbortSignal.timeout(12e3)
       });
       const receipt = await response.json().catch(() => ({}));
-      if (!response.ok || !receipt.id) throw new Error(`Resend não confirmou o envio (HTTP ${response.status}).`);
-      result = { count: number, state: number === 3 ? 'complete' : 'scheduled', sent: [...(Array.isArray(prior.sent) ? prior.sent : []), { number, at: new Date(now).toISOString(), id: String(receipt.id) }], next_at: number < 3 ? new Date(now + RECOVERY_DELAYS[number]).toISOString() : null };
+      if (!response.ok || !receipt.id) throw new Error(`Resend n\xE3o confirmou o envio (HTTP ${response.status}).`);
+      result = { count: number, state: number === 3 ? "complete" : "scheduled", sent: [...Array.isArray(prior.sent) ? prior.sent : [], { number, at: new Date(now).toISOString(), id: String(receipt.id) }], next_at: number < 3 ? new Date(now + RECOVERY_DELAYS[number]).toISOString() : null };
     } catch (error) {
-      result = { ...prior, count, state: 'failed', retry_at: new Date(now + 30 * 60000).toISOString(), error: recoveryText(error.message, 160) };
-      console.error('[recovery-email]', order.id, result.error);
+      result = { ...prior, count, state: "failed", retry_at: new Date(now + 30 * 6e4).toISOString(), error: recoveryText(error.message, 160) };
+      console.error("[recovery-email]", order.id, result.error);
     }
-    const completed = await recoverySwap(db, env, claimed, result);
-    if (!completed) throw new Error('Não foi possível registrar o resultado da recuperação.');
-    return { state: result.state, count: result.count, sent: result.state !== 'failed' };
+    const completed = await recoverySwap(db2, env, claimed, result);
+    if (!completed) throw new Error("N\xE3o foi poss\xEDvel registrar o resultado da recupera\xE7\xE3o.");
+    return { state: result.state, count: result.count, sent: result.state !== "failed" };
   }
-  return { state: 'busy' };
+  return { state: "busy" };
 }
-
-async function processRecoveryQueue(env, db, verifyPayment, limit = 3) {
+async function processRecoveryQueue(env, db2, verifyPayment, limit = 3) {
   if (!recoverySettings(env)) return { configured: false, processed: 0 };
   const now = Date.now();
   const cutoff = new Date(now - RECOVERY_DELAYS[0]).toISOString();
   const size = Math.max(1, Math.min(3, limit));
   const base = `?status=eq.pending&gateway=neq.manual_tracking&created_at=gte.${encodeURIComponent(RECOVERY_ACTIVATION_AT)}&created_at=lte.${encodeURIComponent(cutoff)}`;
   const [newOrders, followups] = await Promise.all([
-    db(env, 'gokoco_orders', `${base}&or=(tracking->_recovery.is.null,tracking->_recovery->>state.eq.failed,tracking->_recovery->>state.eq.sending)&or=(tracking->_recovery->>count.is.null,tracking->_recovery->>count.eq.0)&select=id&order=created_at.desc&limit=${size}`),
-    db(env, 'gokoco_orders', `${base}&tracking->_recovery->>count=gte.1&tracking->_recovery->>count=lte.2&tracking->_recovery->>state=neq.stopped&tracking->_recovery->>next_at=lte.${encodeURIComponent(new Date(now).toISOString())}&select=id&order=created_at.asc&limit=${size}`),
+    db2(env, "gokoco_orders", `${base}&or=(tracking->_recovery.is.null,tracking->_recovery->>state.eq.failed,tracking->_recovery->>state.eq.sending)&or=(tracking->_recovery->>count.is.null,tracking->_recovery->>count.eq.0)&select=id&order=created_at.desc&limit=${size}`),
+    db2(env, "gokoco_orders", `${base}&tracking->_recovery->>count=gte.1&tracking->_recovery->>count=lte.2&tracking->_recovery->>state=neq.stopped&tracking->_recovery->>next_at=lte.${encodeURIComponent(new Date(now).toISOString())}&select=id&order=created_at.asc&limit=${size}`)
   ]);
   const rows = [...followups, ...newOrders].slice(0, size);
-  const results = await Promise.allSettled(rows.map((order) => processRecoveryOrder(env, db, verifyPayment, order.id, now)));
-  return { configured: true, processed: rows.length, sent: results.filter((r) => r.status === 'fulfilled' && r.value.sent).length, failed: results.filter((r) => r.status === 'rejected' || r.value?.state === 'failed').length };
+  const results = await Promise.allSettled(rows.map((order) => processRecoveryOrder(env, db2, verifyPayment, order.id, now)));
+  return { configured: true, processed: rows.length, sent: results.filter((r) => r.status === "fulfilled" && r.value.sent).length, failed: results.filter((r) => r.status === "rejected" || r.value?.state === "failed").length };
 }
 
-return { processRecoveryQueue };
-})();
-
-const { handleReshippingRoute, publicReshipping } = (() => {
-// Taxa de reenvio (mesma lógica da loja Top Mix): após a saída para entrega,
-// o rastreio simula duas tentativas frustradas, retorno ao CD e libera o
-// pagamento da taxa via PIX. O pagamento é confirmado pelo gateway ou pelo
-// envio do comprovante, e então o reenvio é liberado em até 2 dias.
-
-const MINUTE = 60000;
-const HOUR = 60 * MINUTE;
-const OUT_FOR_DELIVERY_OFFSET = 48 * HOUR + 22 * MINUTE;
-const FEE_AFTER_OUT_FOR_DELIVERY = 91 * HOUR + 31 * MINUTE;
-const RECEIPT_BUCKET = 'comprovantes-taxa';
-const RECEIPT_MAX_BYTES = 8 * 1024 * 1024;
-const RECEIPT_TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/heic': 'heic', 'image/heif': 'heif', 'application/pdf': 'pdf' };
-const CODE_PATTERN = /^GK[A-HJ-NP-Z2-9]{10}$/;
-
+// worker-src/reshipping-fee.js
+var MINUTE = 6e4;
+var HOUR = 60 * MINUTE;
+var OUT_FOR_DELIVERY_OFFSET = 48 * HOUR + 22 * MINUTE;
+var FEE_AFTER_OUT_FOR_DELIVERY = 91 * HOUR + 31 * MINUTE;
+var RECEIPT_BUCKET = "comprovantes-taxa";
+var RECEIPT_MAX_BYTES = 8 * 1024 * 1024;
+var RECEIPT_TYPES = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/heic": "heic", "image/heif": "heif", "application/pdf": "pdf" };
+var CODE_PATTERN = /^GK[A-HJ-NP-Z2-9]{10}$/;
 function feeAmount(env) {
-  const value = Number(String(env.RESHIPPING_FEE_AMOUNT || '').replace(',', '.'));
+  const value = Number(String(env.RESHIPPING_FEE_AMOUNT || "").replace(",", "."));
   return Number.isFinite(value) && value >= 1 && value <= 500 ? Math.round(value * 100) / 100 : 9;
 }
-
 function reshippingSchedule(shipping, fallbackCreatedAt) {
   const origin = Date.parse(shipping?.created_at || fallbackCreatedAt);
-  if (!Number.isFinite(origin) || shipping?.status === 'delivered') return null;
+  if (!Number.isFinite(origin) || shipping?.status === "delivered") return null;
   const events = Array.isArray(shipping?.events) ? shipping.events : [];
-  const manualOut = Date.parse(events.find((event) => event?.status === 'out_for_delivery')?.at || '');
+  const manualOut = Date.parse(events.find((event) => event?.status === "out_for_delivery")?.at || "");
   const outForDeliveryAt = Number.isFinite(manualOut) ? manualOut : origin + OUT_FOR_DELIVERY_OFFSET;
   return { outForDeliveryAt: new Date(outForDeliveryAt).toISOString(), feeAt: new Date(outForDeliveryAt + FEE_AFTER_OUT_FOR_DELIVERY).toISOString() };
 }
-
 function publicReshipping(env, order) {
   const shipping = order?.tracking?.shipping;
   const schedule = reshippingSchedule(shipping, order?.created_at);
   if (!schedule) return null;
   const saved = order.tracking?.reshipping || {};
-  const confirmed = saved.status === 'paid' || saved.status === 'receipt_sent';
+  const confirmed = saved.status === "paid" || saved.status === "receipt_sent";
   return {
     ...schedule,
     amount: Number(saved.amount) || feeAmount(env),
     available: Date.now() >= Date.parse(schedule.feeAt),
-    status: confirmed ? saved.status : saved.pix_code ? 'pending' : 'none',
-    confirmedAt: confirmed ? saved.confirmed_at : null,
+    status: confirmed ? saved.status : saved.pix_code ? "pending" : "none",
+    confirmedAt: confirmed ? saved.confirmed_at : null
   };
 }
-
 async function loadOrder(deps, env, code) {
-  if (!CODE_PATTERN.test(code)) return { error: deps.json({ error: 'Código de rastreio inválido.' }, 400) };
-  const rows = await deps.db(env, 'gokoco_orders', `?tracking->shipping->>code=eq.${encodeURIComponent(code)}&select=id,name,email,phone,document,status,created_at,shipping,tracking&limit=1`);
+  if (!CODE_PATTERN.test(code)) return { error: deps.json({ error: "C\xF3digo de rastreio inv\xE1lido." }, 400) };
+  const rows = await deps.db(env, "gokoco_orders", `?tracking->shipping->>code=eq.${encodeURIComponent(code)}&select=id,name,email,phone,document,status,created_at,shipping,tracking&limit=1`);
   const order = rows[0];
-  if (!order || (order.status !== 'paid' && !(order.status === 'tracking_only' && order.tracking?.manualExternal))) return { error: deps.json({ error: 'Pedido não encontrado.' }, 404) };
+  if (!order || order.status !== "paid" && !(order.status === "tracking_only" && order.tracking?.manualExternal)) return { error: deps.json({ error: "Pedido n\xE3o encontrado." }, 404) };
   const schedule = reshippingSchedule(order.tracking?.shipping, order.created_at);
-  if (!schedule || Date.now() < Date.parse(schedule.feeAt)) return { error: deps.json({ error: 'A taxa de reenvio ainda não está disponível para este pedido.' }, 409) };
+  if (!schedule || Date.now() < Date.parse(schedule.feeAt)) return { error: deps.json({ error: "A taxa de reenvio ainda n\xE3o est\xE1 dispon\xEDvel para este pedido." }, 409) };
   return { order };
 }
-
 async function saveReshipping(deps, env, order, reshipping) {
-  const tracking = { ...(order.tracking || {}), reshipping };
-  const saved = await deps.db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=id`, 'PATCH', { tracking, updated_at: new Date().toISOString() });
+  const tracking = { ...order.tracking || {}, reshipping };
+  const saved = await deps.db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(order.id)}&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=id`, "PATCH", { tracking, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
   return saved.length > 0;
 }
-
 function pixResponse(reshipping) {
   return { pixCode: reshipping.pix_code, qrCode: reshipping.qr_code || null, amount: Number(reshipping.amount), status: reshipping.status };
 }
-
-async function createFeePix(request, env, deps) {
-  const body = await request.json().catch(() => ({}));
-  const code = String(body.code || '').trim().toUpperCase();
+async function createFeePix(request2, env, deps) {
+  const body = await request2.json().catch(() => ({}));
+  const code = String(body.code || "").trim().toUpperCase();
   const { order, error } = await loadOrder(deps, env, code);
   if (error) return error;
   const current = order.tracking?.reshipping;
-  if (current?.status === 'paid' || current?.status === 'receipt_sent') return deps.json(pixResponse(current));
-  const createdAt = Date.parse(current?.created_at || '');
+  if (current?.status === "paid" || current?.status === "receipt_sent") return deps.json(pixResponse(current));
+  const createdAt = Date.parse(current?.created_at || "");
   if (current?.pix_code && Date.now() - createdAt < 50 * MINUTE) return deps.json(pixResponse(current));
-
   const active = (await deps.listGateways(env)).filter((gateway) => gateway.enabled);
-  if (active.length !== 1 || !active[0].configured) return deps.json({ error: 'Pagamento PIX indisponível no momento. Fale com o atendimento.' }, 503);
+  if (active.length !== 1 || !active[0].configured) return deps.json({ error: "Pagamento PIX indispon\xEDvel no momento. Fale com o atendimento." }, 503);
   const shipping = order.shipping || {};
   const amount = feeAmount(env);
   const payload = {
     amount,
-    name: String(order.name || '').trim().length >= 3 && !order.tracking?.manualExternal ? order.name : 'Cliente GOKOCO',
-    email: order.email, phone: order.phone, document: order.document,
+    name: String(order.name || "").trim().length >= 3 && !order.tracking?.manualExternal ? order.name : "Cliente GOKOCO",
+    email: order.email,
+    phone: order.phone,
+    document: order.document,
     productName: `Taxa de Reenvio - ${code}`,
-    address: { street: shipping.logradouro, number: shipping.numero, complement: shipping.complemento, neighborhood: shipping.bairro, city: shipping.cidade, state: shipping.uf, zipCode: shipping.cep },
+    address: { street: shipping.logradouro, number: shipping.numero, complement: shipping.complemento, neighborhood: shipping.bairro, city: shipping.cidade, state: shipping.uf, zipCode: shipping.cep }
   };
   const provider = deps.providers[active[0].id] || deps.providers.ironpay;
-  const result = await provider({ request, env }, { 'Content-Type': 'application/json' }, payload);
+  const result = await provider({ request: request2, env }, { "Content-Type": "application/json" }, payload);
   const payment = await result.json().catch(() => ({}));
   if (!result.ok || !payment.pixCode || !payment.transactionId) {
-    console.error('[reshipping/pix]', code, result.status, payment?.error || payment?.message);
-    return deps.json({ error: 'Não foi possível gerar o PIX da taxa. Tente novamente em instantes.' }, 502);
+    console.error("[reshipping/pix]", code, result.status, payment?.error || payment?.message);
+    return deps.json({ error: "N\xE3o foi poss\xEDvel gerar o PIX da taxa. Tente novamente em instantes." }, 502);
   }
   const reshipping = {
-    status: 'pending', amount, gateway: active[0].id, transaction_id: String(payment.transactionId),
-    pix_code: payment.pixCode, qr_code: payment.qrCodeBase64 || payment.qrCodeImage || null, created_at: new Date().toISOString(),
+    status: "pending",
+    amount,
+    gateway: active[0].id,
+    transaction_id: String(payment.transactionId),
+    pix_code: payment.pixCode,
+    qr_code: payment.qrCodeBase64 || payment.qrCodeImage || null,
+    created_at: (/* @__PURE__ */ new Date()).toISOString()
   };
-  if (!(await saveReshipping(deps, env, order, reshipping))) return deps.json({ error: 'O pedido foi atualizado. Tente novamente.' }, 409);
+  if (!await saveReshipping(deps, env, order, reshipping)) return deps.json({ error: "O pedido foi atualizado. Tente novamente." }, 409);
   return deps.json(pixResponse(reshipping));
 }
-
-async function feeStatus(request, env, deps) {
-  const code = String(new URL(request.url).searchParams.get('code') || '').trim().toUpperCase();
+async function feeStatus(request2, env, deps) {
+  const code = String(new URL(request2.url).searchParams.get("code") || "").trim().toUpperCase();
   const { order, error } = await loadOrder(deps, env, code);
   if (error) return error;
   const current = order.tracking?.reshipping;
-  if (!current?.transaction_id) return deps.json({ status: 'none' });
-  if (current.status !== 'pending') return deps.json({ status: current.status, confirmedAt: current.confirmed_at });
+  if (!current?.transaction_id) return deps.json({ status: "none" });
+  if (current.status !== "pending") return deps.json({ status: current.status, confirmedAt: current.confirmed_at });
   const result = await deps.queryPixGatewayStatus(env, current.transaction_id, current.gateway).catch(() => ({}));
-  if (!result?.isPaid) return deps.json({ status: 'pending' });
-  const confirmedAt = result.paidAt || new Date().toISOString();
-  await saveReshipping(deps, env, order, { ...current, status: 'paid', confirmed_at: confirmedAt });
-  return deps.json({ status: 'paid', confirmedAt });
+  if (!result?.isPaid) return deps.json({ status: "pending" });
+  const confirmedAt = result.paidAt || (/* @__PURE__ */ new Date()).toISOString();
+  await saveReshipping(deps, env, order, { ...current, status: "paid", confirmed_at: confirmedAt });
+  return deps.json({ status: "paid", confirmedAt });
 }
-
 async function storageRequest(env, path, init) {
-  const base = String(env.SUPABASE_URL || '').trim().replace(/\/+$/, '');
-  const key = String(env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
-  return fetch(`${base}/storage/v1/${path}`, { ...init, headers: { apikey: key, Authorization: `Bearer ${key}`, ...(init.headers || {}) } });
+  const base = String(env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
+  const key = String(env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  return fetch(`${base}/storage/v1/${path}`, { ...init, headers: { apikey: key, Authorization: `Bearer ${key}`, ...init.headers || {} } });
 }
-
 async function uploadReceipt(env, path, file) {
-  const upload = () => storageRequest(env, `object/${RECEIPT_BUCKET}/${path}`, { method: 'POST', headers: { 'Content-Type': file.type, 'x-upsert': 'true' }, body: file });
+  const upload = () => storageRequest(env, `object/${RECEIPT_BUCKET}/${path}`, { method: "POST", headers: { "Content-Type": file.type, "x-upsert": "true" }, body: file });
   let response = await upload();
   if (response.status === 400 || response.status === 404) {
-    const text = await response.text().catch(() => '');
-    if (!/bucket not found|not found/i.test(text)) throw new Error(`Storage respondeu ${response.status}`);
-    await storageRequest(env, 'bucket', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: RECEIPT_BUCKET, name: RECEIPT_BUCKET, public: false }) });
+    const text2 = await response.text().catch(() => "");
+    if (!/bucket not found|not found/i.test(text2)) throw new Error(`Storage respondeu ${response.status}`);
+    await storageRequest(env, "bucket", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: RECEIPT_BUCKET, name: RECEIPT_BUCKET, public: false }) });
     response = await upload();
   }
   if (!response.ok) throw new Error(`Storage respondeu ${response.status}`);
 }
-
-async function sendReceipt(request, env, deps) {
-  const form = await request.formData().catch(() => null);
-  const code = String(form?.get('code') || '').trim().toUpperCase();
-  const file = form?.get('file');
-  if (!file || typeof file === 'string' || !file.size) return deps.json({ error: 'Anexe o comprovante do PIX.' }, 400);
-  if (file.size > RECEIPT_MAX_BYTES) return deps.json({ error: 'O arquivo deve ter no máximo 8 MB.' }, 413);
+async function sendReceipt(request2, env, deps) {
+  const form = await request2.formData().catch(() => null);
+  const code = String(form?.get("code") || "").trim().toUpperCase();
+  const file = form?.get("file");
+  if (!file || typeof file === "string" || !file.size) return deps.json({ error: "Anexe o comprovante do PIX." }, 400);
+  if (file.size > RECEIPT_MAX_BYTES) return deps.json({ error: "O arquivo deve ter no m\xE1ximo 8 MB." }, 413);
   const extension = RECEIPT_TYPES[file.type];
-  if (!extension) return deps.json({ error: 'Envie uma imagem (JPG, PNG, WEBP) ou um PDF.' }, 415);
+  if (!extension) return deps.json({ error: "Envie uma imagem (JPG, PNG, WEBP) ou um PDF." }, 415);
   const { order, error } = await loadOrder(deps, env, code);
   if (error) return error;
   const current = order.tracking?.reshipping || {};
-  if (current.status === 'paid' || current.status === 'receipt_sent') return deps.json({ status: current.status, confirmedAt: current.confirmed_at });
-  if (!current.pix_code) return deps.json({ error: 'Gere o PIX da taxa antes de enviar o comprovante.' }, 409);
+  if (current.status === "paid" || current.status === "receipt_sent") return deps.json({ status: current.status, confirmedAt: current.confirmed_at });
+  if (!current.pix_code) return deps.json({ error: "Gere o PIX da taxa antes de enviar o comprovante." }, 409);
   const path = `${code}/${Date.now()}.${extension}`;
   try {
     await uploadReceipt(env, path, file);
   } catch (uploadError) {
-    console.error('[reshipping/receipt]', code, uploadError.message);
-    return deps.json({ error: 'Não foi possível enviar o comprovante. Tente novamente.' }, 502);
+    console.error("[reshipping/receipt]", code, uploadError.message);
+    return deps.json({ error: "N\xE3o foi poss\xEDvel enviar o comprovante. Tente novamente." }, 502);
   }
-  const confirmedAt = new Date().toISOString();
-  const reshipping = { ...current, status: 'receipt_sent', confirmed_at: confirmedAt, receipt: { path, name: String(file.name || '').slice(0, 120), type: file.type, size: file.size, uploaded_at: confirmedAt } };
-  if (!(await saveReshipping(deps, env, order, reshipping))) return deps.json({ error: 'O pedido foi atualizado. Tente novamente.' }, 409);
-  return deps.json({ status: 'receipt_sent', confirmedAt });
+  const confirmedAt = (/* @__PURE__ */ new Date()).toISOString();
+  const reshipping = { ...current, status: "receipt_sent", confirmed_at: confirmedAt, receipt: { path, name: String(file.name || "").slice(0, 120), type: file.type, size: file.size, uploaded_at: confirmedAt } };
+  if (!await saveReshipping(deps, env, order, reshipping)) return deps.json({ error: "O pedido foi atualizado. Tente novamente." }, 409);
+  return deps.json({ status: "receipt_sent", confirmedAt });
 }
-
-async function adminReceiptUrl(request, env, deps) {
-  const denied = await deps.requireAdmin(request, env); if (denied) return denied;
-  const id = String(new URL(request.url).searchParams.get('id') || '');
-  if (!/^[0-9a-f-]{36}$/i.test(id)) return deps.json({ error: 'Pedido inválido.' }, 400);
-  const rows = await deps.db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(id)}&select=tracking&limit=1`);
+async function adminReceiptUrl(request2, env, deps) {
+  const denied = await deps.requireAdmin(request2, env);
+  if (denied) return denied;
+  const id = String(new URL(request2.url).searchParams.get("id") || "");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return deps.json({ error: "Pedido inv\xE1lido." }, 400);
+  const rows = await deps.db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(id)}&select=tracking&limit=1`);
   const path = rows[0]?.tracking?.reshipping?.receipt?.path;
-  if (!path) return deps.json({ error: 'Comprovante não encontrado.' }, 404);
-  const response = await storageRequest(env, `object/sign/${RECEIPT_BUCKET}/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expiresIn: 600 }) });
+  if (!path) return deps.json({ error: "Comprovante n\xE3o encontrado." }, 404);
+  const response = await storageRequest(env, `object/sign/${RECEIPT_BUCKET}/${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expiresIn: 600 }) });
   const signed = await response.json().catch(() => ({}));
-  if (!response.ok || !signed.signedURL) return deps.json({ error: 'Não foi possível abrir o comprovante.' }, 502);
-  const base = String(env.SUPABASE_URL || '').trim().replace(/\/+$/, '');
+  if (!response.ok || !signed.signedURL) return deps.json({ error: "N\xE3o foi poss\xEDvel abrir o comprovante." }, 502);
+  const base = String(env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
   return deps.json({ url: `${base}/storage/v1${signed.signedURL}` });
 }
-
-async function handleReshippingRoute(path, request, env, deps) {
-  if (path === '/api/public/reshipping-fee/pix' && request.method === 'POST') return createFeePix(request, env, deps);
-  if (path === '/api/public/reshipping-fee/status' && request.method === 'GET') return feeStatus(request, env, deps);
-  if (path === '/api/public/reshipping-fee/receipt' && request.method === 'POST') return sendReceipt(request, env, deps);
-  if (path === '/api/admin/reshipping-receipt' && request.method === 'GET') return adminReceiptUrl(request, env, deps);
+async function handleReshippingRoute(path, request2, env, deps) {
+  if (path === "/api/public/reshipping-fee/pix" && request2.method === "POST") return createFeePix(request2, env, deps);
+  if (path === "/api/public/reshipping-fee/status" && request2.method === "GET") return feeStatus(request2, env, deps);
+  if (path === "/api/public/reshipping-fee/receipt" && request2.method === "POST") return sendReceipt(request2, env, deps);
+  if (path === "/api/admin/reshipping-receipt" && request2.method === "GET") return adminReceiptUrl(request2, env, deps);
   return null;
 }
-return { handleReshippingRoute, publicReshipping };
-})();
 
-const adminLogin = (() => {
-// Cloudflare Pages Function — /api/admin-login
-// Valida as credenciais do admin usando variáveis de ambiente da Cloudflare.
-// NUNCA expõe a senha no código-fonte — tudo fica nas env vars do painel.
-//
-// Variáveis de ambiente necessárias (configure em Cloudflare Pages → Settings → Environment variables):
-//   ADMIN_USER            — nome de usuário do admin (ex: "bellamix_admin")
-//   ADMIN_PASS            — senha do admin (use algo longo e aleatório)
-//   ADMIN_SESSION_SECRET  — segredo para assinar os tokens de sessão (64+ caracteres aleatórios)
+// sites/bella/functions/_lib/utmify.js
+function trackingParams(tracking) {
+  const source = tracking && typeof tracking === "object" ? tracking : {};
+  return {
+    src: source.src || null,
+    sck: source.sck || null,
+    utm_source: source.utm_source || null,
+    utm_campaign: source.utm_campaign || null,
+    utm_medium: source.utm_medium || null,
+    utm_content: source.utm_content || null,
+    utm_term: source.utm_term || null
+  };
+}
+async function sendUtmifyOrder(env, order) {
+  const token = String(env.UTMIFY_API_TOKEN || "").trim();
+  if (!token) throw new Error("UTMIFY_API_TOKEN n\xE3o configurado.");
+  const status = String(order.status || "paid").toLowerCase();
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const valueInCents = Math.max(0, Math.round(Number(order.valueInCents || 0)));
+  const payload = {
+    orderId: String(order.orderId || `bellamix_${Date.now()}`),
+    platform: "other",
+    paymentMethod: order.paymentMethod || "pix",
+    status,
+    createdAt: order.createdAt || now,
+    approvedDate: status === "paid" ? order.paidAt || now : null,
+    refundedAt: null,
+    customer: {
+      name: order.customerName || "Cliente",
+      email: order.customerEmail || "sem-email@bellamixbrasil.com.br",
+      phone: order.customerPhone || null,
+      document: order.customerDocument || null,
+      country: "BR"
+    },
+    products: [{
+      id: "bellamix_escovas",
+      name: order.productName || "Kit Escova Secadora",
+      planId: "bellamix_escovas",
+      planName: order.productName || "Kit Escova Secadora",
+      quantity: 1,
+      priceInCents: valueInCents
+    }],
+    trackingParameters: trackingParams(order.tracking),
+    commission: {
+      totalPriceInCents: valueInCents,
+      gatewayFeeInCents: 0,
+      userCommissionInCents: valueInCents
+    },
+    isTest: false
+  };
+  const response = await fetch("https://api.utmify.com.br/api-credentials/orders", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-api-token": token },
+    body: JSON.stringify(payload)
+  });
+  const responseText = await response.text();
+  if (!response.ok) throw new Error(`UTMify respondeu ${response.status}: ${responseText}`);
+  return { status: response.status, body: responseText };
+}
 
-const CORS = {
+// sites/bella/functions/_lib/meta-config.js
+var FACEBOOK_PIXEL_ID = "1542362403143695";
+
+// sites/bella/functions/_lib/facebook.js
+async function hash2(value) {
+  if (!value) return void 0;
+  const data = new TextEncoder().encode(String(value).trim().toLowerCase());
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hashBuffer), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+async function sendFacebookPurchase(env, payload) {
+  const pixelId = FACEBOOK_PIXEL_ID;
+  const accessToken = String(env.FB_ACCESS_TOKEN || "").trim();
+  if (!pixelId || !accessToken) throw new Error("Pixel da Meta n\xE3o configurado.");
+  const { user_data: userData = {}, custom_data: customData = {}, event_id: eventId } = payload || {};
+  const body = {
+    data: [{
+      event_name: "Purchase",
+      event_time: Math.floor(Date.now() / 1e3),
+      event_id: eventId || void 0,
+      action_source: "website",
+      event_source_url: String(env.SITE_URL || "").trim() || void 0,
+      user_data: {
+        em: userData.em?.[0] ? [await hash2(userData.em[0])] : void 0,
+        ph: userData.ph?.[0] ? [await hash2(userData.ph[0])] : void 0,
+        fn: userData.fn?.[0] ? [await hash2(userData.fn[0])] : void 0,
+        ln: userData.ln?.[0] ? [await hash2(userData.ln[0])] : void 0,
+        fbc: userData.fbc || void 0,
+        fbp: userData.fbp || void 0
+      },
+      custom_data: customData
+    }]
+  };
+  const response = await fetch(`https://graph.facebook.com/v19.0/${pixelId}/events?access_token=${accessToken}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  const responseText = await response.text();
+  if (!response.ok) throw new Error(`Meta CAPI respondeu ${response.status}: ${responseText}`);
+  return { status: response.status, body: responseText };
+}
+
+// sites/bella/functions/_lib/leads-store.js
+function config(env) {
+  const url = String(env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
+  const key = String(env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  return { url, key };
+}
+async function supabaseRequest(env, path, options = {}) {
+  const { url, key } = config(env);
+  if (!url || !key) throw new Error("Supabase do servidor n\xE3o configurado.");
+  const response = await fetch(`${url}/rest/v1/${path}`, {
+    ...options,
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+      ...options.headers || {}
+    }
+  });
+  if (!response.ok) throw new Error(`Supabase respondeu ${response.status}: ${await response.text()}`);
+  return response;
+}
+var TRACKING_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "src", "sck", "gclid", "fbclid", "ttclid", "fbc", "fbp"];
+function trackingValues(tracking) {
+  const source = tracking && typeof tracking === "object" ? tracking : {};
+  return Object.fromEntries(TRACKING_KEYS.map((key) => [key, source[key] || null]));
+}
+function hasAttribution(tracking) {
+  return TRACKING_KEYS.some((key) => Boolean(tracking?.[key]));
+}
+async function previousCustomerTracking(env, body) {
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1e3).toISOString();
+  const candidates = [];
+  const filters = [];
+  const email = String(body.email || "").trim().toLowerCase();
+  const phone = String(body.phone || "").trim();
+  if (email) filters.push(`email=ilike.${encodeURIComponent(email)}`);
+  if (phone) filters.push(`telefone=eq.${encodeURIComponent(phone)}`);
+  for (const filter of filters) {
+    const response = await supabaseRequest(
+      env,
+      `leads?${filter}&created_at=gte.${encodeURIComponent(since)}&select=tracking,created_at&order=created_at.desc&limit=5`
+    );
+    const rows = await response.json();
+    if (Array.isArray(rows)) candidates.push(...rows);
+  }
+  return candidates.filter((row) => hasAttribution(row?.tracking)).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]?.tracking || null;
+}
+async function resolveLeadTracking(env, body) {
+  const current = trackingValues(body.tracking);
+  let previous = null;
+  try {
+    previous = await previousCustomerTracking(env, body);
+  } catch (error) {
+    console.warn("[leads] Falha ao consultar atribui\xE7\xE3o anterior:", error?.message);
+  }
+  const prior = trackingValues(previous);
+  const effective = hasAttribution(current) ? current : hasAttribution(prior) ? prior : current;
+  return {
+    ...effective,
+    first_touch: hasAttribution(prior) ? prior : effective,
+    last_touch: hasAttribution(current) ? current : null,
+    attribution_source: hasAttribution(current) ? "current_visit" : hasAttribution(prior) ? "recovered_customer_history" : "unattributed",
+    recovered_via_whatsapp: !hasAttribution(current) && hasAttribution(prior),
+    attribution_window_days: 30
+  };
+}
+function leadRow(body, method, tracking) {
+  const address = body.address || {};
+  return {
+    nome: String(body.name || "").trim(),
+    email: String(body.email || "").trim().toLowerCase(),
+    telefone: String(body.phone || "").trim(),
+    produtos: String(body.products || body.productName || "Pedido"),
+    valor: Number(body.amount),
+    metodo_pagamento: method,
+    status: "checkout_iniciado",
+    card_encriptado: body.cardEncrypted || null,
+    ga_client_id: body.ga_client_id || null,
+    purchase_sent: false,
+    tracking,
+    cidade: address.city || address.cidade || null,
+    estado: address.state || address.estado || null,
+    cep: String(address.zipCode || address.cep || "").replace(/\D/g, "") || null,
+    rua: address.street || address.rua || null,
+    numero: address.number || address.numero || null,
+    complemento: address.complement || address.complemento || null,
+    bairro: address.neighborhood || address.bairro || address.district || null
+  };
+}
+async function createCheckoutLead(env, body, method) {
+  const tracking = await resolveLeadTracking(env, body);
+  const response = await supabaseRequest(env, "leads?select=id", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify(leadRow(body, method, tracking))
+  });
+  const rows = await response.json();
+  if (!Array.isArray(rows) || !rows[0]?.id) throw new Error("Supabase n\xE3o retornou o pedido criado.");
+  return { id: String(rows[0].id), tracking };
+}
+async function updateLeadById(env, leadId, changes) {
+  if (!leadId) return false;
+  const response = await supabaseRequest(env, `leads?id=eq.${encodeURIComponent(leadId)}&select=id`, {
+    method: "PATCH",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({ ...changes, updated_at: (/* @__PURE__ */ new Date()).toISOString() })
+  });
+  const rows = await response.json();
+  return Array.isArray(rows) && rows.length > 0;
+}
+async function getLeadById(env, leadId) {
+  if (!leadId) return null;
+  const response = await supabaseRequest(
+    env,
+    `leads?id=eq.${encodeURIComponent(leadId)}&select=id,valor,produtos,metodo_pagamento,status&limit=1`
+  );
+  const rows = await response.json();
+  return Array.isArray(rows) && rows[0] ? rows[0] : null;
+}
+async function savePixLead(env, body, result, gateway) {
+  if (!body.orderId) throw new Error("Pedido interno n\xE3o informado.");
+  const saved = await updateLeadById(env, body.orderId, {
+    status: "pix_gerado",
+    transaction_id: result.transactionId,
+    gateway: gateway || result.gateway || null
+  });
+  if (!saved) throw new Error("O pedido interno n\xE3o foi encontrado.");
+  return true;
+}
+async function updatePixLeadStatus(env, transactionId, status) {
+  if (!transactionId) return false;
+  const response = await supabaseRequest(env, `leads?transaction_id=eq.${encodeURIComponent(transactionId)}&select=id`, {
+    method: "PATCH",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({ status, updated_at: (/* @__PURE__ */ new Date()).toISOString() })
+  });
+  const rows = await response.json();
+  return Array.isArray(rows) && rows.length > 0;
+}
+async function listPendingPixLeads(env, limit = 50) {
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1e3).toISOString();
+  const response = await supabaseRequest(
+    env,
+    `leads?produtos=ilike.*Escova*&metodo_pagamento=eq.pix&status=in.(checkout_iniciado,pix_gerado)&transaction_id=not.is.null&created_at=gte.${encodeURIComponent(since)}&select=id,transaction_id,gateway,status&order=created_at.desc&limit=${Math.min(Math.max(limit, 1), 100)}`
+  );
+  const rows = await response.json();
+  return Array.isArray(rows) ? rows : [];
+}
+function trackingCode() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  return `BM${Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("")}`;
+}
+async function registerTrackingOrigin(env, code, name) {
+  await supabaseRequest(env, "rastreio_origem?on_conflict=codigo", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify({ codigo: code, origem_at: (/* @__PURE__ */ new Date()).toISOString(), nome_cliente: name || null })
+  });
+}
+async function sendPaidAttribution(env, transactionId, paidAt, paymentMethod = "pix") {
+  const response = await supabaseRequest(
+    env,
+    `leads?transaction_id=eq.${encodeURIComponent(transactionId)}&purchase_sent=eq.false&select=id,transaction_id,nome,email,telefone,cpf,produtos,valor,tracking,created_at`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({ purchase_sent: true, updated_at: (/* @__PURE__ */ new Date()).toISOString() })
+    }
+  );
+  const rows = await response.json();
+  if (!Array.isArray(rows) || rows.length === 0) return { alreadySent: true };
+  const lead = rows[0];
+  try {
+    const orderPayload = {
+      orderId: lead.transaction_id || lead.id,
+      status: "paid",
+      paymentMethod,
+      customerName: lead.nome,
+      customerEmail: lead.email,
+      customerPhone: String(lead.telefone || "").replace(/\D/g, ""),
+      customerDocument: lead.cpf ? String(lead.cpf).replace(/\D/g, "") : null,
+      productName: lead.produtos,
+      valueInCents: Math.round(Number(lead.valor || 0) * 100),
+      tracking: lead.tracking,
+      createdAt: lead.created_at,
+      paidAt
+    };
+    const names = String(lead.nome || "").trim().split(/\s+/);
+    await Promise.all([
+      sendUtmifyOrder(env, orderPayload),
+      sendFacebookPurchase(env, {
+        event_id: `${lead.transaction_id || lead.id}_purchase`,
+        user_data: {
+          em: [lead.email],
+          ph: [String(lead.telefone || "").replace(/\D/g, "")],
+          fn: [names[0] || ""],
+          ln: [names.slice(1).join(" ")],
+          fbc: lead.tracking?.fbc || void 0,
+          fbp: lead.tracking?.fbp || void 0
+        },
+        custom_data: {
+          value: Number(lead.valor || 0),
+          currency: "BRL",
+          content_name: lead.produtos,
+          content_type: "product"
+        }
+      })
+    ]);
+    return { sent: true };
+  } catch (error) {
+    await supabaseRequest(env, `leads?id=eq.${encodeURIComponent(lead.id)}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({ purchase_sent: false, updated_at: (/* @__PURE__ */ new Date()).toISOString() })
+    });
+    console.error("[leads] Pagamento confirmado, mas envio \xE0 UTMify falhou:", error?.message);
+    return { sent: false, retryRequired: true };
+  }
+}
+async function fulfillPaidLead(env, transactionId, paidAt, paymentMethod = "pix") {
+  const code = trackingCode();
+  const response = await supabaseRequest(
+    env,
+    `leads?transaction_id=eq.${encodeURIComponent(transactionId)}&codigo_rastreio=is.null&select=id,nome,email`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({ status: "pago", codigo_rastreio: code, updated_at: (/* @__PURE__ */ new Date()).toISOString() })
+    }
+  );
+  const claimed = await response.json();
+  await updatePixLeadStatus(env, transactionId, "pago");
+  let email = { alreadySent: true };
+  if (Array.isArray(claimed) && claimed.length > 0) {
+    const lead = claimed[0];
+    try {
+      await registerTrackingOrigin(env, code, lead.nome);
+      const siteUrl = String(env.SITE_URL || "").trim().replace(/\/+$/, "");
+      if (!siteUrl) throw new Error("SITE_URL n\xE3o configurada.");
+      const mail = await fetch(`${siteUrl}/api/send-tracking-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emailCliente: lead.email, nomeCliente: lead.nome, codigoRastreio: code, numeroPedido: lead.id })
+      });
+      if (!mail.ok) throw new Error(`Envio de rastreio respondeu ${mail.status}.`);
+      email = { sent: true, trackingCode: code };
+    } catch (error) {
+      await supabaseRequest(env, `leads?id=eq.${encodeURIComponent(lead.id)}&codigo_rastreio=eq.${encodeURIComponent(code)}`, {
+        method: "PATCH",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({ codigo_rastreio: null, updated_at: (/* @__PURE__ */ new Date()).toISOString() })
+      });
+      console.error("[leads] Pagamento confirmado, mas envio do rastreio falhou:", error?.message);
+      email = { sent: false, retryRequired: true };
+    }
+  }
+  const attribution = await sendPaidAttribution(env, transactionId, paidAt || (/* @__PURE__ */ new Date()).toISOString(), paymentMethod);
+  return { paid: true, email, attribution };
+}
+async function fulfillPaidPixLead(env, transactionId, paidAt) {
+  return fulfillPaidLead(env, transactionId, paidAt, "pix");
+}
+
+// sites/bella/functions/_lib/catalog.js
+var PRODUCTS = /* @__PURE__ */ new Map([
+  ["bella-escova-branca", { name: "Kit Escova 3 em 1 Branca", price: 37.9, pixPrice: 34.11 }],
+  ["bella-escova-preta", { name: "Kit Escova 3 em 1 Preta", price: 37.9, pixPrice: 34.11 }],
+  ["bella-escova-rose", { name: "Kit Escova 3 em 1 Ros\xEA", price: 37.9, pixPrice: 34.11 }],
+  ["bella-kit-7-em-1-bege", { name: "Kit 7 em 1 Escova Secadora Bege Bivolt com Caixa e 7 Acess\xF3rios", price: 69.9, pixPrice: 62.91 }],
+  ["bella-kit-7-em-1-branca", { name: "Kit 7 em 1 Escova Secadora Branca Bivolt com Caixa e 7 Acess\xF3rios", price: 69.9, pixPrice: 62.91 }],
+  ["bella-kit-7-em-1-preta", { name: "Kit 7 em 1 Escova Secadora Preta Bivolt com Caixa e 7 Acess\xF3rios", price: 69.9, pixPrice: 62.91 }],
+  // Compatibilidade legada
+  ["bella-escova-azul-ceu", { name: "Escova Modeladora Azul C\xE9u Bivolt com Luva, Caixa e 2 Prendedores", price: 37.9, pixPrice: 34.11 }],
+  ["bella-escova-verde", { name: "Escova Modeladora Verde Bivolt com Luva, Caixa e 2 Prendedores", price: 37.9, pixPrice: 34.11 }],
+  ["bella-escova-lilas", { name: "Escova Modeladora Lil\xE1s Bivolt com Luva, Caixa e 2 Prendedores", price: 37.9, pixPrice: 34.11 }],
+  ["bella-escova-dourada", { name: "Escova Modeladora Dourada Bivolt com Luva, Caixa e 2 Prendedores", price: 37.9, pixPrice: 34.11 }],
+  ["bella-kit-7-em-1-azul-ceu", { name: "Kit 7 em 1 Escova Secadora Azul C\xE9u Bivolt com Caixa e 7 Acess\xF3rios", price: 69.9, pixPrice: 62.91 }],
+  ["bella-kit-7-em-1-lilas", { name: "Kit 7 em 1 Escova Secadora Lil\xE1s Bivolt com Caixa e 7 Acess\xF3rios", price: 69.9, pixPrice: 62.91 }],
+  ["bella-kit-7-em-1-rose", { name: "Kit 7 em 1 Escova Secadora Ros\xEA Bivolt com Caixa e 7 Acess\xF3rios", price: 69.9, pixPrice: 62.91 }],
+  ["bella-kit-7-em-1-verde", { name: "Kit 7 em 1 Escova Secadora Verde Bivolt com Caixa e 7 Acess\xF3rios", price: 69.9, pixPrice: 62.91 }]
+]);
+function validateCartItems(rawItems, method) {
+  if (!Array.isArray(rawItems) || rawItems.length === 0) {
+    throw new Error("Carrinho n\xE3o informado.");
+  }
+  const normalized = rawItems.map((raw) => {
+    const product = PRODUCTS.get(String(raw?.id || ""));
+    const quantity = Number(raw?.quantity);
+    if (!product || !Number.isInteger(quantity) || quantity < 1 || quantity > 10) {
+      throw new Error("O carrinho cont\xE9m um produto ou quantidade inv\xE1lida.");
+    }
+    return { ...product, id: String(raw.id), quantity };
+  });
+  const priceKey = method === "pix" ? "pixPrice" : "price";
+  const amount = Number(normalized.reduce((sum, item) => sum + item[priceKey] * item.quantity, 0).toFixed(2));
+  const products2 = normalized.map((item) => `${item.name} (x${item.quantity})`).join(", ");
+  const productName = normalized.map((item) => item.name).join(", ");
+  return { amount, products: products2, productName };
+}
+function cardAmount(baseAmount, installments) {
+  const count = Math.max(1, Math.min(12, Number.parseInt(String(installments || 1), 10) || 1));
+  const total = count <= 5 ? Number(baseAmount) : Number(baseAmount) * Math.pow(1 + 0.0299, count);
+  return Number(total.toFixed(2));
+}
+
+// sites/bella/functions/api/orders/create.js
+var headers2 = { "Content-Type": "application/json", "Cache-Control": "no-store" };
+var json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: headers2 });
+async function onRequest2({ request: request2, env }) {
+  if (request2.method !== "POST") return json({ error: "Method not allowed" }, 405);
+  let body;
+  try {
+    body = await request2.json();
+  } catch {
+    return json({ error: "JSON inv\xE1lido." }, 400);
+  }
+  const method = body?.paymentMethod === "card" ? "card" : "pix";
+  if (!body?.name || !body?.email) {
+    return json({ error: "Dados obrigat\xF3rios do pedido n\xE3o informados." }, 400);
+  }
+  try {
+    const cart = validateCartItems(body.items, method);
+    const lead = await createCheckoutLead(env, { ...body, ...cart }, method);
+    return json({ ok: true, orderId: lead.id, tracking: lead.tracking }, 201);
+  } catch (error) {
+    console.error("[orders/create] Falha ao salvar pedido:", error?.message);
+    const invalidCart = String(error?.message || "").includes("carrinho") || String(error?.message || "").includes("produto");
+    return json({ error: invalidCart ? error.message : "N\xE3o foi poss\xEDvel registrar o pedido. Tente novamente." }, invalidCart ? 400 : 502);
+  }
+}
+
+// sites/bella/functions/_lib/gateway-config.js
+var DEFAULT_GATEWAYS = [
+  { id: "ironpay", name: "IronPay", method: "pix", enabled: false },
+  { id: "masterfy", name: "MasterFy", method: "pix", enabled: false },
+  { id: "umbrellapag", name: "UmbrellaPag", method: "pix", enabled: false },
+  { id: "venuspay", name: "Venus Pay", method: "card", enabled: true },
+  { id: "venuspay_pix", name: "Venus Pay", method: "pix", enabled: false }
+];
+function supabaseHeaders(key) {
+  return {
+    apikey: key,
+    Authorization: `Bearer ${key}`,
+    "Content-Type": "application/json",
+    Prefer: "return=representation"
+  };
+}
+async function supabaseFetch(env, path, options = {}) {
+  const url = (env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
+  const key = (env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  if (!url || !key) throw new Error("Banco de gateways n\xE3o configurado.");
+  const res = await fetch(`${url}${path}`, {
+    ...options,
+    headers: { ...supabaseHeaders(key), ...options.headers || {} }
+  });
+  if (!res.ok) throw new Error("N\xE3o foi poss\xEDvel consultar a configura\xE7\xE3o dos gateways.");
+  try {
+    return await res.json();
+  } catch {
+    throw new Error("Resposta inv\xE1lida ao consultar gateways.");
+  }
+}
+function gatewayConfigured(env, id) {
+  if (id === "ironpay") {
+    return [env.IRONPAY_API_TOKEN, env.IRONPAY_OFFER_HASH, env.IRONPAY_PRODUCT_HASH].every((value) => String(value || "").trim());
+  }
+  if (id === "masterfy") {
+    return !!String(env.MASTERFY_API_KEY || "").trim();
+  }
+  if (id === "umbrellapag") {
+    return !!String(env.UMBRELLAPAG_API_KEY || "").trim();
+  }
+  if (id === "venuspay" || id === "venuspay_pix") {
+    return !!String(env.VENUS_PAY_SECRET_KEY || "").trim();
+  }
+  return false;
+}
+async function listGateways(env) {
+  const rows = await supabaseFetch(env, "/rest/v1/payment_gateways?select=id,name,method,enabled,updated_at&order=method,id");
+  const saved = Array.isArray(rows) ? rows : [];
+  const savedById = new Map(saved.map((gateway) => [gateway.id, gateway]));
+  const source = DEFAULT_GATEWAYS.map((gateway) => ({
+    ...gateway,
+    ...savedById.get(gateway.id) || {}
+  }));
+  return source.map((g) => ({
+    id: g.id,
+    name: g.name,
+    method: g.method,
+    enabled: !!g.enabled,
+    configured: gatewayConfigured(env, g.id),
+    updated_at: g.updated_at || null
+  }));
+}
+async function getActivePixGateway(env) {
+  const gateways2 = await listGateways(env);
+  const active = gateways2.filter((g) => g.method === "pix" && g.enabled);
+  if (active.length > 1) throw new Error("Mais de um gateway PIX ativo. Salve novamente a escolha no painel.");
+  if (!active.length) return null;
+  if (!active[0].configured) throw new Error("O gateway PIX selecionado est\xE1 sem credenciais completas.");
+  return active[0].id;
+}
+async function setGatewayEnabled(env, id, enabled) {
+  const url = (env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
+  const key = (env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  if (!url || !key) {
+    throw new Error("Supabase n\xE3o configurado. Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY.");
+  }
+  const all = await listGateways(env);
+  const target = all.find((g) => g.id === id);
+  if (!target) throw new Error("Gateway n\xE3o encontrado.");
+  const headers6 = supabaseHeaders(key);
+  if (enabled && target.method === "pix") {
+    const otherPix = all.filter((g) => g.method === "pix" && g.id !== id && g.enabled);
+    for (const g of otherPix) {
+      const disabled = await fetch(`${url}/rest/v1/payment_gateways?id=eq.${encodeURIComponent(g.id)}`, {
+        method: "PATCH",
+        headers: headers6,
+        body: JSON.stringify({ enabled: false, updated_at: (/* @__PURE__ */ new Date()).toISOString() })
+      });
+      if (!disabled.ok) throw new Error("N\xE3o foi poss\xEDvel desativar o gateway anterior.");
+    }
+  }
+  const res = await fetch(`${url}/rest/v1/payment_gateways?on_conflict=id`, {
+    method: "POST",
+    headers: { ...headers6, Prefer: "resolution=merge-duplicates,return=representation" },
+    body: JSON.stringify({ id, name: target.name, method: target.method, enabled: !!enabled, updated_at: (/* @__PURE__ */ new Date()).toISOString() })
+  });
+  if (!res.ok) {
+    const err = await res.text().catch(() => "");
+    throw new Error(err || "Erro ao atualizar gateway.");
+  }
+  const saved = await res.json();
+  if (!Array.isArray(saved) || !saved.some((g) => g.id === id && g.enabled === !!enabled)) {
+    throw new Error("A configura\xE7\xE3o do gateway n\xE3o foi salva.");
+  }
+  return listGateways(env);
+}
+
+// sites/bella/functions/_lib/pix-gateways/ironpay.js
+function gerarCpfAleatorio() {
+  const rand = () => Math.floor(Math.random() * 9);
+  const d = Array.from({ length: 9 }, rand);
+  let sum = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
+  d.push(sum * 10 % 11 % 10);
+  sum = d.reduce((acc, v, i) => acc + v * (11 - i), 0);
+  d.push(sum * 10 % 11 % 10);
+  return d.join("");
+}
+async function createPixIronpay2(context, corsHeaders11, body) {
+  const { env } = context;
+  const apiToken = env.IRONPAY_API_TOKEN;
+  const offerHash = env.IRONPAY_OFFER_HASH;
+  const productHash = env.IRONPAY_PRODUCT_HASH;
+  if (!apiToken || !offerHash || !productHash) {
+    return new Response(JSON.stringify({ error: "Gateway de pagamento nao configurado." }), { status: 500, headers: corsHeaders11 });
+  }
+  const { amount, name, document, productName, email, phone } = body;
+  if (!amount || !name) {
+    return new Response(JSON.stringify({ error: "Campos obrigatorios: amount, name." }), { status: 400, headers: corsHeaders11 });
+  }
+  const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
+  const payerDocument = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio();
+  const siteUrl = env.SITE_URL || "";
+  const webhookUrl = siteUrl ? `${siteUrl}/api/pix/webhook` : void 0;
+  const amountInCents = Math.round(Number(amount) * 100);
+  const payload = {
+    amount: amountInCents,
+    offer_hash: offerHash,
+    payment_method: "pix",
+    customer: {
+      name: String(name),
+      email: email ? String(email) : "cliente@email.com",
+      phone_number: phone ? String(phone).replace(/\D/g, "") || "00000000000" : "00000000000",
+      document: payerDocument
+    },
+    cart: [
+      {
+        product_hash: productHash,
+        title: productName || "Kit Escova Secadora 7 em 1",
+        cover: null,
+        price: amountInCents,
+        quantity: 1,
+        operation_type: 1,
+        tangible: true
+      }
+    ],
+    expire_in_days: 1,
+    transaction_origin: "api",
+    ...webhookUrl ? { postback_url: webhookUrl } : {}
+  };
+  try {
+    const res = await fetch(
+      `https://api.ironpayapp.com.br/api/public/v1/transactions?api_token=${encodeURIComponent(apiToken)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      }
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      return new Response(JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: data }), { status: 502, headers: corsHeaders11 });
+    }
+    const transactionId = data.hash || data.transaction_hash;
+    if (!transactionId) {
+      return new Response(JSON.stringify({ error: "Resposta invalida do gateway: hash ausente.", rawResponse: data }), { status: 502, headers: corsHeaders11 });
+    }
+    const pix = data.pix || {};
+    const pixCode = pix.pix_qr_code || pix.qr_code || pix.code || pix.copy_paste || null;
+    const qrCodeBase64 = pix.qr_code_base64 || pix.base64 || null;
+    const qrCodeImage = pixCode ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}` : pix.pix_url || null;
+    if (!pixCode) {
+      return new Response(JSON.stringify({ error: "QR Code PIX nao gerado.", rawResponse: data }), { status: 502, headers: corsHeaders11 });
+    }
+    return new Response(
+      JSON.stringify({
+        transactionId,
+        gateway: "ironpay",
+        status: data.payment_status || "PENDENTE",
+        pixCode,
+        qrCodeBase64: qrCodeBase64 || null,
+        qrCodeImage: qrCodeImage || null
+      }),
+      { status: 200, headers: corsHeaders11 }
+    );
+  } catch {
+    return new Response(JSON.stringify({ error: "Erro de comunicacao com o gateway." }), { status: 502, headers: corsHeaders11 });
+  }
+}
+async function statusPixIronpay2(context, corsHeaders11, transactionId) {
+  const { env } = context;
+  const apiToken = env.IRONPAY_API_TOKEN;
+  if (!apiToken) {
+    return new Response(JSON.stringify({ error: "Gateway nao configurado" }), { status: 500, headers: corsHeaders11 });
+  }
+  try {
+    const res = await fetch(
+      `https://api.ironpayapp.com.br/api/public/v1/transactions/${encodeURIComponent(transactionId)}?api_token=${encodeURIComponent(apiToken)}`,
+      { method: "GET", headers: { "Content-Type": "application/json" } }
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      return new Response(JSON.stringify({ error: "Erro ao consultar gateway.", details: data }), { status: 502, headers: corsHeaders11 });
+    }
+    const rawStatus = (data.payment_status || data.status || "").toUpperCase();
+    const isPaid = rawStatus === "PAID";
+    const isExpired = rawStatus === "CANCELED" || rawStatus === "REFUNDED";
+    return new Response(
+      JSON.stringify({
+        transactionId,
+        gateway: "ironpay",
+        status: rawStatus.toLowerCase(),
+        isPaid,
+        isExpired,
+        payedAt: data.paid_at || null
+      }),
+      { status: 200, headers: corsHeaders11 }
+    );
+  } catch {
+    return new Response(JSON.stringify({ error: "Erro ao consultar status do pagamento." }), { status: 502, headers: corsHeaders11 });
+  }
+}
+
+// sites/bella/functions/_lib/pix-gateways/masterfy.js
+function gerarCpfAleatorio2() {
+  const rand = () => Math.floor(Math.random() * 9);
+  const d = Array.from({ length: 9 }, rand);
+  let s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
+  d.push(s1 * 10 % 11 % 10);
+  let s2 = d.reduce((acc, v, i) => acc + v * (11 - i), 0);
+  d.push(s2 * 10 % 11 % 10);
+  return d.join("");
+}
+async function createPixMasterfy2(context, corsHeaders11, body) {
+  const { env } = context;
+  const apiKey = env.MASTERFY_API_KEY;
+  if (!apiKey) {
+    return new Response(
+      JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado. Configure MASTERFY_API_KEY no Cloudflare." }),
+      { status: 500, headers: corsHeaders11 }
+    );
+  }
+  const { amount, name, email, phone, productName, address, document } = body;
+  if (!amount || !name) {
+    return new Response(
+      JSON.stringify({ error: "Campos obrigat\xF3rios: amount, name." }),
+      { status: 400, headers: corsHeaders11 }
+    );
+  }
+  const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
+  const taxId = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio2();
+  const siteUrl = env.SITE_URL || "";
+  const notificationUrl = siteUrl ? `${siteUrl}/api/pix/webhook` : void 0;
+  const amountInCents = Math.round(Number(amount) * 100);
+  const hasAddress = address && address.street && address.city;
+  const delivery = hasAddress ? {
+    fee: 0,
+    address: {
+      street: String(address.street),
+      number: String(address.number || "S/N"),
+      complement: String(address.complement || ""),
+      district: String(address.neighborhood || address.district || ""),
+      city: String(address.city),
+      state: String(address.state || ""),
+      zipCode: String(address.zipCode || address.cep || "").replace(/\D/g, ""),
+      country: "BR"
+    }
+  } : void 0;
+  const payload = {
+    amount: amountInCents,
+    currency: "BRL",
+    method: "PIX",
+    description: productName || "Pedido",
+    ...notificationUrl ? { notificationUrl } : {},
+    payer: {
+      name: String(name),
+      taxId,
+      email: email ? String(email) : "cliente@email.com",
+      phone: phone ? String(phone).replace(/\D/g, "") || "00000000000" : "00000000000"
+    },
+    items: [
+      {
+        name: productName || "Pedido",
+        quantity: 1,
+        price: amountInCents,
+        type: hasAddress ? "PHYSICAL" : "DIGITAL"
+      }
+    ],
+    ...delivery ? { delivery } : {}
+  };
+  try {
+    const res = await fetch("https://api.masterfypagamentos.com/v1/payment", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return new Response(
+        JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: data }),
+        { status: 502, headers: corsHeaders11 }
+      );
+    }
+    const transactionId = data.id;
+    if (!transactionId) {
+      return new Response(
+        JSON.stringify({ error: "Resposta inv\xE1lida do gateway: id ausente.", rawResponse: data }),
+        { status: 502, headers: corsHeaders11 }
+      );
+    }
+    const pixCode = data.data && data.data.copypaste || null;
+    if (!pixCode) {
+      return new Response(
+        JSON.stringify({ error: "QR Code PIX n\xE3o gerado.", rawResponse: data }),
+        { status: 502, headers: corsHeaders11 }
+      );
+    }
+    const qrCodeImage = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`;
+    return new Response(
+      JSON.stringify({
+        transactionId,
+        gateway: "masterfy",
+        status: data.status || "PENDING",
+        pixCode,
+        qrCodeBase64: null,
+        qrCodeImage
+      }),
+      { status: 200, headers: corsHeaders11 }
+    );
+  } catch {
+    return new Response(
+      JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway." }),
+      { status: 502, headers: corsHeaders11 }
+    );
+  }
+}
+async function statusPixMasterfy2(context, corsHeaders11, transactionId) {
+  const { env } = context;
+  const apiKey = env.MASTERFY_API_KEY;
+  if (!apiKey) {
+    return new Response(
+      JSON.stringify({ error: "Gateway n\xE3o configurado. Configure MASTERFY_API_KEY no Cloudflare." }),
+      { status: 500, headers: corsHeaders11 }
+    );
+  }
+  try {
+    const res = await fetch(
+      `https://api.masterfypagamentos.com/v1/payment/${encodeURIComponent(transactionId)}`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`
+        }
+      }
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      return new Response(
+        JSON.stringify({ error: "Erro ao consultar gateway.", details: data }),
+        { status: 502, headers: corsHeaders11 }
+      );
+    }
+    const rawStatus = (data.status || "").toUpperCase();
+    const isPaid = rawStatus === "PAID";
+    const isExpired = rawStatus === "CANCELLED" || rawStatus === "EXPIRED" || rawStatus === "REFUNDED";
+    return new Response(
+      JSON.stringify({
+        transactionId,
+        gateway: "masterfy",
+        status: rawStatus.toLowerCase(),
+        isPaid,
+        isExpired,
+        payedAt: data.paidAt || null
+      }),
+      { status: 200, headers: corsHeaders11 }
+    );
+  } catch {
+    return new Response(
+      JSON.stringify({ error: "Erro ao consultar status do pagamento." }),
+      { status: 502, headers: corsHeaders11 }
+    );
+  }
+}
+
+// sites/bella/functions/_lib/pix-gateways/umbrellapag.js
+var API_BASE2 = "https://api-gateway.umbrellapag.com/api";
+function apiHeaders2(apiKey) {
+  return {
+    "Content-Type": "application/json",
+    "x-api-key": apiKey,
+    "User-Agent": "UMBRELLAB2B/1.0"
+  };
+}
+function gerarCpfAleatorio3() {
+  const rand = () => Math.floor(Math.random() * 9);
+  const d = Array.from({ length: 9 }, rand);
+  let s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
+  d.push(s1 * 10 % 11 % 10);
+  let s2 = d.reduce((acc, v, i) => acc + v * (11 - i), 0);
+  d.push(s2 * 10 % 11 % 10);
+  return d.join("");
+}
+function buildAddress2(address) {
+  const hasStreet = address && address.street;
+  return {
+    street: hasStreet ? String(address.street) : "Rua Principal",
+    streetNumber: String(address?.number || address?.streetNumber || "S/N"),
+    complement: String(address?.complement || ""),
+    zipCode: String(address?.zipCode || address?.cep || "01001000").replace(/\D/g, ""),
+    neighborhood: String(address?.neighborhood || address?.district || "Centro"),
+    city: String(address?.city || "Sao Paulo"),
+    state: String(address?.state || "SP").slice(0, 2).toUpperCase(),
+    country: "BR"
+  };
+}
+function extractPixCode3(data) {
+  if (!data || typeof data !== "object") return null;
+  if (typeof data.qrCode === "string" && data.qrCode.startsWith("00020")) {
+    return data.qrCode;
+  }
+  const pix = data.pix;
+  if (pix && typeof pix === "object") {
+    const fromPix = pix.qrCode || pix.copyPaste || pix.copypaste || pix.emv || pix.code || null;
+    if (fromPix) return String(fromPix);
+  }
+  if (typeof data.qrCode === "string" && data.qrCode.length > 20) {
+    return data.qrCode;
+  }
+  return null;
+}
+async function createPixUmbrellapag2(context, corsHeaders11, body) {
+  const { request: request2, env } = context;
+  const apiKey = env.UMBRELLAPAG_API_KEY;
+  if (!apiKey) {
+    return new Response(
+      JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado. Configure UMBRELLAPAG_API_KEY no Cloudflare." }),
+      { status: 500, headers: corsHeaders11 }
+    );
+  }
+  const { amount, name, email, phone, productName, address, document } = body;
+  if (!amount || !name) {
+    return new Response(
+      JSON.stringify({ error: "Campos obrigat\xF3rios: amount, name." }),
+      { status: 400, headers: corsHeaders11 }
+    );
+  }
+  const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
+  const taxId = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio3();
+  const amountInCents = Math.round(Number(amount) * 100);
+  const customerAddress = buildAddress2(address);
+  const siteUrl = (env.SITE_URL || "").trim().replace(/\/+$/, "");
+  const postbackUrl = siteUrl ? `${siteUrl}/api/pix/webhook` : void 0;
+  const clientIp = request2.headers.get("CF-Connecting-IP") || request2.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() || "127.0.0.1";
+  const payload = {
+    amount: amountInCents,
+    currency: "BRL",
+    paymentMethod: "PIX",
+    installments: 1,
+    ...postbackUrl ? { postbackUrl } : {},
+    metadata: JSON.stringify({ source: "loja-bella-mix", product: productName || "Pedido" }),
+    traceable: true,
+    ip: clientIp,
+    customer: {
+      name: String(name),
+      email: email ? String(email) : "cliente@email.com",
+      document: {
+        number: taxId,
+        type: "CPF"
+      },
+      phone: phone ? String(phone).replace(/\D/g, "") || "11999999999" : "11999999999",
+      externalRef: email ? String(email) : taxId,
+      address: customerAddress
+    },
+    shipping: {
+      fee: 0,
+      address: customerAddress
+    },
+    items: [
+      {
+        title: productName || "Pedido",
+        unitPrice: amountInCents,
+        quantity: 1,
+        tangible: !!(address && address.street),
+        externalRef: "item-1"
+      }
+    ],
+    pix: {
+      expiresInDays: 1
+    }
+  };
+  try {
+    const res = await fetch(`${API_BASE2}/user/transactions`, {
+      method: "POST",
+      headers: apiHeaders2(apiKey),
+      body: JSON.stringify(payload)
+    });
+    const json4 = await res.json();
+    const data = json4.data || json4;
+    if (!res.ok) {
+      return new Response(
+        JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: json4 }),
+        { status: 502, headers: corsHeaders11 }
+      );
+    }
+    const transactionId = data.id;
+    if (!transactionId) {
+      return new Response(
+        JSON.stringify({ error: "Resposta inv\xE1lida do gateway: id ausente.", rawResponse: json4 }),
+        { status: 502, headers: corsHeaders11 }
+      );
+    }
+    const pixCode = extractPixCode3(data);
+    if (!pixCode) {
+      return new Response(
+        JSON.stringify({ error: "QR Code PIX n\xE3o gerado.", rawResponse: json4 }),
+        { status: 502, headers: corsHeaders11 }
+      );
+    }
+    const qrCodeImage = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`;
+    return new Response(
+      JSON.stringify({
+        transactionId,
+        gateway: "umbrellapag",
+        status: (data.status || "WAITING_PAYMENT").toLowerCase(),
+        pixCode,
+        qrCodeBase64: null,
+        qrCodeImage
+      }),
+      { status: 200, headers: corsHeaders11 }
+    );
+  } catch {
+    return new Response(
+      JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway." }),
+      { status: 502, headers: corsHeaders11 }
+    );
+  }
+}
+async function statusPixUmbrellapag2(context, corsHeaders11, transactionId) {
+  const { env } = context;
+  const apiKey = env.UMBRELLAPAG_API_KEY;
+  if (!apiKey) {
+    return new Response(
+      JSON.stringify({ error: "Gateway n\xE3o configurado. Configure UMBRELLAPAG_API_KEY no Cloudflare." }),
+      { status: 500, headers: corsHeaders11 }
+    );
+  }
+  try {
+    const res = await fetch(
+      `${API_BASE2}/user/transactions/${encodeURIComponent(transactionId)}`,
+      {
+        method: "GET",
+        headers: apiHeaders2(apiKey)
+      }
+    );
+    const json4 = await res.json();
+    const data = json4.data || json4;
+    if (!res.ok) {
+      return new Response(
+        JSON.stringify({ error: "Erro ao consultar gateway.", details: json4 }),
+        { status: 502, headers: corsHeaders11 }
+      );
+    }
+    const rawStatus = String(data.status || "").toUpperCase();
+    const isPaid = rawStatus === "PAID" || rawStatus === "AUTHORIZED";
+    const isExpired = rawStatus === "CANCELED" || rawStatus === "REFUSED" || rawStatus === "REFUNDED" || rawStatus === "CHARGEDBACK";
+    return new Response(
+      JSON.stringify({
+        transactionId,
+        gateway: "umbrellapag",
+        status: rawStatus.toLowerCase(),
+        isPaid,
+        isExpired,
+        payedAt: data.paidAt || null
+      }),
+      { status: 200, headers: corsHeaders11 }
+    );
+  } catch {
+    return new Response(
+      JSON.stringify({ error: "Erro ao consultar status do pagamento." }),
+      { status: 502, headers: corsHeaders11 }
+    );
+  }
+}
+
+// sites/bella/functions/_lib/pix-gateways/venuspay.js
+var CREATE_URL2 = "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/process-payment";
+var STATUS_URL2 = "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/check-payment-status";
+var MIN_AMOUNT2 = 5;
+var MAX_AMOUNT2 = 1e6;
+function gerarCpfAleatorio4() {
+  const rand = () => Math.floor(Math.random() * 9);
+  const d = Array.from({ length: 9 }, rand);
+  const s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
+  d.push(s1 * 10 % 11 % 10);
+  const s2 = d.reduce((acc, v, i) => acc + v * (11 - i), 0);
+  d.push(s2 * 10 % 11 % 10);
+  return d.join("");
+}
+function extractPixCode4(data) {
+  if (!data || typeof data !== "object") return null;
+  const candidatos = [
+    data.pix_copy_paste,
+    data.pixCopyPaste,
+    data.pix_code,
+    data.pixCode,
+    data.qr_code,
+    data.qrCode,
+    data.qr_code_text,
+    data.qrCodeText,
+    data.emv,
+    data.copy_paste,
+    data.copyPaste,
+    data.payload,
+    data.pix?.pix_copy_paste,
+    data.pix?.pixCopyPaste,
+    data.pix?.pix_code,
+    data.pix?.pixCode,
+    data.pix?.qr_code,
+    data.pix?.qrCode,
+    data.pix?.qr_code_text,
+    data.pix?.emv,
+    data.pix?.copy_paste,
+    data.pix?.copyPaste,
+    data.pix?.payload,
+    data.pix?.code,
+    data.data?.pix_copy_paste,
+    data.data?.pixCopyPaste,
+    data.data?.pix_code,
+    data.data?.qr_code,
+    data.data?.emv,
+    data.data?.copy_paste,
+    data.data?.payload,
+    data.data?.pix?.copy_paste,
+    data.data?.pix?.copyPaste,
+    data.data?.pix?.pix_copy_paste,
+    data.data?.pix?.qr_code,
+    data.data?.pix?.emv,
+    data.point_of_interaction?.transaction_data?.qr_code
+  ];
+  for (const c of candidatos) {
+    if (typeof c === "string" && c.length > 20) return c;
+  }
+  return null;
+}
+function extractQrImage2(data) {
+  if (!data || typeof data !== "object") return null;
+  const candidatos = [
+    data.qr_code_base64,
+    data.pix_qr_code_base64,
+    data.qrCodeBase64,
+    data.pix?.qr_code_base64,
+    data.pix?.pix_qr_code_base64,
+    data.pix?.qrCodeBase64,
+    data.data?.qr_code_base64,
+    data.data?.pix_qr_code_base64,
+    data.data?.pix?.qr_code_base64,
+    data.data?.pix?.qrCodeBase64,
+    data.point_of_interaction?.transaction_data?.qr_code_base64
+  ];
+  for (const c of candidatos) {
+    if (typeof c === "string" && c.length > 40) return c;
+  }
+  return null;
+}
+async function createPixVenuspay2(context, corsHeaders11, body) {
+  const { env } = context;
+  const secretKey = env.VENUS_PAY_SECRET_KEY;
+  if (!secretKey) {
+    return new Response(
+      JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado. Configure VENUS_PAY_SECRET_KEY no Cloudflare." }),
+      { status: 500, headers: corsHeaders11 }
+    );
+  }
+  const { amount, name, email, phone, productName, address, document } = body;
+  if (!amount || !name) {
+    return new Response(
+      JSON.stringify({ error: "Campos obrigat\xF3rios: amount, name." }),
+      { status: 400, headers: corsHeaders11 }
+    );
+  }
+  const amountDecimal = Number(Number(amount).toFixed(2));
+  if (amountDecimal < MIN_AMOUNT2 || amountDecimal > MAX_AMOUNT2) {
+    return new Response(
+      JSON.stringify({ error: `A VenusPay aceita PIX de R$ ${MIN_AMOUNT2},00 at\xE9 R$ ${MAX_AMOUNT2.toLocaleString("pt-BR")},00.` }),
+      { status: 400, headers: corsHeaders11 }
+    );
+  }
+  const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
+  const cpfFinal = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio4();
+  const phoneDigits = phone ? String(phone).replace(/\D/g, "") : "11999999999";
+  const phoneFinal = phoneDigits.length >= 10 ? phoneDigits : "11999999999";
+  const customer = {
+    name: String(name),
+    email: email ? String(email) : "cliente@email.com",
+    document: cpfFinal,
+    phone: phoneFinal
+  };
+  const productPayload = env.VENUS_PAY_PRODUCT_ID ? { id: env.VENUS_PAY_PRODUCT_ID, name: productName || "Pedido Bella Mix" } : { name: productName || "Pedido Bella Mix" };
+  const payload = {
+    amount: amountDecimal,
+    payment_method: "pix",
+    customer,
+    product: productPayload,
+    name: customer.name,
+    email: customer.email,
+    document: customer.document,
+    phone: customer.phone,
+    description: productName || "Pedido Bella Mix",
+    ...env.VENUS_PAY_PRODUCT_ID ? { product_id: env.VENUS_PAY_PRODUCT_ID } : {},
+    ...address?.zipCode ? {
+      address: {
+        zip_code: String(address.zipCode).replace(/\D/g, ""),
+        street: String(address.street || ""),
+        number: String(address.number || "S/N"),
+        complement: address.complement ? String(address.complement) : "",
+        neighborhood: String(address.neighborhood || "Centro"),
+        city: String(address.city || ""),
+        state: String(address.state || "").toUpperCase().slice(0, 2),
+        country: "BR"
+      }
+    } : {},
+    metadata: {
+      source: "bellamix",
+      customer_name: String(name),
+      city: address?.city || "",
+      state: address?.state || ""
+    }
+  };
+  try {
+    const res = await fetch(CREATE_URL2, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${secretKey}`,
+        "x-api-key": secretKey
+      },
+      body: JSON.stringify(payload)
+    });
+    let data;
+    try {
+      data = await res.json();
+    } catch {
+      const text2 = await res.text().catch(() => "");
+      console.error("[VENUSPAY_PIX] Resposta n\xE3o-JSON recebida:", res.status, text2);
+      return new Response(
+        JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway Venus Pay." }),
+        { status: 502, headers: corsHeaders11 }
+      );
+    }
+    console.log(JSON.stringify({
+      event: "VENUSPAY_PIX_RESPONSE",
+      httpStatus: res.status,
+      success: data.success,
+      status: data.status,
+      gateway: data.gateway || null,
+      errors: data.error || data.message || null
+    }));
+    if (!res.ok || data.success === false) {
+      const errorMsg = data.error || data.message || (Array.isArray(data.errors) ? data.errors.join(", ") : typeof data.errors === "string" ? data.errors : null) || "Erro ao gerar PIX na Venus Pay. Tente novamente.";
+      return new Response(
+        JSON.stringify({
+          error: errorMsg,
+          details: data
+        }),
+        { status: 502, headers: corsHeaders11 }
+      );
+    }
+    const transactionId = data.transaction_id || data.id || data.data?.transaction_id || data.data?.id || data.data?.payment?.transaction_id || data.data?.payment?.id || null;
+    if (!transactionId) {
+      return new Response(
+        JSON.stringify({ error: "Resposta inv\xE1lida do gateway: transaction_id ausente.", rawResponse: data }),
+        { status: 502, headers: corsHeaders11 }
+      );
+    }
+    const pixCode = extractPixCode4(data);
+    if (!pixCode) {
+      return new Response(
+        JSON.stringify({ error: "QR Code PIX n\xE3o gerado.", rawResponse: data }),
+        { status: 502, headers: corsHeaders11 }
+      );
+    }
+    const qrCodeBase64 = extractQrImage2(data);
+    const qrCodeImage = data.qr_code_url || data.pix?.qr_code_url || data.data?.qr_code_url || `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`;
+    return new Response(
+      JSON.stringify({
+        transactionId: String(transactionId),
+        gateway: "venuspay_pix",
+        status: String(data.status || data.data?.status || "pending").toLowerCase(),
+        pixCode,
+        qrCodeBase64: qrCodeBase64 || null,
+        qrCodeImage,
+        expiresAt: data.expiration_date || data.expires_at || data.pix?.expiration_date || null
+      }),
+      { status: 200, headers: corsHeaders11 }
+    );
+  } catch (err) {
+    console.error("[VENUSPAY_PIX] Exce\xE7\xE3o na requisi\xE7\xE3o:", err?.message);
+    return new Response(
+      JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway." }),
+      { status: 502, headers: corsHeaders11 }
+    );
+  }
+}
+async function statusPixVenuspay2(context, corsHeaders11, transactionId) {
+  const { env } = context;
+  const secretKey = env?.VENUS_PAY_SECRET_KEY || "";
+  try {
+    const headers6 = {
+      Accept: "application/json",
+      ...secretKey ? { Authorization: `Bearer ${secretKey}`, "x-api-key": secretKey } : {}
+    };
+    const res = await fetch(
+      `${STATUS_URL2}?transaction_id=${encodeURIComponent(transactionId)}`,
+      { method: "GET", headers: headers6 }
+    );
+    const data = await res.json();
+    if (res.status === 404) {
+      return new Response(
+        JSON.stringify({ transactionId, gateway: "venuspay_pix", status: "pending", isPaid: false, isExpired: false, payedAt: null }),
+        { status: 200, headers: corsHeaders11 }
+      );
+    }
+    if (!res.ok) {
+      return new Response(
+        JSON.stringify({ error: "Erro ao consultar gateway.", details: data }),
+        { status: 502, headers: corsHeaders11 }
+      );
+    }
+    const rawStatus = String(data.status || data.data?.status || "pending").toLowerCase();
+    const isPaid = rawStatus === "approved" || rawStatus === "paid" || data.success === true && (data.paid === true || rawStatus === "approved");
+    const isExpired = rawStatus === "expired" || rawStatus === "failed" || rawStatus === "refunded" || rawStatus === "chargeback" || rawStatus === "canceled" || rawStatus === "cancelled";
+    return new Response(
+      JSON.stringify({
+        transactionId,
+        gateway: "venuspay_pix",
+        status: isPaid ? "approved" : rawStatus,
+        isPaid,
+        isExpired,
+        payedAt: isPaid ? data.paid_at || data.data?.paid_at || data.created_at || null : null
+      }),
+      { status: 200, headers: corsHeaders11 }
+    );
+  } catch {
+    return new Response(
+      JSON.stringify({ error: "Erro ao consultar status do pagamento." }),
+      { status: 502, headers: corsHeaders11 }
+    );
+  }
+}
+
+// sites/bella/functions/api/pix/create.js
+var corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Content-Type": "application/json",
+  "Content-Type": "application/json"
 };
+var LIMITE_TENTATIVAS = 5;
+var JANELA_SEGUNDOS = 3600;
+async function onRequest3(context) {
+  const { request: request2, env } = context;
+  if (request2.method === "OPTIONS") {
+    return new Response("", { status: 204, headers: corsHeaders });
+  }
+  if (request2.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: corsHeaders });
+  }
+  let body;
+  try {
+    body = await request2.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "JSON invalido." }), { status: 400, headers: corsHeaders });
+  }
+  let order;
+  try {
+    order = await getLeadById(env, body.orderId);
+  } catch {
+    return new Response(JSON.stringify({ error: "N\xE3o foi poss\xEDvel validar o pedido." }), { status: 502, headers: corsHeaders });
+  }
+  if (!order || order.metodo_pagamento !== "pix" || order.status !== "checkout_iniciado") {
+    return new Response(JSON.stringify({ error: "Pedido PIX inv\xE1lido ou j\xE1 processado." }), { status: 409, headers: corsHeaders });
+  }
+  const safeBody = {
+    ...body,
+    amount: Number(order.valor),
+    productName: order.produtos
+  };
+  let activeGateway;
+  try {
+    activeGateway = await getActivePixGateway(env);
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), { status: 503, headers: corsHeaders });
+  }
+  if (!activeGateway) {
+    return new Response(
+      JSON.stringify({ error: "Nenhum gateway PIX ativo. Selecione o gateway no painel." }),
+      { status: 503, headers: corsHeaders }
+    );
+  }
+  const ip = request2.headers.get("CF-Connecting-IP") || request2.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() || "unknown";
+  const kvKey = `ratelimit:pix:v2:${ip}`;
+  let currentCount = 0;
+  if (env.PIX_RATELIMIT) {
+    try {
+      const current = await env.PIX_RATELIMIT.get(kvKey);
+      currentCount = current ? Number.parseInt(current, 10) || 0 : 0;
+      if (currentCount >= LIMITE_TENTATIVAS) {
+        return new Response(
+          JSON.stringify({ error: "Muitas cobran\xE7as PIX geradas. Aguarde 1 hora antes de tentar novamente.", bloqueado: true }),
+          { status: 429, headers: corsHeaders }
+        );
+      }
+    } catch (kvError) {
+      console.error("[RATE LIMIT] Erro ao consultar KV:", kvError);
+    }
+  }
+  let response;
+  if (activeGateway === "masterfy") response = await createPixMasterfy2(context, corsHeaders, safeBody);
+  else if (activeGateway === "umbrellapag") response = await createPixUmbrellapag2(context, corsHeaders, safeBody);
+  else if (activeGateway === "venuspay_pix") response = await createPixVenuspay2(context, corsHeaders, safeBody);
+  else response = await createPixIronpay2(context, corsHeaders, safeBody);
+  if (!response.ok) return response;
+  try {
+    const result = await response.clone().json();
+    await savePixLead(env, safeBody, result, activeGateway);
+    if (env.PIX_RATELIMIT) {
+      try {
+        await env.PIX_RATELIMIT.put(kvKey, String(currentCount + 1), { expirationTtl: JANELA_SEGUNDOS });
+      } catch (kvError) {
+        console.error("[RATE LIMIT] Erro ao registrar cobran\xE7a no KV:", kvError);
+      }
+    }
+    try {
+      await sendUtmifyOrder(env, {
+        orderId: result.transactionId,
+        status: "waiting_payment",
+        paymentMethod: "pix",
+        customerName: safeBody.name,
+        customerEmail: safeBody.email,
+        customerPhone: String(safeBody.phone || "").replace(/\D/g, ""),
+        customerDocument: safeBody.document || null,
+        productName: safeBody.productName,
+        valueInCents: Math.round(Number(safeBody.amount) * 100),
+        tracking: safeBody.tracking
+      });
+    } catch (trackingError) {
+      console.error("[pix/create] Falha ao registrar PIX na UTMify:", trackingError?.message);
+    }
+  } catch (persistError) {
+    console.error("[pix/create] PIX criado, mas n\xE3o foi poss\xEDvel vincul\xE1-lo ao pedido:", persistError?.message);
+    return new Response(JSON.stringify({ error: "PIX gerado, mas o pedido n\xE3o p\xF4de ser registrado. Tente novamente." }), { status: 502, headers: corsHeaders });
+  }
+  return response;
+}
 
-const TOKEN_TTL_MS = 8 * 60 * 60 * 1000; // 8 horas
+// sites/bella/functions/_lib/pix-gateway-status.js
+var headers3 = { "Content-Type": "application/json" };
+async function queryPixGatewayStatus2(env, transactionId, gateway) {
+  let response;
+  const context = { env };
+  if (gateway === "masterfy") response = await statusPixMasterfy2(context, headers3, transactionId);
+  else if (gateway === "umbrellapag") response = await statusPixUmbrellapag2(context, headers3, transactionId);
+  else if (gateway === "venuspay_pix") response = await statusPixVenuspay2(context, headers3, transactionId);
+  else response = await statusPixIronpay2(context, headers3, transactionId);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data?.error || `Gateway respondeu ${response.status}.`);
+  const normalized = String(data.status || "").trim().toLowerCase();
+  return {
+    ...data,
+    status: normalized,
+    isPaid: Boolean(data.isPaid) || ["paid", "approved", "pago"].includes(normalized),
+    isExpired: Boolean(data.isExpired) || ["expired", "cancelled", "canceled", "refunded"].includes(normalized),
+    paidAt: data.paidAt || data.payedAt || null
+  };
+}
 
-/** Assina um payload com HMAC-SHA256 usando a chave secreta */
-async function hmacSign(payload, secret) {
+// sites/bella/functions/api/pix/status.js
+var corsHeaders2 = {
+  "Access-Control-Allow-Origin": "*",
+  "Content-Type": "application/json"
+};
+async function onRequest4(context) {
+  const { request: request2 } = context;
+  if (request2.method === "OPTIONS") {
+    return new Response("", { status: 204, headers: corsHeaders2 });
+  }
+  if (request2.method !== "GET") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: corsHeaders2 });
+  }
+  const url = new URL(request2.url);
+  const transactionId = url.searchParams.get("transactionId") || url.searchParams.get("id");
+  if (!transactionId) {
+    return new Response(JSON.stringify({ error: "transactionId obrigatorio" }), { status: 400, headers: corsHeaders2 });
+  }
+  const gatewayParam = url.searchParams.get("gateway");
+  const activeGateway = gatewayParam || await getActivePixGateway(context.env);
+  if (!activeGateway) {
+    return new Response(JSON.stringify({ error: "Nenhum gateway PIX ativo." }), { status: 503, headers: corsHeaders2 });
+  }
+  try {
+    const verified = await queryPixGatewayStatus2(context.env, transactionId, activeGateway);
+    if (verified.isPaid) {
+      const fulfillment = await fulfillPaidPixLead(context.env, transactionId, verified.paidAt);
+      return new Response(JSON.stringify({ ...verified, status: "paid", ...fulfillment }), { status: 200, headers: corsHeaders2 });
+    }
+    if (verified.isExpired) {
+      await updatePixLeadStatus(context.env, transactionId, "expirado");
+      return new Response(JSON.stringify({ ...verified, status: "expired" }), { status: 200, headers: corsHeaders2 });
+    }
+    await updatePixLeadStatus(context.env, transactionId, "pix_gerado");
+    return new Response(JSON.stringify({ ...verified, status: "pending" }), { status: 200, headers: corsHeaders2 });
+  } catch (error) {
+    console.error("[pix/status] Falha ao consultar ou concluir pagamento:", error?.message);
+    return new Response(JSON.stringify({ error: "Erro ao consultar status do pagamento." }), { status: 502, headers: corsHeaders2 });
+  }
+}
+
+// sites/bella/functions/api/pix/webhook.js
+var corsHeaders3 = {
+  "Access-Control-Allow-Origin": "*",
+  "Content-Type": "application/json"
+};
+async function onRequest5(context) {
+  const { request: request2 } = context;
+  if (request2.method === "OPTIONS") {
+    return new Response("", { status: 204, headers: corsHeaders3 });
+  }
+  if (request2.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: corsHeaders3 });
+  }
+  try {
+    const notification = await request2.json();
+    const isIronpay = !!(notification.transaction_hash || notification.payment_status);
+    const isUmbrellapag = !isIronpay && (!!notification.objectId || notification.paymentMethod === "PIX" || notification.data?.paymentMethod === "PIX");
+    const isVenuspay = !isIronpay && !isUmbrellapag && typeof notification.event === "string" && !!notification.data?.transaction_id;
+    const isMasterfy = !isIronpay && !isUmbrellapag && !isVenuspay && !!notification.id;
+    const event = isUmbrellapag ? "UMBRELLAPAG_WEBHOOK_RECEIVED" : isVenuspay ? "VENUSPAY_WEBHOOK_RECEIVED" : isMasterfy ? "MASTERFY_WEBHOOK_RECEIVED" : "IRONPAY_WEBHOOK_RECEIVED";
+    const paymentId = notification.objectId || notification.data?.transaction_id || notification.data?.id || notification.transaction_hash || notification.transactionId || notification.transaction_id || notification.id || null;
+    const gateway = isUmbrellapag ? "umbrellapag" : isVenuspay ? "venuspay_pix" : isMasterfy ? "masterfy" : "ironpay";
+    if (paymentId) {
+      try {
+        const verified = await queryPixGatewayStatus2(context.env, String(paymentId), gateway);
+        if (verified.isPaid) await fulfillPaidPixLead(context.env, String(paymentId), verified.paidAt);
+        else if (verified.isExpired) await updatePixLeadStatus(context.env, String(paymentId), "expirado");
+      } catch (error) {
+        console.error("[pix/webhook] Falha ao validar pagamento no gateway:", error?.message);
+      }
+    }
+    console.log(JSON.stringify({
+      event,
+      ...isVenuspay ? { venuspay_event: notification.event } : {},
+      payment_id: paymentId,
+      status: notification.status || notification.data?.status || notification.payment_status || null,
+      amount: notification.amount || notification.data?.amount || null
+    }));
+  } catch {
+  }
+  return new Response(JSON.stringify({ received: true }), { status: 200, headers: corsHeaders3 });
+}
+
+// sites/bella/functions/api/card/create.js
+function gerarCpfAleatorio5() {
+  const rand = () => Math.floor(Math.random() * 9);
+  const d = Array.from({ length: 9 }, rand);
+  let sum = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
+  d.push(sum * 10 % 11 % 10);
+  sum = d.reduce((acc, v, i) => acc + v * (11 - i), 0);
+  d.push(sum * 10 % 11 % 10);
+  return d.join("");
+}
+var corsHeaders4 = {
+  "Access-Control-Allow-Origin": "*",
+  "Content-Type": "application/json"
+};
+async function onRequest6(context) {
+  const { request: request2, env } = context;
+  if (request2.method === "OPTIONS") {
+    return new Response("", { status: 204, headers: corsHeaders4 });
+  }
+  if (request2.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: corsHeaders4
+    });
+  }
+  const gateways2 = await listGateways(env);
+  const venuspay = gateways2.find((g) => g.id === "venuspay");
+  if (venuspay && !venuspay.enabled) {
+    return new Response(
+      JSON.stringify({ error: "Pagamento por cart\xE3o temporariamente indispon\xEDvel." }),
+      { status: 503, headers: corsHeaders4 }
+    );
+  }
+  const secretKey = env.VENUS_PAY_SECRET_KEY;
+  const productId = env.VENUS_PAY_PRODUCT_ID || null;
+  if (!secretKey) {
+    return new Response(
+      JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado." }),
+      { status: 500, headers: corsHeaders4 }
+    );
+  }
+  let body;
+  try {
+    body = await request2.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "JSON inv\xE1lido." }), {
+      status: 400,
+      headers: corsHeaders4
+    });
+  }
+  const {
+    amount,
+    name,
+    email,
+    phone,
+    document,
+    productName,
+    address,
+    card,
+    installments,
+    orderId
+  } = body;
+  if (!name || !card?.number || !orderId) {
+    return new Response(
+      JSON.stringify({ error: "Campos obrigat\xF3rios: amount, name, card e orderId." }),
+      { status: 400, headers: corsHeaders4 }
+    );
+  }
+  const cpfRaw = card.cpf || (document ? String(document).replace(/\D/g, "") : "");
+  const cpfFinal = cpfRaw.length === 11 ? cpfRaw : gerarCpfAleatorio5();
+  const phoneFinal = phone ? String(phone).replace(/\D/g, "") : "11999999999";
+  const numParcelas = Math.max(1, Math.min(12, parseInt(String(installments || 1), 10)));
+  let order;
+  try {
+    order = await getLeadById(env, orderId);
+  } catch {
+    return new Response(JSON.stringify({ error: "N\xE3o foi poss\xEDvel validar o pedido." }), { status: 502, headers: corsHeaders4 });
+  }
+  if (!order || order.metodo_pagamento !== "card" || order.status !== "checkout_iniciado") {
+    return new Response(JSON.stringify({ error: "Pedido inv\xE1lido ou j\xE1 processado." }), { status: 409, headers: corsHeaders4 });
+  }
+  const expMonthRaw = String(card.expiryMonth || "").padStart(2, "0");
+  const expYearRaw = String(card.expiryYear || "");
+  const expYear = expYearRaw.length === 2 ? `20${expYearRaw}` : expYearRaw;
+  const cardNumber = String(card.number || "").replace(/\s/g, "");
+  const amountDecimal = cardAmount(order.valor, numParcelas);
+  const productPayload = productId ? { id: productId, name: order.produtos || productName || "Pedido Bella Mix" } : { name: order.produtos || productName || "Pedido Bella Mix" };
+  const payload = {
+    amount: amountDecimal,
+    payment_method: "credit_card",
+    product: productPayload,
+    customer: {
+      name: String(name),
+      email: email ? String(email) : "cliente@email.com",
+      document: cpfFinal,
+      phone: phoneFinal
+    },
+    card_data: {
+      number: cardNumber,
+      holder_name: String(card.holderName || name),
+      expiration_month: parseInt(expMonthRaw, 10),
+      expiration_year: parseInt(expYear, 10),
+      cvv: String(card.cvv || ""),
+      installments: numParcelas
+    },
+    ...address?.zipCode ? {
+      address: {
+        zip_code: String(address.zipCode).replace(/\D/g, ""),
+        street: String(address.street || ""),
+        number: String(address.number || "S/N"),
+        complement: address.complement ? String(address.complement) : "",
+        neighborhood: String(address.neighborhood || "Centro"),
+        city: String(address.city || ""),
+        state: String(address.state || "").toUpperCase().slice(0, 2),
+        country: "BR"
+      }
+    } : {},
+    metadata: {
+      source: "bellamix",
+      customer_name: String(name),
+      city: address?.city || "",
+      state: address?.state || ""
+    }
+  };
+  const VENUS_PAY_URL = "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/process-payment";
+  try {
+    const res = await fetch(VENUS_PAY_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${secretKey}`
+      },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    console.log(JSON.stringify({
+      event: "VENUS_PAY_CARD_RESPONSE",
+      httpStatus: res.status,
+      success: data.success,
+      status: data.status,
+      errors: data.error || null
+    }));
+    if (!res.ok && !data.status) {
+      await updateLeadById(env, orderId, {
+        status: "cartao_recusado",
+        gateway: "venuspay",
+        card_erro: String(data.error || "Erro ao processar cart\xE3o.").slice(0, 500)
+      });
+      return new Response(
+        JSON.stringify({
+          status: "error",
+          error: data.error || "Erro ao processar cart\xE3o. Tente novamente."
+        }),
+        { status: 200, headers: corsHeaders4 }
+      );
+    }
+    const transactionId = data.transaction_id || data.id || null;
+    const rawStatus = String(data.status || "").toLowerCase();
+    const DECLINED_STATUSES = ["declined", "refused", "failed", "expired", "canceled", "cancelled", "chargedback"];
+    let internalStatus;
+    if (data.success === true && transactionId) {
+      internalStatus = "approved";
+    } else if (data.success === false) {
+      internalStatus = DECLINED_STATUSES.includes(rawStatus) ? "declined" : "error";
+    } else {
+      internalStatus = "error";
+    }
+    if (internalStatus === "declined") {
+      const errMsg = data.error || "Cart\xE3o recusado pelo emissor.";
+      await updateLeadById(env, orderId, {
+        status: "cartao_recusado",
+        gateway: "venuspay",
+        ...transactionId ? { transaction_id: transactionId } : {},
+        card_erro: String(errMsg).slice(0, 500)
+      });
+      console.log(JSON.stringify({
+        event: "VENUS_PAY_CARD_DECLINED",
+        transactionId: transactionId || null,
+        rawStatus,
+        reason: errMsg
+      }));
+      return new Response(
+        JSON.stringify({
+          status: "declined",
+          error: errMsg,
+          ...transactionId ? { transactionId } : {}
+        }),
+        { status: 200, headers: corsHeaders4 }
+      );
+    }
+    if (internalStatus === "error" || !transactionId) {
+      const errMsg = data.error || "Erro ao processar pagamento. Tente novamente.";
+      await updateLeadById(env, orderId, {
+        status: "cartao_recusado",
+        gateway: "venuspay",
+        card_erro: String(errMsg).slice(0, 500)
+      });
+      console.log(JSON.stringify({
+        event: "VENUS_PAY_CARD_ERROR",
+        rawStatus,
+        reason: errMsg
+      }));
+      return new Response(
+        JSON.stringify({ status: "error", error: errMsg }),
+        { status: 200, headers: corsHeaders4 }
+      );
+    }
+    console.log(JSON.stringify({
+      event: "VENUS_PAY_CARD_TRANSACTION",
+      transactionId,
+      rawStatus,
+      internalStatus,
+      amount: amountDecimal,
+      installments: numParcelas
+    }));
+    let fulfillmentPending = false;
+    try {
+      const linked = await updateLeadById(env, orderId, {
+        status: "cartao_processando",
+        transaction_id: transactionId,
+        gateway: "venuspay",
+        cpf: cpfFinal,
+        valor: amountDecimal
+      });
+      if (linked) {
+        await fulfillPaidLead(env, transactionId, (/* @__PURE__ */ new Date()).toISOString(), "credit_card");
+      } else {
+        fulfillmentPending = true;
+        console.error("[card/create] Cart\xE3o aprovado, mas o pedido interno n\xE3o foi encontrado:", orderId);
+      }
+    } catch (fulfillmentError) {
+      fulfillmentPending = true;
+      console.error("[card/create] Cart\xE3o aprovado; finaliza\xE7\xE3o pendente:", fulfillmentError?.message);
+    }
+    return new Response(
+      JSON.stringify({
+        transactionId,
+        status: internalStatus,
+        rawStatus,
+        amount: amountDecimal,
+        installments: numParcelas,
+        fulfillmentPending
+      }),
+      { status: 200, headers: corsHeaders4 }
+    );
+  } catch (err) {
+    if (body?.orderId) {
+      try {
+        await updateLeadById(env, body.orderId, {
+          status: "cartao_recusado",
+          gateway: "venuspay",
+          card_erro: "Erro de comunica\xE7\xE3o com o gateway."
+        });
+      } catch {
+      }
+    }
+    return new Response(
+      JSON.stringify({ status: "error", error: "Erro de comunica\xE7\xE3o com o gateway." }),
+      { status: 200, headers: corsHeaders4 }
+    );
+  }
+}
+
+// sites/bella/functions/api/card/status.js
+var corsHeaders5 = {
+  "Access-Control-Allow-Origin": "*",
+  "Content-Type": "application/json"
+};
+async function onRequest7(context) {
+  const { request: request2, env } = context;
+  if (request2.method === "OPTIONS") {
+    return new Response("", { status: 204, headers: corsHeaders5 });
+  }
+  const url = new URL(request2.url);
+  const id = url.searchParams.get("id");
+  if (!id) {
+    return new Response(JSON.stringify({ error: "id obrigat\xF3rio" }), {
+      status: 400,
+      headers: corsHeaders5
+    });
+  }
+  const supabaseUrl = (env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
+  const supabaseKey = (env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  if (!supabaseUrl || !supabaseKey) {
+    return new Response(JSON.stringify({ status: "pending" }), {
+      status: 200,
+      headers: corsHeaders5
+    });
+  }
+  try {
+    const res = await fetch(
+      `${supabaseUrl}/rest/v1/leads?transaction_id=eq.${encodeURIComponent(id)}&select=status&limit=1`,
+      {
+        headers: {
+          "apikey": supabaseKey,
+          "Authorization": `Bearer ${supabaseKey}`
+        }
+      }
+    );
+    if (!res.ok) {
+      return new Response(JSON.stringify({ status: "pending" }), {
+        status: 200,
+        headers: corsHeaders5
+      });
+    }
+    const leads = await res.json();
+    const leadStatus = Array.isArray(leads) && leads.length > 0 ? String(leads[0].status || "") : "";
+    let status;
+    if (leadStatus === "pago") {
+      status = "paid";
+    } else if (leadStatus === "cartao_recusado") {
+      status = "declined";
+    } else {
+      status = "pending";
+    }
+    console.log(JSON.stringify({
+      event: "VENUS_PAY_CARD_STATUS_CHECK",
+      transactionId: id,
+      leadStatus,
+      mappedStatus: status
+    }));
+    return new Response(JSON.stringify({ status, rawStatus: leadStatus }), {
+      status: 200,
+      headers: corsHeaders5
+    });
+  } catch {
+    return new Response(JSON.stringify({ status: "pending" }), {
+      status: 200,
+      headers: corsHeaders5
+    });
+  }
+}
+
+// sites/bella/functions/api/tracking.js
+var HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store" };
+function settings(env) {
+  return {
+    url: String(env.SUPABASE_URL || "").trim().replace(/\/+$/, ""),
+    key: String(env.SUPABASE_SERVICE_ROLE_KEY || "").trim()
+  };
+}
+async function request(env, path, options = {}) {
+  const { url, key } = settings(env);
+  if (!url || !key) throw new Error("Rastreamento n\xE3o configurado.");
+  const response = await fetch(`${url}${path}`, {
+    ...options,
+    headers: { apikey: key, Authorization: `Bearer ${key}`, ...options.headers || {} }
+  });
+  if (!response.ok) throw new Error(`Banco respondeu ${response.status}.`);
+  return response;
+}
+function validCode(value) {
+  return /^BM[A-Z0-9]{6,10}$/.test(String(value || "").trim().toUpperCase().replace(/[-\s]/g, ""));
+}
+async function onRequest8({ request: incoming, env }) {
+  try {
+    if (incoming.method === "GET") {
+      const codigo = new URL(incoming.url).searchParams.get("codigo")?.trim().toUpperCase().replace(/[-\s]/g, "") || "";
+      if (!validCode(codigo)) return new Response(JSON.stringify({ error: "C\xF3digo inv\xE1lido." }), { status: 400, headers: HEADERS });
+      const [originResponse, leadResponse] = await Promise.all([
+        request(env, `/rest/v1/rastreio_origem?codigo=eq.${encodeURIComponent(codigo)}&select=origem_at&limit=1`),
+        request(env, `/rest/v1/leads?codigo_rastreio=eq.${encodeURIComponent(codigo)}&select=nome,cidade,estado,cep,rua,numero,complemento,bairro&limit=1`)
+      ]);
+      const [origins, leads] = await Promise.all([originResponse.json(), leadResponse.json()]);
+      if (!origins?.[0]?.origem_at) return new Response(JSON.stringify({ found: false }), { headers: HEADERS });
+      return new Response(JSON.stringify({ found: true, origem_at: origins[0].origem_at, ...leads?.[0] || {} }), { headers: HEADERS });
+    }
+    if (incoming.method === "POST") {
+      const form = await incoming.formData();
+      const codigo = String(form.get("codigo") || "").trim().toUpperCase().replace(/[-\s]/g, "");
+      const file = form.get("file");
+      if (!validCode(codigo) || !(file instanceof File) || file.size > 8 * 1024 * 1024) {
+        return new Response(JSON.stringify({ error: "Comprovante inv\xE1lido." }), { status: 400, headers: HEADERS });
+      }
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const objectPath = `${codigo}/${Date.now()}-${safeName}`;
+      const encodedPath = objectPath.split("/").map(encodeURIComponent).join("/");
+      const { url } = settings(env);
+      await request(env, `/storage/v1/object/comprovantes/${encodedPath}`, {
+        method: "POST",
+        headers: { "Content-Type": file.type || "application/octet-stream", "x-upsert": "true" },
+        body: file
+      });
+      const publicUrl = `${url}/storage/v1/object/public/comprovantes/${encodedPath}`;
+      await request(env, "/rest/v1/comprovantes_taxa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Prefer: "return=minimal" },
+        body: JSON.stringify({ tracking_code: codigo, file_url: publicUrl, file_name: file.name })
+      });
+      return new Response(JSON.stringify({ ok: true }), { headers: HEADERS });
+    }
+    return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: HEADERS });
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error?.message || "Erro no rastreamento." }), { status: 500, headers: HEADERS });
+  }
+}
+
+// sites/bella/functions/api/marketing-config.js
+function onRequest9({ request: request2, env }) {
+  const headers6 = { "Content-Type": "application/json", "Cache-Control": "no-store" };
+  if (request2.method !== "GET") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: headers6 });
+  }
+  const pixelId = FACEBOOK_PIXEL_ID;
+  return new Response(JSON.stringify({ facebookPixelId: /^\d+$/.test(pixelId) ? pixelId : null }), { headers: headers6 });
+}
+
+// sites/bella/functions/api/checkout-health.js
+var headers4 = {
+  "Content-Type": "application/json",
+  "Cache-Control": "no-store"
+};
+async function onRequest10({ request: request2, env }) {
+  if (request2.method !== "GET") {
+    return new Response(JSON.stringify({ ok: false, error: "Method not allowed" }), { status: 405, headers: headers4 });
+  }
+  const requiredServerConfig = {
+    supabaseUrl: !!String(env.SUPABASE_URL || "").trim(),
+    supabaseServiceRole: !!String(env.SUPABASE_SERVICE_ROLE_KEY || "").trim(),
+    siteUrl: !!String(env.SITE_URL || "").trim(),
+    pixRateLimit: !!env.PIX_RATELIMIT
+  };
+  let databaseProject = null;
+  try {
+    databaseProject = new URL(String(env.SUPABASE_URL || "")).hostname.split(".")[0] || null;
+  } catch {
+  }
+  let gateways2 = [];
+  let activePixGateway = null;
+  let gatewayError = null;
+  try {
+    gateways2 = await listGateways(env);
+    activePixGateway = await getActivePixGateway(env);
+  } catch (error) {
+    gatewayError = error instanceof Error ? error.message : "Falha ao consultar gateways.";
+  }
+  const pixGateways = gateways2.filter((gateway) => gateway.method === "pix").map(({ id, name, enabled, configured: configured2 }) => ({ id, name, enabled, configured: configured2 }));
+  const ok = requiredServerConfig.supabaseUrl && requiredServerConfig.supabaseServiceRole && !!activePixGateway && !gatewayError;
+  return new Response(JSON.stringify({
+    ok,
+    store: "Bella Mix",
+    databaseProject,
+    requiredServerConfig,
+    activePixGateway,
+    pixGateways,
+    gatewayError
+  }), { status: ok ? 200 : 503, headers: headers4 });
+}
+
+// sites/bella/functions/api/send-tracking-email.js
+var corsHeaders6 = {
+  "Access-Control-Allow-Origin": "*",
+  "Content-Type": "application/json"
+};
+async function onRequest11(context) {
+  const { request: request2, env } = context;
+  if (request2.method === "OPTIONS") return new Response("", { status: 204, headers: corsHeaders6 });
+  if (request2.method !== "POST") return new Response(JSON.stringify({ error: "POST only" }), { status: 405, headers: corsHeaders6 });
+  const RESEND_API_KEY = env.RESEND_API_KEY;
+  const RESEND_FROM_EMAIL = env.RESEND_FROM_EMAIL;
+  if (!RESEND_API_KEY) {
+    return new Response(JSON.stringify({ error: "RESEND_API_KEY nao configurado nas variaveis de ambiente do Cloudflare" }), { status: 500, headers: corsHeaders6 });
+  }
+  if (!RESEND_FROM_EMAIL) {
+    return new Response(JSON.stringify({ error: "RESEND_FROM_EMAIL nao configurado. Configure nas variaveis de ambiente do Cloudflare com um email do seu dominio verificado na Resend." }), { status: 500, headers: corsHeaders6 });
+  }
+  let payload;
+  try {
+    payload = await request2.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "JSON invalido" }), { status: 400, headers: corsHeaders6 });
+  }
+  const { emailCliente, nomeCliente, codigoRastreio, numeroPedido } = payload;
+  if (!emailCliente || !codigoRastreio) {
+    return new Response(JSON.stringify({ error: "emailCliente e codigoRastreio sao obrigatorios" }), { status: 400, headers: corsHeaders6 });
+  }
+  const primeiroNome = nomeCliente ? nomeCliente.split(" ")[0] : "cliente";
+  const siteUrl = String(env.SITE_URL || "").trim().replace(/\/+$/, "");
+  if (!siteUrl) {
+    return new Response(JSON.stringify({ error: "SITE_URL nao configurado" }), { status: 500, headers: corsHeaders6 });
+  }
+  const html = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>C\xF3digo de Rastreio \u2014 Bella Mix Brasil</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table width="100%" style="max-width:520px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+          <tr>
+            <td style="background:#15803d;padding:28px 32px;text-align:center;">
+              <p style="margin:0;font-size:22px;font-weight:900;color:#ffffff;letter-spacing:-0.5px;">\u{1F4E6} Bella Mix Brasil</p>
+              <p style="margin:6px 0 0;font-size:13px;color:#bbf7d0;">Seu pedido est\xE1 a caminho!</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px;">
+              <p style="margin:0 0 8px;font-size:15px;color:#374151;">Ol\xE1, <strong>${primeiroNome}</strong>! \u{1F44B}</p>
+              <p style="margin:0 0 24px;font-size:14px;color:#6b7280;line-height:1.6;">
+                ${numeroPedido ? `Seu pedido <strong>#${numeroPedido}</strong> foi confirmado e j\xE1 est\xE1 sendo preparado para envio.` : "Seu pedido foi confirmado e j\xE1 est\xE1 sendo preparado para envio."}
+                Use o c\xF3digo abaixo para acompanhar a entrega:
+              </p>
+              <div style="background:#f0fdf4;border:2px dashed #86efac;border-radius:12px;padding:24px;text-align:center;margin:0 0 24px;">
+                <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:1px;">C\xF3digo de Rastreio</p>
+                <p style="margin:0;font-size:28px;font-weight:900;color:#15803d;letter-spacing:4px;font-family:monospace;">${codigoRastreio}</p>
+              </div>
+              <div style="text-align:center;margin:0 0 24px;">
+                <a href="${siteUrl}/rastrear-pedido"
+                   style="display:inline-block;background:#15803d;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:14px 32px;border-radius:10px;">
+                  Rastrear meu pedido \u2192
+                </a>
+              </div>
+              <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;line-height:1.6;">
+                D\xFAvidas? Entre em contato conosco pelo WhatsApp.<br/>
+                Obrigado por comprar na <strong>Bella Mix Brasil</strong>! \u{1F31F}
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#f9fafb;padding:16px 32px;text-align:center;border-top:1px solid #f0f0f0;">
+              <p style="margin:0;font-size:11px;color:#d1d5db;">
+                \xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} Bella Mix Brasil \xB7 Este email foi enviado automaticamente.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`.trim();
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${RESEND_API_KEY}`
+      },
+      body: JSON.stringify({
+        from: RESEND_FROM_EMAIL,
+        to: [emailCliente],
+        subject: `\u{1F4E6} Seu c\xF3digo de rastreio Bella Mix${numeroPedido ? ` \u2014 Pedido #${numeroPedido}` : ""}`,
+        html
+      })
+    });
+    const result = await res.json();
+    if (res.ok) {
+      return new Response(JSON.stringify({ ok: true, id: result.id }), { status: 200, headers: corsHeaders6 });
+    }
+    const msg = result.message || result.error || JSON.stringify(result);
+    return new Response(JSON.stringify({ error: `Resend erro ${res.status}: ${msg}` }), { status: 502, headers: corsHeaders6 });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: String(err.message || err) }), { status: 500, headers: corsHeaders6 });
+  }
+}
+
+// sites/bella/functions/api/send-recovery-email.js
+var corsHeaders7 = {
+  "Access-Control-Allow-Origin": "*",
+  "Content-Type": "application/json"
+};
+function buildEmail1(primeiroNome, localidade, cidadeFormatada, produtos, valorFormatado, ctaLabel, storeUrl, status) {
+  const introducao = status === "pix_gerado" ? "Seu PIX foi gerado, mas o pagamento ainda n\xE3o caiu. Seu pedido continua reservado \u2014 mas s\xF3 por pouco tempo." : "Voc\xEA quase finalizou. Seu pedido ainda est\xE1 guardado aqui pra voc\xEA.";
+  const desejoComCidade = cidadeFormatada ? `Confirme agora e seu kit sai daqui direto pra <strong>${cidadeFormatada}</strong> \u2014 entrega garantida em <strong>at\xE9 2 dias \xFAteis</strong>, com rastreio do come\xE7o ao fim.` : `Confirme agora e seu kit chega onde voc\xEA est\xE1 \u2014 entrega garantida em <strong>at\xE9 2 dias \xFAteis</strong>, com rastreio do come\xE7o ao fim.`;
+  return `
+    <p style="margin:0 0 16px;font-size:15px;color:#111827;font-weight:700;">Oi, ${primeiroNome}! \u{1F44B}</p>
+    <p style="margin:0 0 20px;font-size:14px;color:#374151;line-height:1.7;">${introducao}</p>
+    ${localidade ? `
+    <div style="background:#fef2f2;border:2px solid #dc2626;border-radius:12px;padding:20px;margin:0 0 20px;text-align:center;">
+      <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:0.5px;">\u{1F69A} Entrega garantida para voc\xEA</p>
+      <p style="margin:0;font-size:20px;font-weight:900;color:#111827;line-height:1.3;">${cidadeFormatada} em at\xE9 2 dias \xFAteis</p>
+      <p style="margin:8px 0 0;font-size:13px;color:#6b7280;">Frete 100% gr\xE1tis \xB7 Rastreio em tempo real \xB7 Embalagem refor\xE7ada</p>
+    </div>` : `
+    <div style="background:#fef2f2;border:2px solid #dc2626;border-radius:12px;padding:20px;margin:0 0 20px;text-align:center;">
+      <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:0.5px;">\u{1F69A} Entrega garantida onde voc\xEA estiver</p>
+      <p style="margin:0;font-size:20px;font-weight:900;color:#111827;line-height:1.3;">Chega em at\xE9 2 dias \xFAteis</p>
+      <p style="margin:8px 0 0;font-size:13px;color:#6b7280;">Frete 100% gr\xE1tis \xB7 Rastreio em tempo real \xB7 Embalagem refor\xE7ada</p>
+    </div>`}
+    ${produtos ? `
+    <p style="margin:0 0 8px;font-size:12px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Seu pedido reservado:</p>
+    <div style="background:#f9fafb;border-radius:10px;padding:14px 16px;margin:0 0 20px;">
+      <p style="margin:0;font-size:13px;color:#374151;font-weight:600;">${produtos}</p>
+      ${valorFormatado ? `<p style="margin:4px 0 0;font-size:15px;color:#15803d;font-weight:900;">${valorFormatado}</p>` : ""}
+    </div>` : ""}
+    <p style="margin:0 0 24px;font-size:14px;color:#374151;line-height:1.7;">${desejoComCidade}</p>
+    <div style="text-align:center;margin:0 0 20px;">
+      <a href="${storeUrl}?utm_source=recovery&utm_medium=email&utm_campaign=email1"
+         style="display:inline-block;background:#dc2626;color:#ffffff;text-decoration:none;font-weight:900;font-size:16px;padding:18px 40px;border-radius:12px;">
+        ${ctaLabel}
+      </a>
+    </div>
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:14px 16px;margin:0 0 20px;text-align:center;">
+      <p style="margin:0;font-size:13px;color:#92400e;font-weight:700;">\u23F3 Estoque limitado \u2014 kits esgotam r\xE1pido.</p>
+    </div>
+  `;
+}
+function buildEmail2(primeiroNome, localidade, cidadeFormatada, produtos, valorFormatado, ctaLabel, storeUrl) {
+  return `
+    <p style="margin:0 0 16px;font-size:15px;color:#111827;font-weight:700;">${primeiroNome}, ainda d\xE1 tempo! \u{1F3C6}</p>
+    <p style="margin:0 0 20px;font-size:14px;color:#374151;line-height:1.7;">
+      Desde que voc\xEA visitou a loja, <strong>dezenas de clientes j\xE1 garantiram o kit</strong> e est\xE3o esperando o kit chegar na porta.
+    </p>
+    <div style="background:#f0fdf4;border:2px solid #16a34a;border-radius:12px;padding:20px;margin:0 0 20px;text-align:center;">
+      <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:0.5px;">\u2705 Seu pedido ainda est\xE1 aqui</p>
+      <p style="margin:0;font-size:18px;font-weight:900;color:#111827;line-height:1.3;">
+        ${localidade ? `Entrega garantida em ${cidadeFormatada}` : "Entrega garantida para voc\xEA"}
+      </p>
+      <p style="margin:8px 0 0;font-size:13px;color:#6b7280;">\u{1F69A} Chega em at\xE9 2 dias \xFAteis \xB7 Frete gr\xE1tis</p>
+    </div>
+    ${produtos ? `
+    <div style="background:#f9fafb;border-radius:10px;padding:14px 16px;margin:0 0 20px;">
+      <p style="margin:0 0 4px;font-size:11px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Seu kit reservado</p>
+      <p style="margin:0;font-size:13px;color:#374151;font-weight:600;">${produtos}</p>
+      ${valorFormatado ? `<p style="margin:4px 0 0;font-size:15px;color:#15803d;font-weight:900;">${valorFormatado}</p>` : ""}
+    </div>` : ""}
+    <p style="margin:0 0 24px;font-size:14px;color:#374151;line-height:1.7;">
+      N\xE3o deixe seu kit ir para outra pessoa. ${localidade ? `Em ${cidadeFormatada}, a entrega \xE9 garantida em <strong>at\xE9 2 dias \xFAteis</strong>.` : "A entrega \xE9 garantida em <strong>at\xE9 2 dias \xFAteis</strong>."}
+    </p>
+    <div style="text-align:center;margin:0 0 20px;">
+      <a href="${storeUrl}?utm_source=recovery&utm_medium=email&utm_campaign=email2"
+         style="display:inline-block;background:#dc2626;color:#ffffff;text-decoration:none;font-weight:900;font-size:16px;padding:18px 40px;border-radius:12px;">
+        ${ctaLabel}
+      </a>
+    </div>
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:14px 16px;margin:0 0 20px;text-align:center;">
+      <p style="margin:0;font-size:13px;color:#92400e;font-weight:700;">\u{1F525} O estoque est\xE1 acabando \u2014 muita gente finalizou hoje.</p>
+    </div>
+  `;
+}
+function buildEmail3(primeiroNome, localidade, cidadeFormatada, produtos, valorFormatado, ctaLabel, storeUrl) {
+  return `
+    <p style="margin:0 0 16px;font-size:15px;color:#111827;font-weight:700;">${primeiroNome}, este \xE9 o \xFAltimo aviso. \u26A0\uFE0F</p>
+    <p style="margin:0 0 20px;font-size:14px;color:#374151;line-height:1.7;">
+      Seu pedido ficou reservado por horas \u2014 mas o estoque est\xE1 chegando ao limite. <strong>Depois disso, n\xE3o podemos mais garantir o seu kit.</strong>
+    </p>
+    <div style="background:#fef2f2;border:2px solid #dc2626;border-radius:12px;padding:20px;margin:0 0 20px;text-align:center;">
+      <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:0.5px;">\u26A1 \xDAltima chance de garantir</p>
+      <p style="margin:0;font-size:18px;font-weight:900;color:#111827;line-height:1.3;">
+        ${localidade ? `Seu kit em ${cidadeFormatada} em 2 dias` : "Seu kit na sua porta em 2 dias"}
+      </p>
+      <p style="margin:8px 0 0;font-size:13px;color:#6b7280;">Frete gr\xE1tis \xB7 Entrega garantida \xB7 Rastreio incluso</p>
+    </div>
+    ${produtos ? `
+    <div style="background:#f9fafb;border-radius:10px;padding:14px 16px;margin:0 0 20px;">
+      <p style="margin:0 0 4px;font-size:11px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Kit reservado para voc\xEA</p>
+      <p style="margin:0;font-size:13px;color:#374151;font-weight:600;">${produtos}</p>
+      ${valorFormatado ? `<p style="margin:4px 0 0;font-size:15px;color:#15803d;font-weight:900;">${valorFormatado}</p>` : ""}
+    </div>` : ""}
+    <p style="margin:0 0 24px;font-size:14px;color:#374151;line-height:1.7;">
+      Se n\xE3o finalizar agora, seu pedido ser\xE1 cancelado e o kit vai para a fila de espera de outros clientes.
+    </p>
+    <div style="text-align:center;margin:0 0 20px;">
+      <a href="${storeUrl}?utm_source=recovery&utm_medium=email&utm_campaign=email3"
+         style="display:inline-block;background:#dc2626;color:#ffffff;text-decoration:none;font-weight:900;font-size:16px;padding:18px 40px;border-radius:12px;">
+        ${ctaLabel}
+      </a>
+    </div>
+  `;
+}
+async function onRequest12(context) {
+  const { request: request2, env } = context;
+  if (request2.method === "OPTIONS") return new Response("", { status: 204, headers: corsHeaders7 });
+  if (request2.method !== "POST") return new Response(JSON.stringify({ error: "POST only" }), { status: 405, headers: corsHeaders7 });
+  const RESEND_API_KEY = env.RESEND_API_KEY;
+  const RESEND_FROM_EMAIL = env.RESEND_FROM_EMAIL;
+  if (!RESEND_API_KEY) {
+    return new Response(JSON.stringify({ error: "RESEND_API_KEY nao configurado" }), { status: 500, headers: corsHeaders7 });
+  }
+  if (!RESEND_FROM_EMAIL) {
+    return new Response(JSON.stringify({ error: "RESEND_FROM_EMAIL nao configurado" }), { status: 500, headers: corsHeaders7 });
+  }
+  let body;
+  try {
+    body = await request2.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "JSON invalido" }), { status: 400, headers: corsHeaders7 });
+  }
+  const {
+    emailCliente,
+    nomeCliente,
+    cidade,
+    estado,
+    produtos,
+    valor,
+    emailNum,
+    status,
+    storeUrl
+  } = body;
+  if (!emailCliente) {
+    return new Response(JSON.stringify({ error: "emailCliente obrigatorio" }), { status: 400, headers: corsHeaders7 });
+  }
+  const num = Number(emailNum) || 1;
+  const primeiroNome = nomeCliente ? nomeCliente.split(" ")[0] : "cliente";
+  const cidadeFormatada = cidade ? `${cidade.charAt(0).toUpperCase() + cidade.slice(1).toLowerCase()}${estado ? `/${estado.toUpperCase()}` : ""}` : null;
+  const localidade = !!cidadeFormatada;
+  const valorFormatado = valor ? `R$ ${(Number(valor) / 100).toFixed(2).replace(".", ",")}` : null;
+  const ctaLabel = "\u2705 Garantir meu kit agora \u2192";
+  const url = storeUrl || env.SITE_URL;
+  if (!url) {
+    return new Response(JSON.stringify({ error: "SITE_URL nao configurado" }), { status: 500, headers: corsHeaders7 });
+  }
+  let corpoHtml;
+  let assunto;
+  if (num >= 3) {
+    assunto = `\u26A0\uFE0F ${primeiroNome}, \xFAltimo aviso \u2014 seu kit vai para outra pessoa`;
+    corpoHtml = buildEmail3(primeiroNome, localidade, cidadeFormatada, produtos, valorFormatado, ctaLabel, url);
+  } else if (num === 2) {
+    assunto = cidadeFormatada ? `\u{1F3C6} ${primeiroNome}, outros j\xE1 garantiram \u2014 seu kit ainda est\xE1 aqui em ${cidadeFormatada}` : `\u{1F3C6} ${primeiroNome}, outros j\xE1 garantiram \u2014 seu kit ainda est\xE1 aqui`;
+    corpoHtml = buildEmail2(primeiroNome, localidade, cidadeFormatada, produtos, valorFormatado, ctaLabel, url);
+  } else {
+    assunto = cidadeFormatada ? `\u2728 ${primeiroNome}, falta 1 minuto \u2014 seu kit chega em 2 dias em ${cidadeFormatada}!` : `\u2728 ${primeiroNome}, seu kit chega em 2 dias \u2014 garanta agora!`;
+    corpoHtml = buildEmail1(primeiroNome, localidade, cidadeFormatada, produtos, valorFormatado, ctaLabel, url, status);
+  }
+  const headerSubtitles = {
+    1: cidadeFormatada ? `Seu kit chega em ${cidadeFormatada} em 2 dias. \u26A1` : "Entrega em 2 dias, garantida. S\xF3 falta 1 clique. \u26A1",
+    2: "Outros clientes j\xE1 garantiram. Voc\xEA ainda pode. \u{1F3C6}",
+    3: "\xDAltimo aviso \u2014 seu kit vai para outra pessoa. \u26A0\uFE0F"
+  };
+  const headerSubtitle = headerSubtitles[num] || headerSubtitles[1];
+  const garantiasHtml = `
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;">
+      <tr>
+        <td style="padding:6px 8px 6px 0;font-size:12px;color:#6b7280;">\u2705 <strong>Kit Escova Secadora</strong> Bella Mix</td>
+        <td style="padding:6px 0 6px 8px;font-size:12px;color:#6b7280;">\u{1F512} Pagamento 100% seguro</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 8px 6px 0;font-size:12px;color:#6b7280;">\u{1F4E6} Embalagem refor\xE7ada anti-amassado</td>
+        <td style="padding:6px 0 6px 8px;font-size:12px;color:#6b7280;">\u{1F69A} Rastreio em tempo real</td>
+      </tr>
+    </table>
+  `;
+  const html = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bella Mix Brasil</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+        <tr>
+          <td style="background:#dc2626;padding:28px 32px;text-align:center;">
+            <p style="margin:0;font-size:22px;font-weight:900;color:#ffffff;letter-spacing:-0.5px;">\u2728 Bella Mix Brasil</p>
+            <p style="margin:6px 0 0;font-size:14px;color:#fecaca;font-weight:700;">${headerSubtitle}</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px;">
+            ${corpoHtml}
+            ${garantiasHtml}
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f9fafb;padding:16px 32px;text-align:center;border-top:1px solid #f0f0f0;">
+            <p style="margin:0 0 4px;font-size:12px;color:#9ca3af;">D\xFAvidas? Chame no WhatsApp. Somos sempre r\xE1pidos! \u{1F60A}</p>
+            <p style="margin:0;font-size:11px;color:#d1d5db;">
+              \xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} Bella Mix Brasil \xB7 Voc\xEA recebeu este email pois iniciou um pedido em nossa loja.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`.trim();
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${RESEND_API_KEY}`
+      },
+      body: JSON.stringify({
+        from: RESEND_FROM_EMAIL,
+        to: [emailCliente],
+        subject: assunto,
+        html
+      })
+    });
+    const result = await res.json();
+    console.log(`[send-recovery-email] email #${num} \u2192 Status Resend:`, res.status);
+    if (res.ok) {
+      return new Response(JSON.stringify({ ok: true, id: result.id }), { status: 200, headers: corsHeaders7 });
+    }
+    const msg = result.message || result.error || JSON.stringify(result);
+    return new Response(JSON.stringify({ error: `Resend erro ${res.status}: ${msg}` }), { status: 502, headers: corsHeaders7 });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: String(err.message || err) }), { status: 500, headers: corsHeaders7 });
+  }
+}
+
+// sites/bella/functions/api/process-recovery-queue.js
+var corsHeaders8 = {
+  "Access-Control-Allow-Origin": "*",
+  "Content-Type": "application/json"
+};
+var MINUTOS_ATE_EMAIL_1 = 30;
+var HORAS_ATE_EMAIL_2 = 4;
+var HORAS_ATE_EMAIL_3 = 24;
+async function supabaseFetch2(supabaseUrl, supabaseKey, path, options = {}) {
+  const res = await fetch(`${supabaseUrl}${path}`, {
+    ...options,
+    headers: {
+      "apikey": supabaseKey,
+      "Authorization": `Bearer ${supabaseKey}`,
+      "Content-Type": "application/json",
+      "Prefer": "return=representation",
+      ...options.headers || {}
+    }
+  });
+  try {
+    return { status: res.status, body: await res.json() };
+  } catch {
+    return { status: res.status, body: await res.text() };
+  }
+}
+async function claim(supabaseUrl, supabaseKey, leadId, conditionQs, patch) {
+  const { status, body } = await supabaseFetch2(
+    supabaseUrl,
+    supabaseKey,
+    `/rest/v1/leads?id=eq.${leadId}&${conditionQs}`,
+    { method: "PATCH", body: JSON.stringify(patch) }
+  );
+  return status < 400 && Array.isArray(body) && body.length > 0;
+}
+async function enviarEmail(SITE_URL, lead, emailNum) {
+  try {
+    const res = await fetch(`${SITE_URL}/api/send-recovery-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        emailCliente: lead.email,
+        nomeCliente: lead.nome,
+        cidade: lead.cidade,
+        estado: lead.estado,
+        produtos: lead.produtos,
+        valor: lead.valor,
+        emailNum,
+        status: lead.status,
+        storeUrl: SITE_URL
+      })
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+async function onRequest13(context) {
+  const { request: request2, env } = context;
+  if (request2.method === "OPTIONS") return new Response("", { status: 204, headers: corsHeaders8 });
+  try {
+    const CRON_SECRET = env.CRON_SECRET;
+    if (CRON_SECRET) {
+      const provided = request2.headers.get("x-cron-secret");
+      if (provided !== CRON_SECRET) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders8 });
+      }
+    }
+    const SUPABASE_URL = (env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
+    const SUPABASE_KEY = (env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+    const SITE_URL = (env.SITE_URL || "").trim().replace(/\/+$/, "");
+    if (!SUPABASE_URL || !SUPABASE_KEY) {
+      return new Response(JSON.stringify({ error: "SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY nao configurados." }), { status: 500, headers: corsHeaders8 });
+    }
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const cutoff30min = new Date(Date.now() - MINUTOS_ATE_EMAIL_1 * 60 * 1e3).toISOString();
+    const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1e3).toISOString();
+    const NAO_INICIADO = `or=(recovery_count.is.null,recovery_count.eq.0)`;
+    let started = 0, followups = 0, deduped = 0, errors = 0;
+    const queryNew = [
+      `produtos=ilike.*Escova*`,
+      `status=eq.pix_gerado`,
+      NAO_INICIADO,
+      `created_at=lte.${encodeURIComponent(cutoff30min)}`,
+      `created_at=gte.${encodeURIComponent(cutoff24h)}`,
+      `order=created_at.desc`,
+      `limit=10`,
+      `select=id,nome,email,cidade,estado,produtos,valor,status,recovery_count,created_at`
+    ].join("&");
+    const { body: novos, status: novosStatus } = await supabaseFetch2(
+      SUPABASE_URL,
+      SUPABASE_KEY,
+      `/rest/v1/leads?${queryNew}`
+    );
+    if (novosStatus < 400 && Array.isArray(novos) && novos.length > 0) {
+      const emails = [...new Set(novos.map((l) => (l.email || "").toLowerCase()).filter(Boolean))];
+      const emailList = emails.map((e) => `"${e.replace(/[",()]/g, "")}"`).join(",");
+      const { status: dedupStatus, body: jaTratados } = await supabaseFetch2(
+        SUPABASE_URL,
+        SUPABASE_KEY,
+        `/rest/v1/leads?produtos=ilike.*Escova*&email=in.(${encodeURIComponent(emailList)})&or=(recovery_count.gte.1,status.eq.pago)&select=email`
+      );
+      if (dedupStatus >= 400 || !Array.isArray(jaTratados)) {
+        console.error("[recovery-queue] Falha na consulta de dedupe; fase A adiada.", dedupStatus);
+        errors++;
+      } else {
+        const emailsJaTratados = new Set(jaTratados.map((l) => (l.email || "").toLowerCase()));
+        const vistos = /* @__PURE__ */ new Set();
+        for (const lead of novos) {
+          const email = (lead.email || "").toLowerCase();
+          try {
+            const ehDuplicado = !email || emailsJaTratados.has(email) || vistos.has(email);
+            if (email) vistos.add(email);
+            if (ehDuplicado) {
+              await claim(
+                SUPABASE_URL,
+                SUPABASE_KEY,
+                lead.id,
+                NAO_INICIADO,
+                { recovery_count: -1, recovery_next_at: null, updated_at: now }
+              );
+              deduped++;
+              continue;
+            }
+            const travou = await claim(SUPABASE_URL, SUPABASE_KEY, lead.id, NAO_INICIADO, {
+              recovery_count: 1,
+              recovery_next_at: new Date(Date.now() + HORAS_ATE_EMAIL_2 * 60 * 60 * 1e3).toISOString(),
+              updated_at: now
+            });
+            if (!travou) continue;
+            const ok = await enviarEmail(SITE_URL, lead, 1);
+            if (!ok) {
+              console.error(`[recovery-queue] Erro ao enviar email 1 para lead ${lead.id}`);
+              await claim(
+                SUPABASE_URL,
+                SUPABASE_KEY,
+                lead.id,
+                `recovery_count=eq.1`,
+                { recovery_count: 0, recovery_next_at: null, updated_at: now }
+              );
+              errors++;
+              continue;
+            }
+            started++;
+          } catch (err) {
+            console.error(`[recovery-queue] Excecao no auto-start do lead ${lead.id}:`, err);
+            errors++;
+          }
+        }
+      }
+    }
+    const queryFollow = [
+      `produtos=ilike.*Escova*`,
+      `recovery_count=gte.1`,
+      `recovery_count=lte.2`,
+      `recovery_next_at=lte.${encodeURIComponent(now)}`,
+      `status=in.(checkout_iniciado,pix_gerado)`,
+      `limit=10`,
+      `select=id,nome,email,cidade,estado,produtos,valor,status,recovery_count`
+    ].join("&");
+    const { body: leads, status: fetchStatus } = await supabaseFetch2(
+      SUPABASE_URL,
+      SUPABASE_KEY,
+      `/rest/v1/leads?${queryFollow}`
+    );
+    if (fetchStatus >= 400) {
+      return new Response(JSON.stringify({ error: "Erro ao buscar leads", details: leads, iniciados: started, duplicados_ignorados: deduped }), { status: 500, headers: corsHeaders8 });
+    }
+    if (Array.isArray(leads)) {
+      for (const lead of leads) {
+        try {
+          const countAtual = lead.recovery_count;
+          const emailNum = countAtual + 1;
+          const nextAt = emailNum < 3 ? new Date(Date.now() + HORAS_ATE_EMAIL_3 * 60 * 60 * 1e3).toISOString() : null;
+          const travou = await claim(
+            SUPABASE_URL,
+            SUPABASE_KEY,
+            lead.id,
+            `recovery_count=eq.${countAtual}&recovery_next_at=lte.${encodeURIComponent(now)}`,
+            { recovery_count: emailNum, recovery_next_at: nextAt, updated_at: now }
+          );
+          if (!travou) continue;
+          const ok = await enviarEmail(SITE_URL, lead, emailNum);
+          if (!ok) {
+            console.error(`[recovery-queue] Erro ao enviar email ${emailNum} para lead ${lead.id}`);
+            await claim(SUPABASE_URL, SUPABASE_KEY, lead.id, `recovery_count=eq.${emailNum}`, {
+              recovery_count: countAtual,
+              recovery_next_at: new Date(Date.now() + 30 * 60 * 1e3).toISOString(),
+              updated_at: now
+            });
+            errors++;
+            continue;
+          }
+          followups++;
+        } catch (err) {
+          console.error(`[recovery-queue] Excecao ao processar lead ${lead.id}:`, err);
+          errors++;
+        }
+      }
+    }
+    return new Response(
+      JSON.stringify({ ok: true, iniciados: started, followups, duplicados_ignorados: deduped, errors }),
+      { status: 200, headers: corsHeaders8 }
+    );
+  } catch (err) {
+    console.error("[recovery-queue] Erro fatal:", err);
+    return new Response(
+      JSON.stringify({ ok: false, error: "Erro interno na automacao", detalhe: String(err && err.message || err) }),
+      { status: 500, headers: corsHeaders8 }
+    );
+  }
+}
+
+// sites/bella/functions/_lib/admin-auth.js
+async function hmacSign3(payload, secret) {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",
@@ -1711,255 +3978,306 @@ async function hmacSign(payload, secret) {
     ["sign"]
   );
   const sig = await crypto.subtle.sign("HMAC", key, enc.encode(payload));
-  return Array.from(new Uint8Array(sig))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
-
-/** Comparação em tempo constante para evitar timing attacks */
-function timingSafeEqual(a, b) {
+function timingSafeEqual3(a, b) {
   if (typeof a !== "string" || typeof b !== "string") return false;
-  if (a.length !== b.length) {
-    // Ainda percorre 'a' para não vazar o tamanho via tempo
-    let dummy = 0;
-    for (let i = 0; i < a.length; i++) dummy |= a.charCodeAt(i);
-    return false;
-  }
+  if (a.length !== b.length) return false;
   let diff = 0;
-  for (let i = 0; i < a.length; i++) {
-    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
 }
-
-async function onRequest(context) {
-  const { request, env } = context;
-
-  if (request.method === "OPTIONS") {
-    return new Response("", { status: 204, headers: CORS });
+async function verifyAdminToken2(request2, env) {
+  const secret = env.ADMIN_SESSION_SECRET;
+  if (!secret) return { valid: false, error: "Servidor n\xE3o configurado." };
+  const auth = request2.headers.get("Authorization") ?? "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : null;
+  if (!token) return { valid: false, error: "N\xE3o autorizado." };
+  const dot = token.lastIndexOf(".");
+  if (dot === -1) return { valid: false, error: "Token inv\xE1lido." };
+  const payloadB64 = token.slice(0, dot);
+  const providedSig = token.slice(dot + 1);
+  const expectedSig = await hmacSign3(payloadB64, secret);
+  if (!timingSafeEqual3(expectedSig, providedSig)) {
+    return { valid: false, error: "Token inv\xE1lido." };
   }
-
-  if (request.method !== "POST") {
-    return new Response(
-      JSON.stringify({ error: "Method not allowed" }),
-      { status: 405, headers: CORS }
-    );
-  }
-
-  // Verifica configuração do servidor
-  const ADMIN_USER = env.ADMIN_USER;
-  const ADMIN_PASS = env.ADMIN_PASS;
-  const ADMIN_SESSION_SECRET = env.ADMIN_SESSION_SECRET;
-
-  if (!ADMIN_USER || !ADMIN_PASS || !ADMIN_SESSION_SECRET) {
-    console.error("[admin-login] Variáveis de ambiente não configuradas.");
-    return new Response(
-      JSON.stringify({ error: "Servidor não configurado corretamente." }),
-      { status: 500, headers: CORS }
-    );
-  }
-
-  // Lê o body
-  let body;
+  let payload;
   try {
-    body = await request.json();
+    payload = JSON.parse(atob(payloadB64));
   } catch {
-    return new Response(
-      JSON.stringify({ error: "JSON inválido" }),
-      { status: 400, headers: CORS }
-    );
+    return { valid: false, error: "Token inv\xE1lido." };
   }
-
-  const { usuario, senha } = body ?? {};
-
-  // Valida credenciais com comparação em tempo constante
-  const userOk = timingSafeEqual(String(usuario ?? ""), ADMIN_USER);
-  const passOk = timingSafeEqual(String(senha ?? ""), ADMIN_PASS);
-
-  if (!userOk || !passOk) {
-    // Delay fixo para dificultar brute-force
-    await new Promise((r) => setTimeout(r, 1500));
-    return new Response(
-      JSON.stringify({ error: "Usuário ou senha incorretos." }),
-      { status: 401, headers: CORS }
-    );
+  if (!payload.exp || Date.now() > payload.exp) {
+    return { valid: false, error: "Sess\xE3o expirada." };
   }
-
-  // Gera token assinado com expiração
-  const exp = Date.now() + TOKEN_TTL_MS;
-  const payload = JSON.stringify({ exp });
-  const payloadB64 = btoa(payload);
-  const sig = await hmacSign(payloadB64, ADMIN_SESSION_SECRET);
-  const token = `${payloadB64}.${sig}`;
-
-  return new Response(JSON.stringify({ token }), { status: 200, headers: CORS });
+  return { valid: true };
 }
 
-return onRequest;
-})();
+// sites/bella/functions/api/reconcile-payments.js
+var headers5 = { "Content-Type": "application/json", "Cache-Control": "no-store" };
+var json2 = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: headers5 });
+async function onRequest14({ request: request2, env }) {
+  if (request2.method !== "POST") return json2({ error: "Method not allowed" }, 405);
+  const cronAuthorized = Boolean(env.CRON_SECRET && request2.headers.get("x-cron-secret") === env.CRON_SECRET);
+  const adminAuthorized = (await verifyAdminToken2(request2, env)).valid;
+  if (!cronAuthorized && !adminAuthorized) return json2({ error: "N\xE3o autorizado." }, 401);
+  try {
+    const leads = await listPendingPixLeads(env, 50);
+    let paid = 0;
+    let expired = 0;
+    let pending = 0;
+    let errors = 0;
+    for (const lead of leads) {
+      try {
+        const result = await queryPixGatewayStatus2(env, lead.transaction_id, lead.gateway || "ironpay");
+        if (result.isPaid) {
+          await fulfillPaidPixLead(env, lead.transaction_id, result.paidAt);
+          paid++;
+        } else if (result.isExpired) {
+          await updateLeadById(env, lead.id, { status: "expirado" });
+          expired++;
+        } else {
+          pending++;
+        }
+      } catch (error) {
+        console.error(`[reconcile-payments] ${lead.transaction_id}:`, error?.message);
+        errors++;
+      }
+    }
+    return json2({ ok: true, checked: leads.length, paid, expired, pending, errors });
+  } catch (error) {
+    console.error("[reconcile-payments] Falha geral:", error?.message);
+    return json2({ error: "N\xE3o foi poss\xEDvel sincronizar os pagamentos." }, 502);
+  }
+}
 
-const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
-const gateways = [
-  { id: 'ironpay', name: 'IronPay' },
-  { id: 'masterfy', name: 'MasterFy' },
-  { id: 'umbrellapag', name: 'UmbrellaPag' },
-  { id: 'venuspay_pix', name: 'Venus Pay PIX' },
+// sites/bella/functions/api/fb-purchase.js
+var corsHeaders9 = {
+  "Access-Control-Allow-Origin": "*",
+  "Content-Type": "application/json"
+};
+async function onRequest15(context) {
+  const { request: request2, env } = context;
+  if (request2.method === "OPTIONS") return new Response("", { status: 204, headers: corsHeaders9 });
+  if (request2.method !== "POST") return new Response(JSON.stringify({ error: "POST only" }), { status: 405, headers: corsHeaders9 });
+  if (!env.FB_ACCESS_TOKEN) {
+    return new Response(JSON.stringify({ error: "Pixel nao configurado" }), { status: 500, headers: corsHeaders9 });
+  }
+  let payload;
+  try {
+    payload = await request2.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "JSON invalido" }), { status: 400, headers: corsHeaders9 });
+  }
+  try {
+    const result = await sendFacebookPurchase(env, payload);
+    console.log("FB CAPI response:", result.status, result.body);
+    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: corsHeaders9 });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders9 });
+  }
+}
+
+// sites/bella/functions/api/utmify-order.js
+var corsHeaders10 = {
+  "Access-Control-Allow-Origin": "*",
+  "Content-Type": "application/json"
+};
+async function onRequest16(context) {
+  const { request: request2, env } = context;
+  if (request2.method === "OPTIONS") return new Response("", { status: 204, headers: corsHeaders10 });
+  if (request2.method !== "POST") return new Response(JSON.stringify({ error: "POST only" }), { status: 405, headers: corsHeaders10 });
+  let body;
+  try {
+    body = await request2.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "JSON invalido" }), { status: 400, headers: corsHeaders10 });
+  }
+  const {
+    orderId,
+    status,
+    customerName,
+    customerEmail,
+    customerPhone,
+    customerDocument,
+    productName,
+    valueInCents,
+    tracking,
+    paymentMethod
+  } = body;
+  try {
+    const result = await sendUtmifyOrder(env, {
+      orderId,
+      status,
+      customerName,
+      customerEmail,
+      customerPhone,
+      customerDocument,
+      productName,
+      valueInCents,
+      tracking,
+      paymentMethod
+    });
+    return new Response(JSON.stringify({ ok: true, utmifyStatus: result.status }), { status: 200, headers: corsHeaders10 });
+  } catch (err) {
+    console.error("[utmify-order]", err?.message);
+    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders10 });
+  }
+}
+
+// worker-src/index.js
+var JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
+var gateways = [
+  { id: "ironpay", name: "IronPay" },
+  { id: "masterfy", name: "MasterFy" },
+  { id: "umbrellapag", name: "UmbrellaPag" },
+  { id: "venuspay_pix", name: "Venus Pay PIX" }
 ];
-const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
-const digits = (value) => String(value || '').replace(/\D/g, '');
-const BUMPS = { necessaire: 19.47, siage: 32.63, wella: 45.70 };
-const COLORS = { Preta: 37.90, Branca: 37.90, Rosa: 37.90 };
-const SHIPPING = { 'Frete Grátis': 0, JADLOG: 18.47, 'SEDEX 12': 33.40 };
+var json3 = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
+var digits = (value) => String(value || "").replace(/\D/g, "");
+var BUMPS = { necessaire: 19.47, siage: 32.63, wella: 45.7 };
+var COLORS = { Preta: 37.9, Branca: 37.9, Rosa: 37.9 };
+var SHIPPING = { "Frete Gr\xE1tis": 0, JADLOG: 18.47, "SEDEX 12": 33.4 };
 function normalizeBuyerEmail(value) {
-  const email = String(value || '').trim().toLowerCase();
-  const at = email.lastIndexOf('@');
-  return at > 0 ? `${email.slice(0, at).replace(/\.+$/, '')}@${email.slice(at + 1)}` : email;
+  const email = String(value || "").trim().toLowerCase();
+  const at = email.lastIndexOf("@");
+  return at > 0 ? `${email.slice(0, at).replace(/\.+$/, "")}@${email.slice(at + 1)}` : email;
 }
 function cartTotal(cart) {
   if (!cart || !Number.isInteger(cart.qty) || cart.qty < 1 || cart.qty > 10) return null;
-  let base = 37.90 * cart.qty;
+  let base = 37.9 * cart.qty;
   if (Array.isArray(cart.colors) && cart.colors.length) {
     if (cart.colors.length > 3 || cart.colors.some((c) => !Object.hasOwn(COLORS, c.label) || !Number.isInteger(c.quantity) || c.quantity < 1 || c.quantity > 10)) return null;
-    if (cart.colors.reduce((sum, c) => sum + c.quantity, 0) !== cart.qty) return null;
-    base = cart.colors.reduce((sum, c) => sum + COLORS[c.label] * c.quantity, 0);
+    if (cart.colors.reduce((sum2, c) => sum2 + c.quantity, 0) !== cart.qty) return null;
+    base = cart.colors.reduce((sum2, c) => sum2 + COLORS[c.label] * c.quantity, 0);
   }
   if (!Object.hasOwn(SHIPPING, cart.shipping)) return null;
   if (!Array.isArray(cart.bumps) || cart.bumps.length > 5 || new Set(cart.bumps).size !== cart.bumps.length || cart.bumps.some((id) => !Object.hasOwn(BUMPS, id))) return null;
   if (![1, 0.5].includes(cart.discount) || ![0, 5].includes(cart.bonus)) return null;
   const d = cart.discount;
   const round = (n) => Math.round(n * 100);
-  const sum = round(base * d) + round(SHIPPING[cart.shipping] * d)
-    + cart.bumps.reduce((acc, id) => acc + round(BUMPS[id] * d), 0) - cart.bonus * 100;
+  const sum = round(base * d) + round(SHIPPING[cart.shipping] * d) + cart.bumps.reduce((acc, id) => acc + round(BUMPS[id] * d), 0) - cart.bonus * 100;
   return Math.max(1, sum) / 100;
 }
-
 async function nextPixAmount(env, baseAmount) {
   const baseCents = Math.round(baseAmount * 100);
-  const recent = await db(env, 'gokoco_orders', `?amount=gte.${((baseCents + 1) / 100).toFixed(2)}&amount=lte.${((baseCents + 5) / 100).toFixed(2)}&status=neq.failed&select=amount&order=created_at.desc&limit=1`);
+  const recent = await db(env, "gokoco_orders", `?amount=gte.${((baseCents + 1) / 100).toFixed(2)}&amount=lte.${((baseCents + 5) / 100).toFixed(2)}&status=neq.failed&select=amount&order=created_at.desc&limit=1`);
   const last = recent.find((row) => {
     const difference = Math.round(Number(row.amount) * 100) - baseCents;
     return difference >= 1 && difference <= 5;
   });
   const lastOffset = last ? Math.round(Number(last.amount) * 100) - baseCents : 0;
-  return (baseCents + (lastOffset % 5) + 1) / 100;
+  return (baseCents + lastOffset % 5 + 1) / 100;
 }
-
-async function db(env, table, query = '', method = 'GET', body) {
-  const base = String(env.SUPABASE_URL || '').trim().replace(/\/+$/, '');
-  const key = String(env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
-  if (!base || !key) throw new Error('Supabase não configurado no servidor.');
+async function db(env, table, query = "", method = "GET", body) {
+  const base = String(env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
+  const key = String(env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  if (!base || !key) throw new Error("Supabase n\xE3o configurado no servidor.");
   const response = await fetch(`${base}/rest/v1/${table}${query}`, {
     method,
     headers: {
       apikey: key,
       Authorization: `Bearer ${key}`,
-      'Content-Type': 'application/json',
-      Prefer: query.includes('on_conflict=') ? 'resolution=merge-duplicates,return=representation' : 'return=representation',
+      "Content-Type": "application/json",
+      Prefer: query.includes("on_conflict=") ? "resolution=merge-duplicates,return=representation" : "return=representation"
     },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    ...body === void 0 ? {} : { body: JSON.stringify(body) }
   });
   const value = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(`Banco respondeu ${response.status}: ${value?.message || value?.error || 'erro desconhecido'}`);
+  if (!response.ok) throw new Error(`Banco respondeu ${response.status}: ${value?.message || value?.error || "erro desconhecido"}`);
   return value;
 }
-
 function configured(env, id) {
-  if (id === 'ironpay') return !!(env.IRONPAY_API_TOKEN && env.IRONPAY_OFFER_HASH && env.IRONPAY_PRODUCT_HASH);
-  if (id === 'masterfy') return !!env.MASTERFY_API_KEY;
-  if (id === 'umbrellapag') return !!env.UMBRELLAPAG_API_KEY;
-  if (id === 'venuspay_pix') return !!env.VENUS_PAY_SECRET_KEY;
+  if (id === "ironpay") return !!(env.IRONPAY_API_TOKEN && env.IRONPAY_OFFER_HASH && env.IRONPAY_PRODUCT_HASH);
+  if (id === "masterfy") return !!env.MASTERFY_API_KEY;
+  if (id === "umbrellapag") return !!env.UMBRELLAPAG_API_KEY;
+  if (id === "venuspay_pix") return !!env.VENUS_PAY_SECRET_KEY;
   return false;
 }
-
-async function listGateways(env) {
-  const rows = await db(env, 'gokoco_gateways', '?select=id,enabled,updated_at');
+async function listGateways2(env) {
+  const rows = await db(env, "gokoco_gateways", "?select=id,enabled,updated_at");
   return gateways.map((g) => {
     const saved = rows.find((row) => row.id === g.id);
     return { ...g, enabled: !!saved?.enabled, configured: configured(env, g.id), updated_at: saved?.updated_at || null };
   });
 }
-
-async function requireAdmin(request, env) {
-  const auth = await verifyAdminToken(request, env);
-  return auth.valid ? null : json({ error: auth.error || 'Não autorizado.' }, 401);
+async function requireAdmin(request2, env) {
+  const auth = await verifyAdminToken(request2, env);
+  return auth.valid ? null : json3({ error: auth.error || "N\xE3o autorizado." }, 401);
 }
-
 function validateBuyer(body) {
   const buyer = body?.client || {};
   const amount = Number(body?.amount);
   const expected = cartTotal(body?.cart);
-  if (!Number.isFinite(amount) || expected === null || Math.abs(Math.round(amount * 100) - Math.round(expected * 100)) > 1) return 'Valor do pedido inválido. Atualize a página e tente novamente.';
-  if (String(buyer.name || '').trim().length < 3) return 'Informe seu nome completo.';
-  if (!isValidBuyerEmail(normalizeBuyerEmail(buyer.email))) return 'E-mail inválido. Confira o endereço informado e tente novamente.';
-  if (![11, 14].includes(digits(buyer.document).length)) return 'CPF/CNPJ inválido.';
-  if (digits(buyer.phone).length < 10) return 'Telefone inválido.';
+  if (!Number.isFinite(amount) || expected === null || Math.abs(Math.round(amount * 100) - Math.round(expected * 100)) > 1) return "Valor do pedido inv\xE1lido. Atualize a p\xE1gina e tente novamente.";
+  if (String(buyer.name || "").trim().length < 3) return "Informe seu nome completo.";
+  if (!isValidBuyerEmail(normalizeBuyerEmail(buyer.email))) return "E-mail inv\xE1lido. Confira o endere\xE7o informado e tente novamente.";
+  if (![11, 14].includes(digits(buyer.document).length)) return "CPF/CNPJ inv\xE1lido.";
+  if (digits(buyer.phone).length < 10) return "Telefone inv\xE1lido.";
   return null;
 }
-
 function isValidBuyerEmail(value) {
-  const email = String(value || '').trim();
+  const email = String(value || "").trim();
   if (email.length > 254 || /\.\./.test(email)) return false;
   return /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.[a-z]{2,63}$/i.test(email);
 }
-
 function validateShipping(shipping) {
-  const address = shipping && typeof shipping === 'object' ? shipping : {};
-  if (digits(address.cep).length !== 8) return 'Informe um CEP válido para a entrega.';
-  for (const [field, label] of [['logradouro', 'endereço'], ['numero', 'número'], ['bairro', 'bairro'], ['cidade', 'cidade']]) {
-    if (!String(address[field] || '').trim()) return `Informe ${label} para a entrega.`;
+  const address = shipping && typeof shipping === "object" ? shipping : {};
+  if (digits(address.cep).length !== 8) return "Informe um CEP v\xE1lido para a entrega.";
+  for (const [field, label] of [["logradouro", "endere\xE7o"], ["numero", "n\xFAmero"], ["bairro", "bairro"], ["cidade", "cidade"]]) {
+    if (!String(address[field] || "").trim()) return `Informe ${label} para a entrega.`;
   }
-  if (!/^[A-Za-z]{2}$/.test(String(address.uf || '').trim())) return 'Informe a UF com duas letras.';
+  if (!/^[A-Za-z]{2}$/.test(String(address.uf || "").trim())) return "Informe a UF com duas letras.";
   return null;
 }
-
-// The gateway only receives placeholder contact data; the real e-mail/phone stay in gokoco_orders for the admin.
-// A unique alias per order avoids antifraud flags caused by many charges sharing one e-mail.
-// Set GATEWAY_MASK_CUSTOMER=false to send the real data again.
 function maskedGatewayContact(env, orderId, order) {
-  if (String(env.GATEWAY_MASK_CUSTOMER || '').toLowerCase() === 'false') return { email: order.email, phone: order.phone };
-  let domain = String(env.GATEWAY_MASK_EMAIL_DOMAIN || '').trim().replace(/^@/, '');
+  if (String(env.GATEWAY_MASK_CUSTOMER || "").toLowerCase() === "false") return { email: order.email, phone: order.phone };
+  let domain = String(env.GATEWAY_MASK_EMAIL_DOMAIN || "").trim().replace(/^@/, "");
   if (!domain) {
-    try { domain = new URL(env.SITE_URL).hostname; } catch { domain = 'gokoco-tiktok.pages.dev'; }
+    try {
+      domain = new URL(env.SITE_URL).hostname;
+    } catch {
+      domain = "gokoco-tiktok.pages.dev";
+    }
   }
-  const ref = String(orderId).replace(/[^a-z0-9]/gi, '').slice(0, 12).toLowerCase() || 'cliente';
-  const phone = digits(env.GATEWAY_MASK_PHONE) || '11999999999';
+  const ref = String(orderId).replace(/[^a-z0-9]/gi, "").slice(0, 12).toLowerCase() || "cliente";
+  const phone = digits(env.GATEWAY_MASK_PHONE) || "11999999999";
   return { email: `pedido-${ref}@${domain}`, phone };
 }
-
-async function createPix(request, env, ctx) {
-  const body = await request.json().catch(() => null);
+async function createPix(request2, env, ctx, siteVariant = "gokoco") {
+  const body = await request2.json().catch(() => null);
   if (body?.client) body.client.email = normalizeBuyerEmail(body.client.email);
   const invalid = validateBuyer(body);
-  if (invalid) return json({ message: invalid, code: 'invalid_document' }, 400);
+  if (invalid) return json3({ message: invalid, code: "invalid_document" }, 400);
   const invalidShipping = validateShipping(body.shipping);
-  if (invalidShipping) return json({ message: invalidShipping, code: 'invalid_address' }, 400);
-  const checkoutId = String(body.checkoutId || '');
-  if (!/^[a-f0-9-]{20,50}$/i.test(checkoutId)) return json({ message: 'Identificador de checkout inválido.' }, 400);
-  const previous = await db(env, 'gokoco_orders', `?checkout_id=eq.${encodeURIComponent(checkoutId)}&select=*&limit=1`);
+  if (invalidShipping) return json3({ message: invalidShipping, code: "invalid_address" }, 400);
+  const checkoutId = String(body.checkoutId || "");
+  if (!/^[a-f0-9-]{20,50}$/i.test(checkoutId)) return json3({ message: "Identificador de checkout inv\xE1lido." }, 400);
+  const previous = await db(env, "gokoco_orders", `?checkout_id=eq.${encodeURIComponent(checkoutId)}&select=*&limit=1`);
   if (previous[0]?.pix_code) {
     const old = previous[0];
-    if (old.status === 'pending' && purchaseDestination(env) === 'utmify') {
-      const send = deliverPendingPurchase(env, db, old.id).catch((error) => console.error('[purchase/pending]', old.id, error?.message || error));
-      if (ctx?.waitUntil) ctx.waitUntil(send); else await send;
+    if (old.status === "pending" && purchaseDestination(env) === "utmify") {
+      const send = deliverPendingPurchase(env, db, old.id).catch((error) => console.error("[purchase/pending]", old.id, error?.message || error));
+      if (ctx?.waitUntil) ctx.waitUntil(send);
+      else await send;
     }
-    return json({ copyPaste: old.pix_code, qrCode: old.qr_code, transactionId: old.transaction_id, gatewayTransactionId: old.transaction_id, orderId: old.id, amount: Number(old.amount) });
+    return json3({ copyPaste: old.pix_code, qrCode: old.qr_code, transactionId: old.transaction_id, gatewayTransactionId: old.transaction_id, orderId: old.id, amount: Number(old.amount) });
   }
-  if (previous[0] && previous[0].status !== 'failed') return json({ message: 'A cobrança anterior está em processamento. Aguarde um momento.' }, 409);
-  const active = (await listGateways(env)).filter((g) => g.enabled);
-  if (active.length !== 1) return json({ message: 'Selecione um gateway PIX no painel admin.' }, 503);
-  if (!active[0].configured) return json({ message: 'O gateway PIX selecionado precisa de uma chave de API.' }, 503);
-
-  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  if (previous[0] && previous[0].status !== "failed") return json3({ message: "A cobran\xE7a anterior est\xE1 em processamento. Aguarde um momento." }, 409);
+  const active = (await listGateways2(env)).filter((g) => g.enabled);
+  if (active.length !== 1) return json3({ message: "Selecione um gateway PIX no painel admin." }, 503);
+  if (!active[0].configured) return json3({ message: "O gateway PIX selecionado precisa de uma chave de API." }, 503);
+  const ip = request2.headers.get("CF-Connecting-IP") || "unknown";
   const ipKey = `pix:${ip}`;
-  const hashBytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${env.ADMIN_SESSION_SECRET || ''}:${ip}`));
-  const ipHash = Array.from(new Uint8Array(hashBytes), (b) => b.toString(16).padStart(2, '0')).join('');
+  const hashBytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${env.ADMIN_SESSION_SECRET || ""}:${ip}`));
+  const ipHash = Array.from(new Uint8Array(hashBytes), (b) => b.toString(16).padStart(2, "0")).join("");
   if (env.PIX_RATELIMIT) {
     const count = Number(await env.PIX_RATELIMIT.get(ipKey) || 0);
-    if (count >= 5) return json({ message: 'Muitas cobranças PIX. Tente novamente em uma hora.' }, 429);
+    if (count >= 5) return json3({ message: "Muitas cobran\xE7as PIX. Tente novamente em uma hora." }, 429);
   } else {
-    const since = new Date(Date.now() - 3600000).toISOString();
-    const recent = await db(env, 'gokoco_orders', `?client_ip_hash=eq.${ipHash}&created_at=gte.${encodeURIComponent(since)}&status=eq.pending&select=id&limit=5`);
-    if (recent.length >= 5) return json({ message: 'Muitas cobranças PIX. Tente novamente em uma hora.' }, 429);
+    const since = new Date(Date.now() - 36e5).toISOString();
+    const recent = await db(env, "gokoco_orders", `?client_ip_hash=eq.${ipHash}&created_at=gte.${encodeURIComponent(since)}&status=eq.pending&select=id&limit=5`);
+    if (recent.length >= 5) return json3({ message: "Muitas cobran\xE7as PIX. Tente novamente em uma hora." }, 429);
   }
   const shipping = body.shipping;
   const order = {
@@ -1968,173 +4286,334 @@ async function createPix(request, env, ctx) {
     email: normalizeBuyerEmail(body.client.email),
     phone: digits(body.client.phone),
     document: digits(body.client.document),
-    amount: await nextPixAmount(env, cartTotal(body.cart)),
+    amount: siteVariant === "mercado_livre" ? cartTotal(body.cart) : await nextPixAmount(env, cartTotal(body.cart)),
     products: Array.isArray(body.products) ? body.products.slice(0, 10) : [],
     shipping,
-    tracking: await recoverCustomerAttribution(env, db, capturePurchaseTracking(request, body), body.client),
+    tracking: { ...await recoverCustomerAttribution(env, db, capturePurchaseTracking(request2, body), body.client), site_variant: siteVariant },
     gateway: active[0].id,
     client_ip_hash: ipHash,
-    status: 'creating',
+    status: "creating"
   };
-  const saved = previous[0]
-    ? await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(previous[0].id)}&status=eq.failed&select=id`, 'PATCH', { ...order, updated_at: new Date().toISOString() })
-    : await db(env, 'gokoco_orders', '?select=id', 'POST', order);
+  const saved = previous[0] ? await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(previous[0].id)}&status=eq.failed&select=id`, "PATCH", { ...order, updated_at: (/* @__PURE__ */ new Date()).toISOString() }) : await db(env, "gokoco_orders", "?select=id", "POST", order);
   const id = saved?.[0]?.id;
-  if (!id) return json({ message: 'A cobrança já está em processamento. Aguarde um momento.' }, 409);
+  if (!id) return json3({ message: "A cobran\xE7a j\xE1 est\xE1 em processamento. Aguarde um momento." }, 409);
   const gatewayContact = maskedGatewayContact(env, id, order);
   const payload = {
-    amount: order.amount, name: order.name, email: gatewayContact.email, phone: gatewayContact.phone,
+    amount: order.amount,
+    name: order.name,
+    email: gatewayContact.email,
+    phone: gatewayContact.phone,
     document: order.document,
-    productName: order.products.map((p) => p.name).filter(Boolean).join(' + ').slice(0, 255) || 'Escova Modeladora GOKOCO',
+    productName: order.products.map((p) => p.name).filter(Boolean).join(" + ").slice(0, 255) || "Escova Modeladora GOKOCO",
     address: {
-      street: shipping.logradouro, number: shipping.numero, complement: shipping.complemento,
-      neighborhood: shipping.bairro, city: shipping.cidade, state: shipping.uf, zipCode: shipping.cep,
-    },
+      street: shipping.logradouro,
+      number: shipping.numero,
+      complement: shipping.complemento,
+      neighborhood: shipping.bairro,
+      city: shipping.cidade,
+      state: shipping.uf,
+      zipCode: shipping.cep
+    }
   };
-  const context = { request, env };
-  const headers = { 'Content-Type': 'application/json' };
+  const context = { request: request2, env };
+  const headers6 = { "Content-Type": "application/json" };
   const provider = active[0].id;
-  const result = provider === 'masterfy' ? await createPixMasterfy(context, headers, payload)
-    : provider === 'umbrellapag' ? await createPixUmbrellapag(context, headers, payload)
-    : provider === 'venuspay_pix' ? await createPixVenuspay(context, headers, payload)
-    : await createPixIronpay(context, headers, payload);
+  const result = provider === "masterfy" ? await createPixMasterfy(context, headers6, payload) : provider === "umbrellapag" ? await createPixUmbrellapag(context, headers6, payload) : provider === "venuspay_pix" ? await createPixVenuspay(context, headers6, payload) : await createPixIronpay(context, headers6, payload);
   const payment = await result.json().catch(() => ({}));
   if (!result.ok || !payment.pixCode || !payment.transactionId) {
-    await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(id)}`, 'PATCH', { status: 'failed' });
-    const providerMessage = Array.isArray(payment.error?.message)
-      ? payment.error.message.join(', ')
-      : typeof payment.error === 'string' ? payment.error
-      : Array.isArray(payment.message) ? payment.message.join(', ')
-      : typeof payment.message === 'string' ? payment.message
-      : 'Não foi possível gerar o PIX. Confira seus dados e tente novamente.';
-    return json({ message: providerMessage }, result.status || 502);
+    await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(id)}`, "PATCH", { status: "failed" });
+    const providerMessage = Array.isArray(payment.error?.message) ? payment.error.message.join(", ") : typeof payment.error === "string" ? payment.error : Array.isArray(payment.message) ? payment.message.join(", ") : typeof payment.message === "string" ? payment.message : "N\xE3o foi poss\xEDvel gerar o PIX. Confira seus dados e tente novamente.";
+    return json3({ message: providerMessage }, result.status || 502);
   }
   const qr = payment.qrCodeBase64 || payment.qrCodeImage || null;
-  await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(id)}`, 'PATCH', {
-    status: 'pending', transaction_id: String(payment.transactionId), pix_code: payment.pixCode, qr_code: qr,
-    updated_at: new Date().toISOString(),
+  await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(id)}`, "PATCH", {
+    status: "pending",
+    transaction_id: String(payment.transactionId),
+    pix_code: payment.pixCode,
+    qr_code: qr,
+    updated_at: (/* @__PURE__ */ new Date()).toISOString()
   });
-  if (purchaseDestination(env) === 'utmify') {
-    const send = deliverPendingPurchase(env, db, id).catch((error) => console.error('[purchase/pending]', id, error?.message || error));
-    if (ctx?.waitUntil) ctx.waitUntil(send); else await send;
+  if (purchaseDestination(env) === "utmify") {
+    const send = deliverPendingPurchase(env, db, id).catch((error) => console.error("[purchase/pending]", id, error?.message || error));
+    if (ctx?.waitUntil) ctx.waitUntil(send);
+    else await send;
   }
   if (env.PIX_RATELIMIT) {
     const count = Number(await env.PIX_RATELIMIT.get(ipKey) || 0);
     await env.PIX_RATELIMIT.put(ipKey, String(count + 1), { expirationTtl: 3600 });
   }
-  return json({ copyPaste: payment.pixCode, qrCode: qr, transactionId: payment.transactionId, gatewayTransactionId: payment.transactionId, orderId: id, amount: order.amount });
+  return json3({ copyPaste: payment.pixCode, qrCode: qr, transactionId: payment.transactionId, gatewayTransactionId: payment.transactionId, orderId: id, amount: order.amount });
 }
-
-async function statusPix(request, env) {
-  const id = new URL(request.url).searchParams.get('id');
-  if (!id || id.length > 150) return json({ error: 'Transação inválida.' }, 400);
-  const ids = id.split(',').slice(0, 2);
+async function createMarketPix(request2, env, ctx) {
+  const body = await request2.json().catch(() => null);
+  const quantity = Number(body?.quantity);
+  if (!body || !Number.isInteger(quantity) || quantity < 1 || quantity > 10) return json3({ error: "Quantidade inv\xE1lida." }, 400);
+  const adapted = {
+    amount: body.amount,
+    checkoutId: body.checkoutId,
+    client: { name: body.name, email: body.email, phone: body.phone, document: body.document },
+    cart: { qty: quantity, shipping: "Frete Gr\xE1tis", bumps: [], discount: 1, bonus: 0 },
+    shipping: {
+      cep: body.address?.zipCode,
+      uf: body.address?.state,
+      cidade: body.address?.city,
+      logradouro: body.address?.street,
+      bairro: body.address?.neighborhood,
+      numero: body.address?.number,
+      complemento: body.address?.complement || ""
+    },
+    products: [{ name: "Kit 3 em 1 - Escova Modeladora GOKOCO Bivolt", quantity, color: String(body.color || "").slice(0, 40), price: 37.9 }],
+    tracking: body.tracking || {}
+  };
+  const internal = new Request(request2, { body: JSON.stringify(adapted) });
+  const result = await createPix(internal, env, ctx, "mercado_livre");
+  const data = await result.json();
+  if (!result.ok) return json3({ error: data.message || data.error || "N\xE3o foi poss\xEDvel gerar o PIX." }, result.status);
+  const qr = String(data.qrCode || "");
+  const externalImage = /^(data:|https?:\/\/)/i.test(qr);
+  return json3({ transactionId: data.transactionId, pixCode: data.copyPaste, qrCodeBase64: externalImage ? null : qr, qrCodeImage: externalImage ? qr : null, orderId: data.orderId, amount: data.amount });
+}
+function marketSiteRequest(url, env) {
+  const hostname = String(env.MARKET_HOSTNAME || "").trim().toLowerCase();
+  return hostname && url.hostname.toLowerCase() === hostname || url.pathname === "/tl" || url.pathname.startsWith("/tl/");
+}
+function bellaSiteRequest(url, env) {
+  const hostname = String(env.BELLA_HOSTNAME || "").trim().toLowerCase();
+  return hostname && url.hostname.toLowerCase() === hostname || url.pathname === "/video" || url.pathname.startsWith("/video/");
+}
+function bellaEnvironment(env) {
+  const scoped = ["IRONPAY_API_TOKEN", "IRONPAY_OFFER_HASH", "IRONPAY_PRODUCT_HASH", "MASTERFY_API_KEY", "UMBRELLAPAG_API_KEY", "VENUS_PAY_SECRET_KEY", "VENUS_PAY_PRODUCT_ID", "RESEND_API_KEY", "RESEND_FROM_EMAIL", "UTMIFY_API_TOKEN", "FB_PIXEL_ID", "FB_ACCESS_TOKEN", "VITE_GTM_ID", "VITE_GA_ID", "VITE_UTMIFY_PIXEL_ID"];
+  return {
+    ...env,
+    ...Object.fromEntries(scoped.map((key) => [key, env[`BELLA_${key}`] || env[key]])),
+    SUPABASE_URL: env.BELLA_SUPABASE_URL || env.SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY: env.BELLA_SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_ROLE_KEY,
+    SITE_URL: env.BELLA_SITE_URL || `${String(env.SITE_URL || "https://gokoco-tiktok.pages.dev").replace(/\/+$/, "")}/video`
+  };
+}
+var bellaRoutes = {
+  "/api/orders/create": onRequest2,
+  "/api/pix/create": onRequest3,
+  "/api/pix/status": onRequest4,
+  "/api/pix/webhook": onRequest5,
+  "/api/card/create": onRequest6,
+  "/api/card/status": onRequest7,
+  "/api/tracking": onRequest8,
+  "/api/marketing-config": onRequest9,
+  "/api/checkout-health": onRequest10,
+  "/api/send-tracking-email": onRequest11,
+  "/api/send-recovery-email": onRequest12,
+  "/api/process-recovery-queue": onRequest13,
+  "/api/reconcile-payments": onRequest14,
+  "/api/fb-purchase": onRequest15,
+  "/api/utmify-order": onRequest16
+};
+async function bellaRoute(path, request2, env, ctx) {
+  const handler = bellaRoutes[path];
+  if (!handler) return null;
+  const url = new URL(request2.url);
+  url.pathname = path;
+  return handler({ request: new Request(url, request2), env: bellaEnvironment(env), waitUntil: ctx?.waitUntil?.bind(ctx) });
+}
+async function adminBellaOrders(request2, env) {
+  const denied = await requireAdmin(request2, env);
+  if (denied) return denied;
+  const bella = bellaEnvironment(env);
+  const base = String(bella.SUPABASE_URL || "").replace(/\/+$/, "");
+  const key = String(bella.SUPABASE_SERVICE_ROLE_KEY || "");
+  if (!base || !key) return json3({ error: "Banco Bella Mix n\xE3o configurado." }, 503);
+  const headers6 = { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json", Prefer: "return=representation" };
+  if (request2.method === "GET") {
+    const offset = Number(new URL(request2.url).searchParams.get("offset") || 0);
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset > 1e5) return json3({ error: "P\xE1gina inv\xE1lida." }, 400);
+    const rows = await fetch(`${base}/rest/v1/leads?select=id,created_at,nome,email,telefone,produtos,valor,metodo_pagamento,status,transaction_id,codigo_rastreio,gateway,cidade,estado,cep,rua,numero,bairro,tracking&order=created_at.desc&limit=500&offset=${offset}`, { headers: headers6 });
+    if (!rows.ok) return json3({ error: "N\xE3o foi poss\xEDvel listar os pedidos Bella Mix." }, 502);
+    return json3({ orders: await rows.json() });
+  }
+  if (request2.method === "PATCH") {
+    const body = await request2.json().catch(() => ({}));
+    if (!/^[0-9a-f-]{36}$/i.test(String(body.id || ""))) return json3({ error: "Pedido inv\xE1lido." }, 400);
+    const code = String(body.codigo_rastreio || "").trim().toUpperCase().replace(/[-\s]/g, "");
+    if (!/^BM[A-Z0-9]{6,10}$/.test(code)) return json3({ error: "C\xF3digo Bella Mix inv\xE1lido. Use BM seguido de 6 a 10 letras ou n\xFAmeros." }, 400);
+    const origin = await fetch(`${base}/rest/v1/rastreio_origem?on_conflict=codigo`, { method: "POST", headers: { ...headers6, Prefer: "resolution=ignore-duplicates,return=minimal" }, body: JSON.stringify({ codigo: code, origem_at: (/* @__PURE__ */ new Date()).toISOString(), nome_cliente: null }) });
+    if (!origin.ok) return json3({ error: "N\xE3o foi poss\xEDvel registrar a origem do rastreio." }, 502);
+    const changed = await fetch(`${base}/rest/v1/leads?id=eq.${encodeURIComponent(body.id)}&select=id,codigo_rastreio`, { method: "PATCH", headers: headers6, body: JSON.stringify({ codigo_rastreio: code, updated_at: (/* @__PURE__ */ new Date()).toISOString() }) });
+    if (!changed.ok) return json3({ error: "N\xE3o foi poss\xEDvel salvar o rastreio." }, 502);
+    return json3({ ok: true, order: (await changed.json())[0] || null });
+  }
+  return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
+}
+async function adminBellaGateways(request2, env) {
+  const denied = await requireAdmin(request2, env);
+  if (denied) return denied;
+  const bella = bellaEnvironment(env);
+  if (request2.method === "GET") return json3({ gateways: await listGateways(bella) });
+  if (request2.method !== "PATCH") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
+  const body = await request2.json().catch(() => ({}));
+  if (typeof body.enabled !== "boolean" || !["ironpay", "masterfy", "umbrellapag", "venuspay", "venuspay_pix"].includes(body.id)) return json3({ error: "Gateway inv\xE1lido." }, 400);
+  return json3({ gateways: await setGatewayEnabled(bella, body.id, body.enabled) });
+}
+async function adminBellaTrackingEmail(request2, env) {
+  const denied = await requireAdmin(request2, env);
+  if (denied) return denied;
+  if (request2.method !== "POST") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
+  const { id } = await request2.json().catch(() => ({}));
+  if (!/^[0-9a-f-]{36}$/i.test(String(id || ""))) return json3({ error: "Pedido inv\xE1lido." }, 400);
+  const bella = bellaEnvironment(env);
+  const base = String(bella.SUPABASE_URL || "").replace(/\/+$/, "");
+  const key = String(bella.SUPABASE_SERVICE_ROLE_KEY || "");
+  if (!base || !key) return json3({ error: "Banco Bella Mix n\xE3o configurado." }, 503);
+  const found = await fetch(`${base}/rest/v1/leads?id=eq.${encodeURIComponent(id)}&select=id,nome,email,codigo_rastreio&limit=1`, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
+  if (!found.ok) return json3({ error: "N\xE3o foi poss\xEDvel consultar o pedido." }, 502);
+  const order = (await found.json())[0];
+  if (!order?.email || !/^BM[A-Z0-9]{6,10}$/.test(String(order.codigo_rastreio || ""))) return json3({ error: "Salve um c\xF3digo de rastreio v\xE1lido antes de enviar o e-mail." }, 400);
+  const mail = new Request(request2, { body: JSON.stringify({ emailCliente: order.email, nomeCliente: order.nome, codigoRastreio: order.codigo_rastreio, numeroPedido: order.id }) });
+  return onRequest11({ request: mail, env: bella });
+}
+async function siteAsset(request2, env) {
+  const url = new URL(request2.url);
+  const site = marketSiteRequest(url, env) ? "tl" : bellaSiteRequest(url, env) ? "video" : null;
+  if (!site) return env.ASSETS.fetch(request2);
+  let pathname = url.pathname.replace(new RegExp(`^/${site}(?=/|$)`), "") || "/";
+  if (!/\.[a-z0-9]+$/i.test(pathname)) pathname = "/index.html";
+  url.pathname = `/${site}${pathname}`;
+  return env.ASSETS.fetch(new Request(url, request2));
+}
+async function statusPix(request2, env) {
+  const id = new URL(request2.url).searchParams.get("id");
+  if (!id || id.length > 150) return json3({ error: "Transa\xE7\xE3o inv\xE1lida." }, 400);
+  const ids = id.split(",").slice(0, 2);
   let order = null;
   for (const candidate of ids) {
-    const rows = await db(env, 'gokoco_orders', `?transaction_id=eq.${encodeURIComponent(candidate)}&select=*&limit=1`);
-    if (rows[0]) { order = rows[0]; break; }
+    const rows = await db(env, "gokoco_orders", `?transaction_id=eq.${encodeURIComponent(candidate)}&select=*&limit=1`);
+    if (rows[0]) {
+      order = rows[0];
+      break;
+    }
   }
-  if (!order) return json({ status: 'unknown' }, 404);
-  if (order.status === 'paid') {
-    const shippingTracking = await registerOrderTracking(env, order.id, order.updated_at || order.created_at).catch((error) => { console.error('[tracking/status]', error.message); return null; });
-    await deliverPaidPurchase(env, db, order.id).catch((error) => console.error('[purchase/status]', error.message));
-    await deliverPaidEmail(env, db, order.id).catch((error) => console.error('[email/status]', error.message));
-    return json({ status: 'paid', isPaid: true, amount: Number(order.amount), trackingCode: shippingTracking?.code || null, eventId: `pix_${order.id}`, purchaseDestination: purchaseDestination(env) });
+  if (!order) return json3({ status: "unknown" }, 404);
+  if (order.status === "paid") {
+    const shippingTracking2 = await registerOrderTracking(env, order.id, order.updated_at || order.created_at).catch((error) => {
+      console.error("[tracking/status]", error.message);
+      return null;
+    });
+    await deliverPaidPurchase(env, db, order.id).catch((error) => console.error("[purchase/status]", error.message));
+    await deliverPaidEmail(env, db, order.id).catch((error) => console.error("[email/status]", error.message));
+    return json3({ status: "paid", isPaid: true, amount: Number(order.amount), trackingCode: shippingTracking2?.code || null, eventId: `pix_${order.id}`, purchaseDestination: purchaseDestination(env) });
   }
   const result = await queryPixGatewayStatus(env, order.transaction_id, order.gateway);
-  const status = result.isPaid ? 'paid' : result.isRefunded ? 'refunded' : result.isExpired ? 'expired' : 'pending';
-  // Uma consulta antiga não pode desfazer um pagamento confirmado em paralelo.
-  if (status !== order.status) await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}&status=eq.${encodeURIComponent(order.status)}`, 'PATCH', { status, updated_at: new Date().toISOString() });
+  const status = result.isPaid ? "paid" : result.isRefunded ? "refunded" : result.isExpired ? "expired" : "pending";
+  if (status !== order.status) await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(order.id)}&status=eq.${encodeURIComponent(order.status)}`, "PATCH", { status, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
   let shippingTracking = null;
-  if (status === 'paid') {
-    shippingTracking = await registerOrderTracking(env, order.id, result.paidAt || new Date().toISOString()).catch((error) => { console.error('[tracking/status]', error.message); return null; });
-    await deliverPaidPurchase(env, db, order.id, result.paidAt || new Date().toISOString()).catch((error) => console.error('[purchase/status]', error.message));
-    await deliverPaidEmail(env, db, order.id, result.paidAt || new Date().toISOString()).catch((error) => console.error('[email/status]', error.message));
+  if (status === "paid") {
+    shippingTracking = await registerOrderTracking(env, order.id, result.paidAt || (/* @__PURE__ */ new Date()).toISOString()).catch((error) => {
+      console.error("[tracking/status]", error.message);
+      return null;
+    });
+    await deliverPaidPurchase(env, db, order.id, result.paidAt || (/* @__PURE__ */ new Date()).toISOString()).catch((error) => console.error("[purchase/status]", error.message));
+    await deliverPaidEmail(env, db, order.id, result.paidAt || (/* @__PURE__ */ new Date()).toISOString()).catch((error) => console.error("[email/status]", error.message));
   }
-  return json({ status, isPaid: status === 'paid', isExpired: result.isExpired, amount: Number(order.amount), trackingCode: shippingTracking?.code || null, eventId: `pix_${order.id}`, purchaseDestination: purchaseDestination(env) });
+  return json3({ status, isPaid: status === "paid", isExpired: result.isExpired, amount: Number(order.amount), trackingCode: shippingTracking?.code || null, eventId: `pix_${order.id}`, purchaseDestination: purchaseDestination(env) });
 }
-
 function createTrackingCode() {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const bytes = crypto.getRandomValues(new Uint8Array(10));
-  return `GK${Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('')}`;
+  return `GK${Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("")}`;
 }
-
 async function registerOrderTracking(env, orderId, paidAt) {
-  const rows = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(orderId)}&select=id,status,tracking&limit=1`);
+  const rows = await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(orderId)}&select=id,status,tracking&limit=1`);
   const order = rows[0];
   if (!order) return null;
   if (order.tracking?.shipping?.code) return order.tracking.shipping;
   const code = createTrackingCode();
-  const tracking = { ...(order.tracking || {}), shipping: { code, created_at: order.tracking?._payment?.paid_at || paidAt || new Date().toISOString(), status: 'confirmed', events: [] } };
-  const saved = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(orderId)}&status=eq.paid&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=id`, 'PATCH', { status: 'paid', tracking });
+  const tracking = { ...order.tracking || {}, shipping: { code, created_at: order.tracking?._payment?.paid_at || paidAt || (/* @__PURE__ */ new Date()).toISOString(), status: "confirmed", events: [] } };
+  const saved = await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(orderId)}&status=eq.paid&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=id`, "PATCH", { status: "paid", tracking });
   if (saved.length) return tracking.shipping;
-  const current = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(orderId)}&select=tracking&limit=1`);
+  const current = await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(orderId)}&select=tracking&limit=1`);
   return current[0]?.tracking?.shipping || null;
 }
-
-async function webhook(request, env) {
-  const notification = await request.json().catch(() => null);
-  if (!notification) return json({ received: true });
+async function webhook(request2, env) {
+  const notification = await request2.json().catch(() => null);
+  if (!notification) return json3({ received: true });
   const ids = [
-    notification.objectId, notification.transactionId, notification.transaction_id, notification.transactionHash, notification.transaction_hash, notification.id,
-    notification.object?.id, notification.object?.transaction_id, notification.object?.transactionId, notification.object?.hash,
-    notification.transaction?.id, notification.transaction?.transaction_id, notification.transaction?.hash,
-    notification.payment?.id, notification.payment?.transaction_id, notification.payment?.transactionId,
-    notification.data?.objectId, notification.data?.transaction_id, notification.data?.transactionId, notification.data?.transactionHash,
-    notification.data?.transaction_hash, notification.data?.id, notification.data?.transaction?.id, notification.data?.transaction?.transaction_id,
-    notification.data?.object?.id, notification.data?.payment?.id,
-  ].filter((value) => typeof value === 'string' || typeof value === 'number').map(String).filter(Boolean);
-  const seenIds = new Set();
+    notification.objectId,
+    notification.transactionId,
+    notification.transaction_id,
+    notification.transactionHash,
+    notification.transaction_hash,
+    notification.id,
+    notification.object?.id,
+    notification.object?.transaction_id,
+    notification.object?.transactionId,
+    notification.object?.hash,
+    notification.transaction?.id,
+    notification.transaction?.transaction_id,
+    notification.transaction?.hash,
+    notification.payment?.id,
+    notification.payment?.transaction_id,
+    notification.payment?.transactionId,
+    notification.data?.objectId,
+    notification.data?.transaction_id,
+    notification.data?.transactionId,
+    notification.data?.transactionHash,
+    notification.data?.transaction_hash,
+    notification.data?.id,
+    notification.data?.transaction?.id,
+    notification.data?.transaction?.transaction_id,
+    notification.data?.object?.id,
+    notification.data?.payment?.id
+  ].filter((value) => typeof value === "string" || typeof value === "number").map(String).filter(Boolean);
+  const seenIds = /* @__PURE__ */ new Set();
   let matchedOrder = false;
   for (const id of ids) {
     if (seenIds.has(id)) continue;
     seenIds.add(id);
-    const rows = await db(env, 'gokoco_orders', `?transaction_id=eq.${encodeURIComponent(String(id))}&select=id,transaction_id,gateway,status&limit=1`);
+    const rows = await db(env, "gokoco_orders", `?transaction_id=eq.${encodeURIComponent(String(id))}&select=id,transaction_id,gateway,status&limit=1`);
     const order = rows[0];
     if (!order) continue;
     matchedOrder = true;
-    const manualRows = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}&select=tracking&limit=1`);
+    const manualRows = await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(order.id)}&select=tracking&limit=1`);
     if (manualRows[0]?.tracking?.manualPayment) continue;
     const verified = await queryPixGatewayStatus(env, order.transaction_id, order.gateway);
-    const status = verified.isRefunded ? 'refunded' : verified.isPaid ? 'paid' : order.status === 'paid' ? 'paid' : verified.isExpired ? 'expired' : order.status;
-    if (status !== order.status) await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}&status=eq.${encodeURIComponent(order.status)}`, 'PATCH', { status, updated_at: new Date().toISOString() });
-    if (status === 'paid') {
-      await registerOrderTracking(env, order.id, verified.paidAt || (order.status === 'paid' ? undefined : new Date().toISOString()));
-      const delivery = await deliverPaidPurchase(env, db, order.id, verified.paidAt || (order.status === 'paid' ? undefined : new Date().toISOString()));
-      await deliverPaidEmail(env, db, order.id, verified.paidAt).catch((error) => console.error('[email/webhook]', error.message));
-      if (delivery.state === 'failed' || delivery.state === 'retry_pending' || delivery.state === 'busy') return json({ received: true, retryRequired: true }, 503);
+    const status = verified.isRefunded ? "refunded" : verified.isPaid ? "paid" : order.status === "paid" ? "paid" : verified.isExpired ? "expired" : order.status;
+    if (status !== order.status) await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(order.id)}&status=eq.${encodeURIComponent(order.status)}`, "PATCH", { status, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
+    if (status === "paid") {
+      await registerOrderTracking(env, order.id, verified.paidAt || (order.status === "paid" ? void 0 : (/* @__PURE__ */ new Date()).toISOString()));
+      const delivery = await deliverPaidPurchase(env, db, order.id, verified.paidAt || (order.status === "paid" ? void 0 : (/* @__PURE__ */ new Date()).toISOString()));
+      await deliverPaidEmail(env, db, order.id, verified.paidAt).catch((error) => console.error("[email/webhook]", error.message));
+      if (delivery.state === "failed" || delivery.state === "retry_pending" || delivery.state === "busy") return json3({ received: true, retryRequired: true }, 503);
     }
     break;
   }
-  if (!seenIds.size) console.warn('[payment/webhook] notificação sem identificador de transação reconhecido', { fields: Object.keys(notification).slice(0, 12) });
-  else if (!matchedOrder) console.warn('[payment/webhook] transação recebida sem pedido correspondente', { candidates: ids.length, fields: Object.keys(notification).slice(0, 12) });
-  return json({ received: true });
+  if (!seenIds.size) console.warn("[payment/webhook] notifica\xE7\xE3o sem identificador de transa\xE7\xE3o reconhecido", { fields: Object.keys(notification).slice(0, 12) });
+  else if (!matchedOrder) console.warn("[payment/webhook] transa\xE7\xE3o recebida sem pedido correspondente", { candidates: ids.length, fields: Object.keys(notification).slice(0, 12) });
+  return json3({ received: true });
 }
-
-function publicTrackingProducts(products) {
+function publicTrackingProducts(products2) {
   const brushImages = {
-    preta: '/images/f2/cores/preta.webp',
-    branca: '/images/f2/cores/branca.webp',
-    rosa: '/images/f2/cores/rosa.webp',
+    preta: "/images/f2/cores/preta.webp",
+    branca: "/images/f2/cores/branca.webp",
+    rosa: "/images/f2/cores/rosa.webp"
   };
   const accessoryImages = [
-    ['wella', '/images/bump-wella.webp'], ['taiff', '/images/bump-taiff.webp'],
-    ['siage', '/images/bump-siage.webp'], ['necessaire', '/images/bump-necessaire.webp'],
-    ['escovas', '/images/bump-escovas.webp'],
+    ["wella", "/images/bump-wella.webp"],
+    ["taiff", "/images/bump-taiff.webp"],
+    ["siage", "/images/bump-siage.webp"],
+    ["necessaire", "/images/bump-necessaire.webp"],
+    ["escovas", "/images/bump-escovas.webp"]
   ];
   const result = [];
-  for (const product of Array.isArray(products) ? products.slice(0, 10) : []) {
-    const name = String(product?.name || '').slice(0, 150);
+  for (const product of Array.isArray(products2) ? products2.slice(0, 10) : []) {
+    const name = String(product?.name || "").slice(0, 150);
     if (!name || /frete|envio/i.test(name)) continue;
     const quantity = Math.max(1, Math.min(20, Number.parseInt(product.quantity, 10) || 1));
     if (/escova\s+modeladora\s+gokoco/i.test(name)) {
       const variants = [...name.matchAll(/\b(preta|branca|rosa)\s*x\s*(\d{1,2})\b/gi)];
-      const voltage = name.match(/·\s*(bivolt|110\s*v|220\s*v)\b/i)?.[1] || '';
+      const voltage = name.match(/·\s*(bivolt|110\s*v|220\s*v)\b/i)?.[1] || "";
       if (variants.length) {
         for (const variant of variants) {
           const color = variant[1].toLowerCase();
-          result.push({ name: `Escova Modeladora GOKOCO - ${color[0].toUpperCase()}${color.slice(1)}${voltage ? ` · ${voltage}` : ''}`, quantity: Math.max(1, Number(variant[2])), image: brushImages[color] });
+          result.push({ name: `Escova Modeladora GOKOCO - ${color[0].toUpperCase()}${color.slice(1)}${voltage ? ` \xB7 ${voltage}` : ""}`, quantity: Math.max(1, Number(variant[2])), image: brushImages[color] });
         }
       } else {
         const color = name.match(/\b(preta|branca|rosa)\b/i)?.[1]?.toLowerCase();
@@ -2147,305 +4626,322 @@ function publicTrackingProducts(products) {
   }
   return result;
 }
-
-async function publicOrderTracking(request, env) {
-  const code = new URL(request.url).searchParams.get('code')?.trim().toUpperCase() || '';
-  if (!/^GK[A-HJ-NP-Z2-9]{10}$/.test(code)) return json({ error: 'Código inválido ou não encontrado.' }, 404);
-  const rows = await db(env, 'gokoco_orders', `?tracking->shipping->>code=eq.${encodeURIComponent(code)}&select=id,name,status,created_at,updated_at,products,shipping,tracking&limit=1`);
+async function publicOrderTracking(request2, env) {
+  const code = new URL(request2.url).searchParams.get("code")?.trim().toUpperCase() || "";
+  if (!/^GK[A-HJ-NP-Z2-9]{10}$/.test(code)) return json3({ error: "C\xF3digo inv\xE1lido ou n\xE3o encontrado." }, 404);
+  const rows = await db(env, "gokoco_orders", `?tracking->shipping->>code=eq.${encodeURIComponent(code)}&select=id,name,status,created_at,updated_at,products,shipping,tracking&limit=1`);
   const order = rows[0];
-  if (!order || (order.status !== 'paid' && !(order.status === 'tracking_only' && order.tracking?.manualExternal))) return json({ error: 'Código inválido ou não encontrado.' }, 404);
-  if (order.tracking?.manualExternal) return json({ code, manual: true, createdAt: order.tracking.shipping.created_at || order.created_at, shipping: order.tracking.shipping, reshipping: publicReshipping(env, order) });
-  return json({
+  if (!order || order.status !== "paid" && !(order.status === "tracking_only" && order.tracking?.manualExternal)) return json3({ error: "C\xF3digo inv\xE1lido ou n\xE3o encontrado." }, 404);
+  if (order.tracking?.manualExternal) return json3({ code, manual: true, createdAt: order.tracking.shipping.created_at || order.created_at, shipping: order.tracking.shipping, reshipping: publicReshipping(env, order) });
+  return json3({
     code,
-      buyerName: String(order.name || '').trim().slice(0, 100),
+    buyerName: String(order.name || "").trim().slice(0, 100),
     createdAt: order.tracking.shipping.created_at || order.created_at,
     products: publicTrackingProducts(order.products),
-    destination: { city: String(order.shipping?.cidade || '').slice(0, 80), state: String(order.shipping?.uf || '').slice(0, 2) },
+    destination: { city: String(order.shipping?.cidade || "").slice(0, 80), state: String(order.shipping?.uf || "").slice(0, 2) },
     shipping: order.tracking.shipping,
-    reshipping: publicReshipping(env, order),
+    reshipping: publicReshipping(env, order)
   });
 }
-
-async function adminUpdateOrderTracking(request, env) {
-  const denied = await requireAdmin(request, env); if (denied) return denied;
-  if (request.method !== 'PATCH') return json({ error: 'Método inválido.' }, 405);
-  const body = await request.json().catch(() => ({}));
-  const id = String(body.id || '');
-  const code = String(body.code || '').trim().toUpperCase();
-  const status = String(body.status || '');
-  if (!/^[0-9a-f-]{36}$/i.test(id) || !/^GK[A-HJ-NP-Z2-9]{10}$/.test(code)) return json({ error: 'Código de rastreio inválido.' }, 400);
+async function adminUpdateOrderTracking(request2, env) {
+  const denied = await requireAdmin(request2, env);
+  if (denied) return denied;
+  if (request2.method !== "PATCH") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
+  const body = await request2.json().catch(() => ({}));
+  const id = String(body.id || "");
+  const code = String(body.code || "").trim().toUpperCase();
+  const status = String(body.status || "");
+  if (!/^[0-9a-f-]{36}$/i.test(id) || !/^GK[A-HJ-NP-Z2-9]{10}$/.test(code)) return json3({ error: "C\xF3digo de rastreio inv\xE1lido." }, 400);
   const stages = {
-    confirmed: { label: 'Pedido confirmado', detail: 'Pagamento aprovado e pedido confirmado.' },
-    preparing: { label: 'Preparando pedido', detail: 'Seu pedido está sendo separado e preparado.' },
-    shipped: { label: 'Pedido enviado', detail: 'Seu pedido foi despachado para entrega.' },
-    out_for_delivery: { label: 'Saiu para entrega', detail: 'Seu pedido está a caminho do endereço informado.' },
-    delivered: { label: 'Pedido entregue', detail: 'A entrega foi concluída.' },
+    confirmed: { label: "Pedido confirmado", detail: "Pagamento aprovado e pedido confirmado." },
+    preparing: { label: "Preparando pedido", detail: "Seu pedido est\xE1 sendo separado e preparado." },
+    shipped: { label: "Pedido enviado", detail: "Seu pedido foi despachado para entrega." },
+    out_for_delivery: { label: "Saiu para entrega", detail: "Seu pedido est\xE1 a caminho do endere\xE7o informado." },
+    delivered: { label: "Pedido entregue", detail: "A entrega foi conclu\xEDda." }
   };
-  if (!Object.hasOwn(stages, status)) return json({ error: 'Etapa de entrega inválida.' }, 400);
-  const rows = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(id)}&status=eq.paid&select=id,tracking&limit=1`);
+  if (!Object.hasOwn(stages, status)) return json3({ error: "Etapa de entrega inv\xE1lida." }, 400);
+  const rows = await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(id)}&status=eq.paid&select=id,tracking&limit=1`);
   const order = rows[0];
-  if (!order) return json({ error: 'Pedido pago não encontrado.' }, 404);
+  if (!order) return json3({ error: "Pedido pago n\xE3o encontrado." }, 404);
   const previous = order.tracking?.shipping || {};
-  const previousStageIndex = ['confirmed', 'preparing', 'shipped', 'out_for_delivery', 'delivered'].indexOf(previous.status || 'confirmed');
-  const requestedStageIndex = ['confirmed', 'preparing', 'shipped', 'out_for_delivery', 'delivered'].indexOf(status);
-  if (status !== 'confirmed' && requestedStageIndex < previousStageIndex) return json({ error: 'A etapa só pode avançar. Escolha a etapa atual ou uma etapa posterior.' }, 409);
-  if (status === 'confirmed' && previous.status && previous.status !== 'confirmed') return json({ error: 'O rastreio já avançou e não pode voltar à confirmação.' }, 409);
+  const previousStageIndex = ["confirmed", "preparing", "shipped", "out_for_delivery", "delivered"].indexOf(previous.status || "confirmed");
+  const requestedStageIndex = ["confirmed", "preparing", "shipped", "out_for_delivery", "delivered"].indexOf(status);
+  if (status !== "confirmed" && requestedStageIndex < previousStageIndex) return json3({ error: "A etapa s\xF3 pode avan\xE7ar. Escolha a etapa atual ou uma etapa posterior." }, 409);
+  if (status === "confirmed" && previous.status && previous.status !== "confirmed") return json3({ error: "O rastreio j\xE1 avan\xE7ou e n\xE3o pode voltar \xE0 confirma\xE7\xE3o." }, 409);
   const tracking = {
-    ...(order.tracking || {}),
+    ...order.tracking || {},
     shipping: {
       ...previous,
       code: previous.code || code,
-      created_at: previous.created_at || new Date().toISOString(),
+      created_at: previous.created_at || (/* @__PURE__ */ new Date()).toISOString(),
       status,
-      events: status === 'confirmed' ? [] : [...(Array.isArray(previous.events) ? previous.events.filter((event) => event.status !== 'confirmed') : []), { status, label: stages[status].label, detail: stages[status].detail, at: new Date().toISOString() }],
-    },
+      events: status === "confirmed" ? [] : [...Array.isArray(previous.events) ? previous.events.filter((event) => event.status !== "confirmed") : [], { status, label: stages[status].label, detail: stages[status].detail, at: (/* @__PURE__ */ new Date()).toISOString() }]
+    }
   };
-  const saved = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(id)}&status=eq.paid&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=id`, 'PATCH', { tracking, updated_at: new Date().toISOString() });
-  if (!saved.length) return json({ error: 'O pedido mudou durante a atualização. Atualize a lista e tente novamente.' }, 409);
-  return json({ ok: true, shipping: tracking.shipping });
+  const saved = await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(id)}&status=eq.paid&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=id`, "PATCH", { tracking, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
+  if (!saved.length) return json3({ error: "O pedido mudou durante a atualiza\xE7\xE3o. Atualize a lista e tente novamente." }, 409);
+  return json3({ ok: true, shipping: tracking.shipping });
 }
-
-async function adminManualPayment(request, env) {
-  const denied = await requireAdmin(request, env); if (denied) return denied;
-  if (request.method !== 'POST') return json({ error: 'Método inválido.' }, 405);
-  const body = await request.json().catch(() => ({}));
-  const id = String(body.id || '');
-  if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ error: 'Pedido inválido.' }, 400);
-  const rows = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(id)}&select=id,status,tracking&limit=1`);
+async function adminManualPayment(request2, env) {
+  const denied = await requireAdmin(request2, env);
+  if (denied) return denied;
+  if (request2.method !== "POST") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
+  const body = await request2.json().catch(() => ({}));
+  const id = String(body.id || "");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return json3({ error: "Pedido inv\xE1lido." }, 400);
+  const rows = await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(id)}&select=id,status,tracking&limit=1`);
   const order = rows[0];
-  if (!order) return json({ error: 'Pedido não encontrado.' }, 404);
-  if (!['pending', 'expired', 'failed', 'paid'].includes(order.status)) return json({ error: 'Este pedido não pode ser marcado como pago.' }, 409);
-  if (order.status !== 'paid') {
-    const paidAt = new Date().toISOString();
-    const tracking = { ...(order.tracking || {}), manualPayment: { paidAt, source: 'admin', method: 'external' } };
-    const saved = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(id)}&status=eq.${order.status}&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=id`, 'PATCH', { status: 'paid', tracking, updated_at: paidAt });
-    if (!saved.length) return json({ error: 'O pedido mudou. Atualize a lista e tente novamente.' }, 409);
+  if (!order) return json3({ error: "Pedido n\xE3o encontrado." }, 404);
+  if (!["pending", "expired", "failed", "paid"].includes(order.status)) return json3({ error: "Este pedido n\xE3o pode ser marcado como pago." }, 409);
+  if (order.status !== "paid") {
+    const paidAt = (/* @__PURE__ */ new Date()).toISOString();
+    const tracking = { ...order.tracking || {}, manualPayment: { paidAt, source: "admin", method: "external" } };
+    const saved = await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(id)}&status=eq.${order.status}&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=id`, "PATCH", { status: "paid", tracking, updated_at: paidAt });
+    if (!saved.length) return json3({ error: "O pedido mudou. Atualize a lista e tente novamente." }, 409);
   }
   const shipping = await registerOrderTracking(env, id);
-  if (!shipping?.code) return json({ error: 'Pagamento salvo. Tente gerar o rastreio novamente.' }, 409);
+  if (!shipping?.code) return json3({ error: "Pagamento salvo. Tente gerar o rastreio novamente." }, 409);
   await deliverPaidPurchase(env, db, id);
-  await deliverPaidEmail(env, db, id).catch((error) => console.error('[email/admin]', error.message));
-  return json({ ok: true, shipping });
+  await deliverPaidEmail(env, db, id).catch((error) => console.error("[email/admin]", error.message));
+  return json3({ ok: true, shipping });
 }
-
-async function adminGenerateTracking(request, env) {
-  const denied = await requireAdmin(request, env); if (denied) return denied;
-  if (request.method !== 'POST') return json({ error: 'Método inválido.' }, 405);
-  const body = await request.json().catch(() => ({}));
-  const id = String(body.id || '');
-  if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ error: 'Pedido inválido.' }, 400);
-  const rows = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(id)}&status=eq.paid&select=id&limit=1`);
-  if (!rows.length) return json({ error: 'Marque o pagamento como recebido antes de gerar o rastreio.' }, 409);
+async function adminGenerateTracking(request2, env) {
+  const denied = await requireAdmin(request2, env);
+  if (denied) return denied;
+  if (request2.method !== "POST") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
+  const body = await request2.json().catch(() => ({}));
+  const id = String(body.id || "");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return json3({ error: "Pedido inv\xE1lido." }, 400);
+  const rows = await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(id)}&status=eq.paid&select=id&limit=1`);
+  if (!rows.length) return json3({ error: "Marque o pagamento como recebido antes de gerar o rastreio." }, 409);
   const shipping = await registerOrderTracking(env, id);
-  if (!shipping?.code) return json({ error: 'Não foi possível gerar o rastreio. Tente novamente.' }, 409);
-  await deliverPaidEmail(env, db, id).catch((error) => console.error('[email/tracking]', error.message));
-  return json({ ok: true, shipping });
+  if (!shipping?.code) return json3({ error: "N\xE3o foi poss\xEDvel gerar o rastreio. Tente novamente." }, 409);
+  await deliverPaidEmail(env, db, id).catch((error) => console.error("[email/tracking]", error.message));
+  return json3({ ok: true, shipping });
 }
-
-async function adminCreateExternalTracking(request, env) {
-  const denied = await requireAdmin(request, env); if (denied) return denied;
-  if (request.method === 'GET') {
-    const rows = await db(env, 'gokoco_orders', '?gateway=eq.manual_tracking&select=id,created_at,tracking&order=created_at.desc&limit=30');
-    return json({ codes: rows.map((row) => ({ id: row.id, code: row.tracking?.shipping?.code, createdAt: row.created_at })).filter((row) => row.code) });
+async function adminCreateExternalTracking(request2, env) {
+  const denied = await requireAdmin(request2, env);
+  if (denied) return denied;
+  if (request2.method === "GET") {
+    const rows = await db(env, "gokoco_orders", "?gateway=eq.manual_tracking&select=id,created_at,tracking&order=created_at.desc&limit=30");
+    return json3({ codes: rows.map((row) => ({ id: row.id, code: row.tracking?.shipping?.code, createdAt: row.created_at })).filter((row) => row.code) });
   }
-  if (request.method !== 'POST') return json({ error: 'Método inválido.' }, 405);
-  const now = new Date().toISOString();
+  if (request2.method !== "POST") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
+  const now = (/* @__PURE__ */ new Date()).toISOString();
   const code = createTrackingCode();
   const order = {
     checkout_id: `external-tracking-${crypto.randomUUID()}`,
-    name: 'Rastreio manual', email: '', phone: '', document: '',
-    amount: 0.01, products: [], shipping: {},
-    tracking: { manualExternal: true, shipping: { code, created_at: now, status: 'confirmed', events: [] } },
-    gateway: 'manual_tracking', status: 'tracking_only', created_at: now, updated_at: now,
+    name: "Rastreio manual",
+    email: "",
+    phone: "",
+    document: "",
+    amount: 0.01,
+    products: [],
+    shipping: {},
+    tracking: { manualExternal: true, shipping: { code, created_at: now, status: "confirmed", events: [] } },
+    gateway: "manual_tracking",
+    status: "tracking_only",
+    created_at: now,
+    updated_at: now
   };
-  const saved = await db(env, 'gokoco_orders', '?select=id', 'POST', order);
-  if (!saved.length) return json({ error: 'Não foi possível salvar o rastreio.' }, 500);
-  return json({ ok: true, code, id: saved[0].id }, 201);
+  const saved = await db(env, "gokoco_orders", "?select=id", "POST", order);
+  if (!saved.length) return json3({ error: "N\xE3o foi poss\xEDvel salvar o rastreio." }, 500);
+  return json3({ ok: true, code, id: saved[0].id }, 201);
 }
-
-async function adminGateways(request, env) {
-  const denied = await requireAdmin(request, env); if (denied) return denied;
-  if (request.method === 'GET') return json({ gateways: await listGateways(env) });
-  if (request.method !== 'PATCH') return json({ error: 'Método inválido.' }, 405);
-  const { id, enabled } = await request.json().catch(() => ({}));
-  if (!gateways.some((g) => g.id === id) || typeof enabled !== 'boolean') return json({ error: 'Gateway inválido.' }, 400);
-  if (enabled && !configured(env, id)) return json({ error: 'Configure a chave deste gateway no Cloudflare antes de ativá-lo.' }, 400);
-  if (enabled) await db(env, 'gokoco_gateways', '?enabled=eq.true', 'PATCH', { enabled: false, updated_at: new Date().toISOString() });
-  await db(env, 'gokoco_gateways', '?on_conflict=id', 'POST', { id, enabled, updated_at: new Date().toISOString() });
-  return json({ gateways: await listGateways(env) });
+async function adminGateways(request2, env) {
+  const denied = await requireAdmin(request2, env);
+  if (denied) return denied;
+  if (request2.method === "GET") return json3({ gateways: await listGateways2(env) });
+  if (request2.method !== "PATCH") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
+  const { id, enabled } = await request2.json().catch(() => ({}));
+  if (!gateways.some((g) => g.id === id) || typeof enabled !== "boolean") return json3({ error: "Gateway inv\xE1lido." }, 400);
+  if (enabled && !configured(env, id)) return json3({ error: "Configure a chave deste gateway no Cloudflare antes de ativ\xE1-lo." }, 400);
+  if (enabled) await db(env, "gokoco_gateways", "?enabled=eq.true", "PATCH", { enabled: false, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
+  await db(env, "gokoco_gateways", "?on_conflict=id", "POST", { id, enabled, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
+  return json3({ gateways: await listGateways2(env) });
 }
-
-async function adminOrders(request, env) {
-  const denied = await requireAdmin(request, env); if (denied) return denied;
-  if (request.method !== 'GET') return json({ error: 'Método inválido.' }, 405);
-  const params = new URL(request.url).searchParams;
-  const offset = Number(params.get('offset') || 0);
-  if (!Number.isSafeInteger(offset) || offset < 0 || offset % 200 !== 0) return json({ error: 'Página de pedidos inválida.' }, 400);
-  const before = params.get('before');
-  if (before && !Number.isFinite(Date.parse(before))) return json({ error: 'Data de consulta inválida.' }, 400);
+async function adminOrders(request2, env) {
+  const denied = await requireAdmin(request2, env);
+  if (denied) return denied;
+  if (request2.method !== "GET") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
+  const params = new URL(request2.url).searchParams;
+  const offset = Number(params.get("offset") || 0);
+  if (!Number.isSafeInteger(offset) || offset < 0 || offset % 200 !== 0) return json3({ error: "P\xE1gina de pedidos inv\xE1lida." }, 400);
+  const before = params.get("before");
+  if (before && !Number.isFinite(Date.parse(before))) return json3({ error: "Data de consulta inv\xE1lida." }, 400);
   if (offset === 0) {
-    const missingTracking = encodeURIComponent('tracking->shipping->>code');
-    const paidOrders = await db(env, 'gokoco_orders', `?status=eq.paid&${missingTracking}=is.null&select=id,tracking,updated_at,created_at&order=created_at.desc&limit=3`);
-    await Promise.allSettled(paidOrders.map((order) =>
-      registerOrderTracking(env, order.id, order.updated_at || order.created_at),
+    const missingTracking = encodeURIComponent("tracking->shipping->>code");
+    const paidOrders = await db(env, "gokoco_orders", `?status=eq.paid&${missingTracking}=is.null&select=id,tracking,updated_at,created_at&order=created_at.desc&limit=3`);
+    await Promise.allSettled(paidOrders.map(
+      (order) => registerOrderTracking(env, order.id, order.updated_at || order.created_at)
     ));
     await retryPaidPurchases(env);
   }
-  const rows = await db(env, 'gokoco_orders', `?gateway=neq.manual_tracking${before ? `&created_at=lte.${encodeURIComponent(before)}` : ''}&select=id,created_at,name,email,phone,amount,products,gateway,status,transaction_id,shipping,tracking&order=created_at.desc,id.desc&limit=200&offset=${offset}`);
-  return json({ orders: rows.map(({ tracking, ...order }) => ({ ...order, shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, recovery: tracking?._recovery || null, reshipping: tracking?.reshipping ? { status: tracking.reshipping.status, amount: tracking.reshipping.amount, confirmed_at: tracking.reshipping.confirmed_at || null, hasReceipt: !!tracking.reshipping.receipt?.path } : null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
+  const rows = await db(env, "gokoco_orders", `?gateway=neq.manual_tracking${before ? `&created_at=lte.${encodeURIComponent(before)}` : ""}&select=id,created_at,name,email,phone,amount,products,gateway,status,transaction_id,shipping,tracking&order=created_at.desc,id.desc&limit=200&offset=${offset}`);
+  return json3({ orders: rows.map(({ tracking, ...order }) => ({ ...order, shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, recovery: tracking?._recovery || null, reshipping: tracking?.reshipping ? { status: tracking.reshipping.status, amount: tracking.reshipping.amount, confirmed_at: tracking.reshipping.confirmed_at || null, hasReceipt: !!tracking.reshipping.receipt?.path } : null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
 }
-
-async function adminSendOrderEmail(request, env) {
-  const denied = await requireAdmin(request, env); if (denied) return denied;
-  if (request.method !== 'POST') return json({ error: 'Método inválido.' }, 405);
-  const body = await request.json().catch(() => ({}));
-  const id = String(body.id || '');
-  const subject = String(body.subject || '').trim();
-  const message = String(body.message || '').trim();
-  if (!/^[0-9a-f-]{36}$/i.test(id) || !subject || subject.length > 150 || !message || message.length > 5000) return json({ error: 'Confira o pedido, assunto e mensagem.' }, 400);
-  const rows = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(id)}&gateway=neq.manual_tracking&select=id,name,email,status,tracking&limit=1`);
-  if (!rows.length) return json({ error: 'Pedido não encontrado.' }, 404);
+async function adminSendOrderEmail(request2, env) {
+  const denied = await requireAdmin(request2, env);
+  if (denied) return denied;
+  if (request2.method !== "POST") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
+  const body = await request2.json().catch(() => ({}));
+  const id = String(body.id || "");
+  const subject = String(body.subject || "").trim();
+  const message = String(body.message || "").trim();
+  if (!/^[0-9a-f-]{36}$/i.test(id) || !subject || subject.length > 150 || !message || message.length > 5e3) return json3({ error: "Confira o pedido, assunto e mensagem." }, 400);
+  const rows = await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(id)}&gateway=neq.manual_tracking&select=id,name,email,status,tracking&limit=1`);
+  if (!rows.length) return json3({ error: "Pedido n\xE3o encontrado." }, 404);
   const result = await sendManualOrderEmail(env, rows[0], subject, message);
-  if (result.state === 'not_configured') return json({ error: 'Configure o Resend no servidor para enviar e-mails.' }, 503);
-  if (result.state === 'invalid_input') return json({ error: 'O e-mail do cliente, assunto ou mensagem é inválido.' }, 400);
-  if (result.state !== 'sent') return json({ error: 'O Resend não confirmou o envio. Tente novamente.' }, 502);
-  return json({ ok: true, email_id: result.email_id });
+  if (result.state === "not_configured") return json3({ error: "Configure o Resend no servidor para enviar e-mails." }, 503);
+  if (result.state === "invalid_input") return json3({ error: "O e-mail do cliente, assunto ou mensagem \xE9 inv\xE1lido." }, 400);
+  if (result.state !== "sent") return json3({ error: "O Resend n\xE3o confirmou o envio. Tente novamente." }, 502);
+  return json3({ ok: true, email_id: result.email_id });
 }
-
 async function reconcilePendingPayments(env, limit = 2, deferFulfillment = false, newestFirst = false) {
-  const since = new Date(Date.now() - 7 * 86400000).toISOString();
-  const cooldownMs = newestFirst ? 20000 : deferFulfillment ? 60000 : 0;
-  const cooldown = cooldownMs ? `&updated_at=lte.${encodeURIComponent(new Date(Date.now() - cooldownMs).toISOString())}` : '';
-  const order = newestFirst ? 'created_at.desc' : 'updated_at.asc,created_at.asc';
-  const pending = await db(env, 'gokoco_orders', `?select=id,transaction_id,gateway,status,updated_at,tracking&status=in.(pending,expired,failed)&transaction_id=not.is.null&created_at=gte.${encodeURIComponent(since)}${cooldown}&order=${order}&limit=${Math.max(1, Math.min(10, Number(limit) || 2))}`);
+  const since = new Date(Date.now() - 7 * 864e5).toISOString();
+  const cooldownMs = newestFirst ? 2e4 : deferFulfillment ? 6e4 : 0;
+  const cooldown = cooldownMs ? `&updated_at=lte.${encodeURIComponent(new Date(Date.now() - cooldownMs).toISOString())}` : "";
+  const order = newestFirst ? "created_at.desc" : "updated_at.asc,created_at.asc";
+  const pending = await db(env, "gokoco_orders", `?select=id,transaction_id,gateway,status,updated_at,tracking&status=in.(pending,expired,failed)&transaction_id=not.is.null&created_at=gte.${encodeURIComponent(since)}${cooldown}&order=${order}&limit=${Math.max(1, Math.min(10, Number(limit) || 2))}`);
   const summary = { checked: 0, paid: 0, expired: 0, failed: 0, rateLimited: false, failures: [] };
-  for (const order of pending.filter((item) => item.transaction_id)) {
+  for (const order2 of pending.filter((item) => item.transaction_id)) {
     let claimedAt;
     try {
-      const previousUpdatedAt = Date.parse(order.updated_at || '') || 0;
+      const previousUpdatedAt = Date.parse(order2.updated_at || "") || 0;
       claimedAt = new Date(Math.max(Date.now(), previousUpdatedAt + 1)).toISOString();
-      const updateFilter = order.updated_at
-        ? `updated_at=eq.${encodeURIComponent(order.updated_at)}`
-        : 'updated_at=is.null';
-      const claimed = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}&status=eq.${order.status}&${updateFilter}&select=id`, 'PATCH', { updated_at: claimedAt });
+      const updateFilter = order2.updated_at ? `updated_at=eq.${encodeURIComponent(order2.updated_at)}` : "updated_at=is.null";
+      const claimed = await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(order2.id)}&status=eq.${order2.status}&${updateFilter}&select=id`, "PATCH", { updated_at: claimedAt });
       if (!claimed.length) continue;
       summary.checked++;
-
-      const verified = await queryPixGatewayStatus(env, order.transaction_id, order.gateway);
-      const status = verified.isPaid ? 'paid' : verified.isRefunded ? 'refunded' : verified.isExpired ? 'expired' : 'pending';
-      if (status === 'pending') continue;
-
-      const updated = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}&status=eq.${order.status}&updated_at=eq.${encodeURIComponent(claimedAt)}&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=id`, 'PATCH', {
-        status, updated_at: new Date().toISOString(),
-        ...(status === 'paid' ? { tracking: { ...(order.tracking || {}), _payment: { paid_at: verified.paidAt || new Date().toISOString() } } } : {}),
+      const verified = await queryPixGatewayStatus(env, order2.transaction_id, order2.gateway);
+      const status = verified.isPaid ? "paid" : verified.isRefunded ? "refunded" : verified.isExpired ? "expired" : "pending";
+      if (status === "pending") continue;
+      const updated = await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(order2.id)}&status=eq.${order2.status}&updated_at=eq.${encodeURIComponent(claimedAt)}&tracking=eq.${encodeURIComponent(JSON.stringify(order2.tracking || {}))}&select=id`, "PATCH", {
+        status,
+        updated_at: (/* @__PURE__ */ new Date()).toISOString(),
+        ...status === "paid" ? { tracking: { ...order2.tracking || {}, _payment: { paid_at: verified.paidAt || (/* @__PURE__ */ new Date()).toISOString() } } } : {}
       });
       if (!updated.length) continue;
-      if (status === 'paid') {
+      if (status === "paid") {
         summary.paid++;
         if (deferFulfillment) continue;
-        const paidAt = verified.paidAt || new Date().toISOString();
-        await registerOrderTracking(env, order.id, paidAt);
-        await deliverPaidPurchase(env, db, order.id, paidAt);
-        await deliverPaidEmail(env, db, order.id, paidAt);
+        const paidAt = verified.paidAt || (/* @__PURE__ */ new Date()).toISOString();
+        await registerOrderTracking(env, order2.id, paidAt);
+        await deliverPaidPurchase(env, db, order2.id, paidAt);
+        await deliverPaidEmail(env, db, order2.id, paidAt);
       } else {
         summary.expired++;
       }
     } catch (error) {
       summary.failed++;
-      const gateway = String(order.gateway || 'desconhecido').slice(0, 32);
-      const reason = String(error?.message || 'Falha de comunicação').slice(0, 100);
+      const gateway = String(order2.gateway || "desconhecido").slice(0, 32);
+      const reason = String(error?.message || "Falha de comunica\xE7\xE3o").slice(0, 100);
       const entry = summary.failures.find((item) => item.gateway === gateway && item.reason === reason);
       if (entry) entry.count++;
       else if (summary.failures.length < 8) summary.failures.push({ gateway, reason, count: 1 });
-      console.error('[payment/reconcile]', order.gateway, order.id, error?.message || error);
-      if (/HTTP 429\b/.test(reason)) { summary.rateLimited = true; break; }
+      console.error("[payment/reconcile]", order2.gateway, order2.id, error?.message || error);
+      if (/HTTP 429\b/.test(reason)) {
+        summary.rateLimited = true;
+        break;
+      }
     }
   }
   return summary;
 }
-
-async function reconcilePaymentsRoute(request, env) {
-  const cron = Boolean(env.CRON_SECRET && request.headers.get('x-cron-secret') === env.CRON_SECRET);
-  if (!cron) { const denied = await requireAdmin(request, env); if (denied) return denied; }
-  if (request.method !== 'POST') return json({ error: 'Método inválido.' }, 405);
-  // Lote pequeno e sequencial evita o limite de consultas dos gateways.
-  // Rastreio, pixel e e-mail seguem nas filas com proteção contra duplicação.
-  // No admin, confira primeiro os pedidos recentes; a rotina agendada percorre os mais antigos.
-  return json(await reconcilePendingPayments(env, 3, true, !cron));
+async function reconcilePaymentsRoute(request2, env) {
+  const cron = Boolean(env.CRON_SECRET && request2.headers.get("x-cron-secret") === env.CRON_SECRET);
+  if (!cron) {
+    const denied = await requireAdmin(request2, env);
+    if (denied) return denied;
+  }
+  if (request2.method !== "POST") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
+  return json3(await reconcilePendingPayments(env, 3, true, !cron));
 }
-
 async function fulfillConfirmedPayment(env) {
-  const rows = await db(env, 'gokoco_orders', '?status=eq.paid&gateway=neq.manual_tracking&tracking->shipping->>code=is.null&select=id,tracking,updated_at&order=updated_at.desc&limit=1');
+  const rows = await db(env, "gokoco_orders", "?status=eq.paid&gateway=neq.manual_tracking&tracking->shipping->>code=is.null&select=id,tracking,updated_at&order=updated_at.desc&limit=1");
   if (!rows.length) return;
   const order = rows[0], paidAt = order.tracking?._payment?.paid_at || order.updated_at;
   await registerOrderTracking(env, order.id, paidAt);
   await deliverPaidPurchase(env, db, order.id, paidAt);
   await deliverPaidEmail(env, db, order.id, paidAt);
 }
-
 async function retryPaidPurchases(env, limit = 3) {
   const destination = purchaseDestination(env);
   if (!destination) return { configured: false, processed: 0 };
-  const since = new Date(Date.now() - 7 * 86400000).toISOString();
+  const since = new Date(Date.now() - 7 * 864e5).toISOString();
   const path = `tracking->_purchase->${destination}->>state`;
-  const rows = await db(env, 'gokoco_orders', `?status=eq.paid&gateway=neq.manual_tracking&updated_at=gte.${encodeURIComponent(since)}&or=(${path}.is.null,${path}.neq.sent)&select=id&order=created_at.asc&limit=${limit}`);
+  const rows = await db(env, "gokoco_orders", `?status=eq.paid&gateway=neq.manual_tracking&updated_at=gte.${encodeURIComponent(since)}&or=(${path}.is.null,${path}.neq.sent)&select=id&order=created_at.asc&limit=${limit}`);
   const results = await Promise.allSettled(rows.map((order) => deliverPaidPurchase(env, db, order.id)));
-  return { configured: true, processed: rows.length, sent: results.filter((r) => r.status === 'fulfilled' && r.value.state === 'sent').length, failed: results.filter((r) => r.status === 'rejected' || r.value?.state === 'failed').length };
+  return { configured: true, processed: rows.length, sent: results.filter((r) => r.status === "fulfilled" && r.value.state === "sent").length, failed: results.filter((r) => r.status === "rejected" || r.value?.state === "failed").length };
 }
-
 async function retryPendingPurchases(env) {
-  if (purchaseDestination(env) !== 'utmify') return { configured: false, processed: 0 };
-  const since = new Date(Date.now() - 7 * 86400000).toISOString();
-  const path = 'tracking->_purchase->utmify_pending->>state';
-  const rows = await db(env, 'gokoco_orders', `?status=eq.pending&transaction_id=not.is.null&created_at=gte.${encodeURIComponent(since)}&or=(${path}.is.null,${path}.neq.sent)&select=id&order=created_at.desc&limit=1`);
+  if (purchaseDestination(env) !== "utmify") return { configured: false, processed: 0 };
+  const since = new Date(Date.now() - 7 * 864e5).toISOString();
+  const path = "tracking->_purchase->utmify_pending->>state";
+  const rows = await db(env, "gokoco_orders", `?status=eq.pending&transaction_id=not.is.null&created_at=gte.${encodeURIComponent(since)}&or=(${path}.is.null,${path}.neq.sent)&select=id&order=created_at.desc&limit=1`);
   if (rows[0]) await deliverPendingPurchase(env, db, rows[0].id);
   return { configured: true, processed: rows.length };
 }
-
-export default {
-  async fetch(request, env, ctx) {
-    const url = new URL(request.url);
+var index_default = {
+  async fetch(request2, env, ctx) {
+    const url = new URL(request2.url);
     try {
       const path = url.pathname;
-      if (path === '/api/admin/login') return await adminLogin({ request, env });
-      if (path === '/api/admin/verify') return json({ valid: (await verifyAdminToken(request, env)).valid });
-      if (path === '/api/admin/gateways') return await adminGateways(request, env);
-      if (path === '/api/admin/orders') return await adminOrders(request, env);
-      if (path === '/api/admin/reconcile-payments') return await reconcilePaymentsRoute(request, env);
-      if (path === '/api/admin/send-order-email') return await adminSendOrderEmail(request, env);
-      if (path === '/api/admin/order-tracking') return await adminUpdateOrderTracking(request, env);
-      if (path === '/api/admin/manual-payment') return await adminManualPayment(request, env);
-      if (path === '/api/admin/generate-tracking') return await adminGenerateTracking(request, env);
-      if (path === '/api/admin/external-tracking') return await adminCreateExternalTracking(request, env);
-      if (path === '/api/public/order-tracking' && request.method === 'GET') return await publicOrderTracking(request, env);
-      if (path.startsWith('/api/public/reshipping-fee/') || path === '/api/admin/reshipping-receipt') {
-        const handled = await handleReshippingRoute(path, request, env, {
-          db, json, listGateways, requireAdmin, queryPixGatewayStatus,
-          providers: { ironpay: createPixIronpay, masterfy: createPixMasterfy, umbrellapag: createPixUmbrellapag, venuspay_pix: createPixVenuspay },
+      if (["/tl/admin", "/tl/admin.html", "/video/admin", "/video/admin.html"].includes(path)) return Response.redirect(new URL("/admin.html", env.SITE_URL || request2.url), 302);
+      if (path.startsWith("/video/api/")) {
+        const response = await bellaRoute(path.slice("/video".length), request2, env, ctx);
+        return response || json3({ error: "Rota inv\xE1lida." }, 404);
+      }
+      if (path === "/api/admin/login") return await onRequest({ request: request2, env });
+      if (path === "/api/admin/verify") return json3({ valid: (await verifyAdminToken(request2, env)).valid });
+      if (path === "/api/admin/gateways") return await adminGateways(request2, env);
+      if (path === "/api/admin/orders") return await adminOrders(request2, env);
+      if (path === "/api/admin/bella-orders") return await adminBellaOrders(request2, env);
+      if (path === "/api/admin/bella-gateways") return await adminBellaGateways(request2, env);
+      if (path === "/api/admin/bella-tracking-email") return await adminBellaTrackingEmail(request2, env);
+      if (path === "/api/admin/reconcile-payments") return await reconcilePaymentsRoute(request2, env);
+      if (path === "/api/admin/send-order-email") return await adminSendOrderEmail(request2, env);
+      if (path === "/api/admin/order-tracking") return await adminUpdateOrderTracking(request2, env);
+      if (path === "/api/admin/manual-payment") return await adminManualPayment(request2, env);
+      if (path === "/api/admin/generate-tracking") return await adminGenerateTracking(request2, env);
+      if (path === "/api/admin/external-tracking") return await adminCreateExternalTracking(request2, env);
+      if (path === "/api/public/order-tracking" && request2.method === "GET") return await publicOrderTracking(request2, env);
+      if (path.startsWith("/api/public/reshipping-fee/") || path === "/api/admin/reshipping-receipt") {
+        const handled = await handleReshippingRoute(path, request2, env, {
+          db,
+          json: json3,
+          listGateways: listGateways2,
+          requireAdmin,
+          queryPixGatewayStatus,
+          providers: { ironpay: createPixIronpay, masterfy: createPixMasterfy, umbrellapag: createPixUmbrellapag, venuspay_pix: createPixVenuspay }
         });
         if (handled) return handled;
       }
-      if (path === '/api/process-purchase-queue' && request.method === 'POST') {
-        const secret = String(env.CRON_SECRET || '');
-        if (!secret || request.headers.get('x-cron-secret') !== secret) return json({ error: 'Não autorizado.' }, 401);
-        const phase = url.searchParams.get('phase');
-        if (phase === 'recovery') return json({ recovery: await processRecoveryQueue(env, db, queryPixGatewayStatus) });
-        const payments = phase === 'fulfillment' ? null : await reconcilePendingPayments(env, 2, true);
+      if (path === "/api/process-purchase-queue" && request2.method === "POST") {
+        const secret = String(env.CRON_SECRET || "");
+        if (!secret || request2.headers.get("x-cron-secret") !== secret) return json3({ error: "N\xE3o autorizado." }, 401);
+        const phase = url.searchParams.get("phase");
+        if (phase === "recovery") return json3({ recovery: await processRecoveryQueue(env, db, queryPixGatewayStatus) });
+        const payments = phase === "fulfillment" ? null : await reconcilePendingPayments(env, 2, true);
         await fulfillConfirmedPayment(env);
         const purchases = await retryPaidPurchases(env, 1);
         const pendingPurchases = await retryPendingPurchases(env);
         const emails = await retryPaidEmails(env, db);
-        const recovery = phase === 'fulfillment' ? null : await processRecoveryQueue(env, db, queryPixGatewayStatus, 1);
-        return json({ payments, purchases, pendingPurchases, emails, recovery });
+        const recovery = phase === "fulfillment" ? null : await processRecoveryQueue(env, db, queryPixGatewayStatus, 1);
+        return json3({ payments, purchases, pendingPurchases, emails, recovery });
       }
-      if (path === '/api/public/pix/create' && request.method === 'POST') return await createPix(request, env, ctx);
-      if (path === '/api/public/pix/status' && request.method === 'GET') return await statusPix(request, env);
-      if (path === '/api/pix/webhook' && request.method === 'POST') return await webhook(request, env);
-      if (path.startsWith('/api/')) return json({ error: 'Rota não encontrada.' }, 404);
-      return env.ASSETS.fetch(request);
+      if (path === "/api/market/pix/create" && request2.method === "POST") return await createMarketPix(request2, env, ctx);
+      if (path === "/api/public/pix/create" && request2.method === "POST") return await createPix(request2, env, ctx);
+      if (path === "/api/public/pix/status" && request2.method === "GET") return await statusPix(request2, env);
+      if (path === "/api/pix/webhook" && request2.method === "POST") return await webhook(request2, env);
+      if (path.startsWith("/api/")) return json3({ error: "Rota n\xE3o encontrada." }, 404);
+      return siteAsset(request2, env);
     } catch (error) {
-      console.error('[gokoco]', error?.message || error);
-      return json({ message: error?.message || 'Erro interno do servidor.' }, 500);
+      console.error("[gokoco]", error?.message || error);
+      return json3({ message: error?.message || "Erro interno do servidor." }, 500);
     }
-  },
+  }
+};
+export {
+  index_default as default
 };
