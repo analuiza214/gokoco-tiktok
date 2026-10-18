@@ -1,7 +1,7 @@
-import { statusPixIronpay } from "./pix-gateways/ironpay.js";
-import { statusPixMasterfy } from "./pix-gateways/masterfy.js";
-import { statusPixUmbrellapag } from "./pix-gateways/umbrellapag.js";
-import { statusPixVenuspay } from "./pix-gateways/venuspay.js";
+import { statusPixIronpay } from "./providers/ironpay.js";
+import { statusPixMasterfy } from "./providers/masterfy.js";
+import { statusPixUmbrellapag } from "./providers/umbrellapag.js";
+import { statusPixVenuspay } from "./providers/venuspay.js";
 
 const headers = { "Content-Type": "application/json" };
 

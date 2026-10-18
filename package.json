@@ -1,8 +1,15 @@
 {
   "name": "gokoco-tiktok",
   "private": true,
+  "type": "module",
   "version": "1.0.0",
   "scripts": {
-    "build": "node build-worker.mjs && node scripts/prepare-deploy.mjs"
+    "build": "npm run build:mercado && npm run build:bella && node build-worker.mjs && node scripts/prepare-deploy.mjs",
+    "build:mercado": "npm ci --prefix sites/mercado && npm run build --prefix sites/mercado -- --base=/tl/",
+    "build:bella": "npm ci --prefix sites/bella && npm run build --prefix sites/bella -- --base=/video/",
+    "test:multisite": "node tests/multisite.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.12"
   }
 }

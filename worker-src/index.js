@@ -9,6 +9,22 @@ import { capturePurchaseTracking, recoverCustomerAttribution, purchaseDestinatio
 import { deliverPaidEmail, retryPaidEmails, sendManualOrderEmail } from './order-email.js';
 import { processRecoveryQueue } from './recovery-email.js';
 import { handleReshippingRoute, publicReshipping } from './reshipping-fee.js';
+import { onRequest as bellaOrdersCreate } from '../sites/bella/functions/api/orders/create.js';
+import { onRequest as bellaPixCreate } from '../sites/bella/functions/api/pix/create.js';
+import { onRequest as bellaPixStatus } from '../sites/bella/functions/api/pix/status.js';
+import { onRequest as bellaPixWebhook } from '../sites/bella/functions/api/pix/webhook.js';
+import { onRequest as bellaCardCreate } from '../sites/bella/functions/api/card/create.js';
+import { onRequest as bellaCardStatus } from '../sites/bella/functions/api/card/status.js';
+import { onRequest as bellaTracking } from '../sites/bella/functions/api/tracking.js';
+import { onRequest as bellaMarketingConfig } from '../sites/bella/functions/api/marketing-config.js';
+import { onRequest as bellaCheckoutHealth } from '../sites/bella/functions/api/checkout-health.js';
+import { onRequest as bellaSendTrackingEmail } from '../sites/bella/functions/api/send-tracking-email.js';
+import { onRequest as bellaSendRecoveryEmail } from '../sites/bella/functions/api/send-recovery-email.js';
+import { onRequest as bellaProcessRecoveryQueue } from '../sites/bella/functions/api/process-recovery-queue.js';
+import { onRequest as bellaReconcilePayments } from '../sites/bella/functions/api/reconcile-payments.js';
+import { onRequest as bellaFbPurchase } from '../sites/bella/functions/api/fb-purchase.js';
+import { onRequest as bellaUtmifyOrder } from '../sites/bella/functions/api/utmify-order.js';
+import { listGateways as listBellaGateways, setGatewayEnabled as setBellaGatewayEnabled } from '../sites/bella/functions/_lib/gateway-config.js';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
 const gateways = [
@@ -138,7 +154,7 @@ function maskedGatewayContact(env, orderId, order) {
   return { email: `pedido-${ref}@${domain}`, phone };
 }
 
-async function createPix(request, env, ctx) {
+async function createPix(request, env, ctx, siteVariant = 'gokoco') {
   const body = await request.json().catch(() => null);
   if (body?.client) body.client.email = normalizeBuyerEmail(body.client.email);
   const invalid = validateBuyer(body);
@@ -180,10 +196,10 @@ async function createPix(request, env, ctx) {
     email: normalizeBuyerEmail(body.client.email),
     phone: digits(body.client.phone),
     document: digits(body.client.document),
-    amount: await nextPixAmount(env, cartTotal(body.cart)),
+    amount: siteVariant === 'mercado_livre' ? cartTotal(body.cart) : await nextPixAmount(env, cartTotal(body.cart)),
     products: Array.isArray(body.products) ? body.products.slice(0, 10) : [],
     shipping,
-    tracking: await recoverCustomerAttribution(env, db, capturePurchaseTracking(request, body), body.client),
+    tracking: { ...await recoverCustomerAttribution(env, db, capturePurchaseTracking(request, body), body.client), site_variant: siteVariant },
     gateway: active[0].id,
     client_ip_hash: ipHash,
     status: 'creating',
@@ -235,6 +251,144 @@ async function createPix(request, env, ctx) {
     await env.PIX_RATELIMIT.put(ipKey, String(count + 1), { expirationTtl: 3600 });
   }
   return json({ copyPaste: payment.pixCode, qrCode: qr, transactionId: payment.transactionId, gatewayTransactionId: payment.transactionId, orderId: id, amount: order.amount });
+}
+
+async function createMarketPix(request, env, ctx) {
+  const body = await request.json().catch(() => null);
+  const quantity = Number(body?.quantity);
+  if (!body || !Number.isInteger(quantity) || quantity < 1 || quantity > 10) return json({ error: 'Quantidade inválida.' }, 400);
+  const adapted = {
+    amount: body.amount,
+    checkoutId: body.checkoutId,
+    client: { name: body.name, email: body.email, phone: body.phone, document: body.document },
+    cart: { qty: quantity, shipping: 'Frete Grátis', bumps: [], discount: 1, bonus: 0 },
+    shipping: {
+      cep: body.address?.zipCode, uf: body.address?.state, cidade: body.address?.city,
+      logradouro: body.address?.street, bairro: body.address?.neighborhood,
+      numero: body.address?.number, complemento: body.address?.complement || '',
+    },
+    products: [{ name: 'Kit 3 em 1 - Escova Modeladora GOKOCO Bivolt', quantity, color: String(body.color || '').slice(0, 40), price: 37.90 }],
+    tracking: body.tracking || {},
+  };
+  const internal = new Request(request, { body: JSON.stringify(adapted) });
+  const result = await createPix(internal, env, ctx, 'mercado_livre');
+  const data = await result.json();
+  if (!result.ok) return json({ error: data.message || data.error || 'Não foi possível gerar o PIX.' }, result.status);
+  const qr = String(data.qrCode || '');
+  const externalImage = /^(data:|https?:\/\/)/i.test(qr);
+  return json({ transactionId: data.transactionId, pixCode: data.copyPaste, qrCodeBase64: externalImage ? null : qr, qrCodeImage: externalImage ? qr : null, orderId: data.orderId, amount: data.amount });
+}
+
+function marketSiteRequest(url, env) {
+  const hostname = String(env.MARKET_HOSTNAME || '').trim().toLowerCase();
+  return (hostname && url.hostname.toLowerCase() === hostname) || url.pathname === '/tl' || url.pathname.startsWith('/tl/');
+}
+
+function bellaSiteRequest(url, env) {
+  const hostname = String(env.BELLA_HOSTNAME || '').trim().toLowerCase();
+  return (hostname && url.hostname.toLowerCase() === hostname) || url.pathname === '/video' || url.pathname.startsWith('/video/');
+}
+
+function bellaEnvironment(env) {
+  const scoped = ['IRONPAY_API_TOKEN', 'IRONPAY_OFFER_HASH', 'IRONPAY_PRODUCT_HASH', 'MASTERFY_API_KEY', 'UMBRELLAPAG_API_KEY', 'VENUS_PAY_SECRET_KEY', 'VENUS_PAY_PRODUCT_ID', 'RESEND_API_KEY', 'RESEND_FROM_EMAIL', 'UTMIFY_API_TOKEN', 'FB_PIXEL_ID', 'FB_ACCESS_TOKEN', 'VITE_GTM_ID', 'VITE_GA_ID', 'VITE_UTMIFY_PIXEL_ID'];
+  return {
+    ...env,
+    ...Object.fromEntries(scoped.map((key) => [key, env[`BELLA_${key}`] || env[key]])),
+    SUPABASE_URL: env.BELLA_SUPABASE_URL || env.SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY: env.BELLA_SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_ROLE_KEY,
+    SITE_URL: env.BELLA_SITE_URL || `${String(env.SITE_URL || 'https://gokoco-tiktok.pages.dev').replace(/\/+$/, '')}/video`,
+  };
+}
+
+const bellaRoutes = {
+  '/api/orders/create': bellaOrdersCreate,
+  '/api/pix/create': bellaPixCreate,
+  '/api/pix/status': bellaPixStatus,
+  '/api/pix/webhook': bellaPixWebhook,
+  '/api/card/create': bellaCardCreate,
+  '/api/card/status': bellaCardStatus,
+  '/api/tracking': bellaTracking,
+  '/api/marketing-config': bellaMarketingConfig,
+  '/api/checkout-health': bellaCheckoutHealth,
+  '/api/send-tracking-email': bellaSendTrackingEmail,
+  '/api/send-recovery-email': bellaSendRecoveryEmail,
+  '/api/process-recovery-queue': bellaProcessRecoveryQueue,
+  '/api/reconcile-payments': bellaReconcilePayments,
+  '/api/fb-purchase': bellaFbPurchase,
+  '/api/utmify-order': bellaUtmifyOrder,
+};
+
+async function bellaRoute(path, request, env, ctx) {
+  const handler = bellaRoutes[path];
+  if (!handler) return null;
+  const url = new URL(request.url);
+  url.pathname = path;
+  return handler({ request: new Request(url, request), env: bellaEnvironment(env), waitUntil: ctx?.waitUntil?.bind(ctx) });
+}
+
+async function adminBellaOrders(request, env) {
+  const denied = await requireAdmin(request, env); if (denied) return denied;
+  const bella = bellaEnvironment(env);
+  const base = String(bella.SUPABASE_URL || '').replace(/\/+$/, '');
+  const key = String(bella.SUPABASE_SERVICE_ROLE_KEY || '');
+  if (!base || !key) return json({ error: 'Banco Bella Mix não configurado.' }, 503);
+  const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', Prefer: 'return=representation' };
+  if (request.method === 'GET') {
+    const offset = Number(new URL(request.url).searchParams.get('offset') || 0);
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset > 100000) return json({ error: 'Página inválida.' }, 400);
+    const rows = await fetch(`${base}/rest/v1/leads?select=id,created_at,nome,email,telefone,produtos,valor,metodo_pagamento,status,transaction_id,codigo_rastreio,gateway,cidade,estado,cep,rua,numero,bairro,tracking&order=created_at.desc&limit=500&offset=${offset}`, { headers });
+    if (!rows.ok) return json({ error: 'Não foi possível listar os pedidos Bella Mix.' }, 502);
+    return json({ orders: await rows.json() });
+  }
+  if (request.method === 'PATCH') {
+    const body = await request.json().catch(() => ({}));
+    if (!/^[0-9a-f-]{36}$/i.test(String(body.id || ''))) return json({ error: 'Pedido inválido.' }, 400);
+    const code = String(body.codigo_rastreio || '').trim().toUpperCase().replace(/[-\s]/g, '');
+    if (!/^BM[A-Z0-9]{6,10}$/.test(code)) return json({ error: 'Código Bella Mix inválido. Use BM seguido de 6 a 10 letras ou números.' }, 400);
+    const origin = await fetch(`${base}/rest/v1/rastreio_origem?on_conflict=codigo`, { method: 'POST', headers: { ...headers, Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ codigo: code, origem_at: new Date().toISOString(), nome_cliente: null }) });
+    if (!origin.ok) return json({ error: 'Não foi possível registrar a origem do rastreio.' }, 502);
+    const changed = await fetch(`${base}/rest/v1/leads?id=eq.${encodeURIComponent(body.id)}&select=id,codigo_rastreio`, { method: 'PATCH', headers, body: JSON.stringify({ codigo_rastreio: code, updated_at: new Date().toISOString() }) });
+    if (!changed.ok) return json({ error: 'Não foi possível salvar o rastreio.' }, 502);
+    return json({ ok: true, order: (await changed.json())[0] || null });
+  }
+  return json({ error: 'Método inválido.' }, 405);
+}
+
+async function adminBellaGateways(request, env) {
+  const denied = await requireAdmin(request, env); if (denied) return denied;
+  const bella = bellaEnvironment(env);
+  if (request.method === 'GET') return json({ gateways: await listBellaGateways(bella) });
+  if (request.method !== 'PATCH') return json({ error: 'Método inválido.' }, 405);
+  const body = await request.json().catch(() => ({}));
+  if (typeof body.enabled !== 'boolean' || !['ironpay', 'masterfy', 'umbrellapag', 'venuspay', 'venuspay_pix'].includes(body.id)) return json({ error: 'Gateway inválido.' }, 400);
+  return json({ gateways: await setBellaGatewayEnabled(bella, body.id, body.enabled) });
+}
+
+async function adminBellaTrackingEmail(request, env) {
+  const denied = await requireAdmin(request, env); if (denied) return denied;
+  if (request.method !== 'POST') return json({ error: 'Método inválido.' }, 405);
+  const { id } = await request.json().catch(() => ({}));
+  if (!/^[0-9a-f-]{36}$/i.test(String(id || ''))) return json({ error: 'Pedido inválido.' }, 400);
+  const bella = bellaEnvironment(env);
+  const base = String(bella.SUPABASE_URL || '').replace(/\/+$/, '');
+  const key = String(bella.SUPABASE_SERVICE_ROLE_KEY || '');
+  if (!base || !key) return json({ error: 'Banco Bella Mix não configurado.' }, 503);
+  const found = await fetch(`${base}/rest/v1/leads?id=eq.${encodeURIComponent(id)}&select=id,nome,email,codigo_rastreio&limit=1`, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
+  if (!found.ok) return json({ error: 'Não foi possível consultar o pedido.' }, 502);
+  const order = (await found.json())[0];
+  if (!order?.email || !/^BM[A-Z0-9]{6,10}$/.test(String(order.codigo_rastreio || ''))) return json({ error: 'Salve um código de rastreio válido antes de enviar o e-mail.' }, 400);
+  const mail = new Request(request, { body: JSON.stringify({ emailCliente: order.email, nomeCliente: order.nome, codigoRastreio: order.codigo_rastreio, numeroPedido: order.id }) });
+  return bellaSendTrackingEmail({ request: mail, env: bella });
+}
+
+async function siteAsset(request, env) {
+  const url = new URL(request.url);
+  const site = marketSiteRequest(url, env) ? 'tl' : bellaSiteRequest(url, env) ? 'video' : null;
+  if (!site) return env.ASSETS.fetch(request);
+  let pathname = url.pathname.replace(new RegExp(`^/${site}(?=/|$)`), '') || '/';
+  if (!/\.[a-z0-9]+$/i.test(pathname)) pathname = '/index.html';
+  url.pathname = `/${site}${pathname}`;
+  return env.ASSETS.fetch(new Request(url, request));
 }
 
 async function statusPix(request, env) {
@@ -619,10 +773,18 @@ export default {
     const url = new URL(request.url);
     try {
       const path = url.pathname;
+      if (['/tl/admin', '/tl/admin.html', '/video/admin', '/video/admin.html'].includes(path)) return Response.redirect(new URL('/admin.html', env.SITE_URL || request.url), 302);
+      if (path.startsWith('/video/api/')) {
+        const response = await bellaRoute(path.slice('/video'.length), request, env, ctx);
+        return response || json({ error: 'Rota inválida.' }, 404);
+      }
       if (path === '/api/admin/login') return await adminLogin({ request, env });
       if (path === '/api/admin/verify') return json({ valid: (await verifyAdminToken(request, env)).valid });
       if (path === '/api/admin/gateways') return await adminGateways(request, env);
       if (path === '/api/admin/orders') return await adminOrders(request, env);
+      if (path === '/api/admin/bella-orders') return await adminBellaOrders(request, env);
+      if (path === '/api/admin/bella-gateways') return await adminBellaGateways(request, env);
+      if (path === '/api/admin/bella-tracking-email') return await adminBellaTrackingEmail(request, env);
       if (path === '/api/admin/reconcile-payments') return await reconcilePaymentsRoute(request, env);
       if (path === '/api/admin/send-order-email') return await adminSendOrderEmail(request, env);
       if (path === '/api/admin/order-tracking') return await adminUpdateOrderTracking(request, env);
@@ -650,11 +812,12 @@ export default {
         const recovery = phase === 'fulfillment' ? null : await processRecoveryQueue(env, db, queryPixGatewayStatus, 1);
         return json({ payments, purchases, pendingPurchases, emails, recovery });
       }
+      if (path === '/api/market/pix/create' && request.method === 'POST') return await createMarketPix(request, env, ctx);
       if (path === '/api/public/pix/create' && request.method === 'POST') return await createPix(request, env, ctx);
       if (path === '/api/public/pix/status' && request.method === 'GET') return await statusPix(request, env);
       if (path === '/api/pix/webhook' && request.method === 'POST') return await webhook(request, env);
       if (path.startsWith('/api/')) return json({ error: 'Rota não encontrada.' }, 404);
-      return env.ASSETS.fetch(request);
+      return siteAsset(request, env);
     } catch (error) {
       console.error('[gokoco]', error?.message || error);
       return json({ message: error?.message || 'Erro interno do servidor.' }, 500);

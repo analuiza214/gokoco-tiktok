@@ -15,6 +15,8 @@ jobs:
     steps:
       - name: Baixar código
         uses: actions/checkout@v6
+      - name: Instalar dependências do build
+        run: npm ci
       - name: Preparar site e Worker
         run: npm run build
       - name: Publicar no Cloudflare Pages
