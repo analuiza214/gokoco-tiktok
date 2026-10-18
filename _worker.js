@@ -4383,11 +4383,12 @@ function bellaSiteRequest(url, env) {
 }
 function bellaEnvironment(env) {
   const scoped = ["IRONPAY_API_TOKEN", "IRONPAY_OFFER_HASH", "IRONPAY_PRODUCT_HASH", "MASTERFY_API_KEY", "UMBRELLAPAG_API_KEY", "VENUS_PAY_SECRET_KEY", "VENUS_PAY_PRODUCT_ID", "RESEND_API_KEY", "RESEND_FROM_EMAIL", "UTMIFY_API_TOKEN", "FB_PIXEL_ID", "FB_ACCESS_TOKEN", "VITE_GTM_ID", "VITE_GA_ID", "VITE_UTMIFY_PIXEL_ID"];
+  const paymentKeys = /* @__PURE__ */ new Set(["IRONPAY_API_TOKEN", "IRONPAY_OFFER_HASH", "IRONPAY_PRODUCT_HASH", "MASTERFY_API_KEY", "UMBRELLAPAG_API_KEY", "VENUS_PAY_SECRET_KEY", "VENUS_PAY_PRODUCT_ID"]);
   return {
     ...env,
-    ...Object.fromEntries(scoped.map((key) => [key, env[`BELLA_${key}`] || env[key]])),
-    SUPABASE_URL: env.BELLA_SUPABASE_URL || env.SUPABASE_URL,
-    SUPABASE_SERVICE_ROLE_KEY: env.BELLA_SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_ROLE_KEY,
+    ...Object.fromEntries(scoped.map((key) => [key, env[`BELLA_${key}`] || (paymentKeys.has(key) ? void 0 : env[key])])),
+    SUPABASE_URL: env.BELLA_SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY: env.BELLA_SUPABASE_SERVICE_ROLE_KEY,
     SITE_URL: env.BELLA_SITE_URL || `${String(env.SITE_URL || "https://gokoco-tiktok.pages.dev").replace(/\/+$/, "")}/video`
   };
 }

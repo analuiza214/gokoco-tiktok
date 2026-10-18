@@ -33,6 +33,17 @@ assert.equal(marketRedirect.headers.get('location'), 'https://gokoco.example/adm
 const privateOrders = await worker.fetch(new Request('https://gokoco.example/api/admin/bella-orders'), env);
 assert.equal(privateOrders.status, 401);
 
+const bellaHealth = await worker.fetch(new Request('https://gokoco.example/video/api/checkout-health'), {
+  ...env,
+  SUPABASE_URL: 'https://gokoco.supabase.co',
+  SUPABASE_SERVICE_ROLE_KEY: 'gokoco-only',
+  VENUS_PAY_SECRET_KEY: 'gokoco-only',
+});
+const health = await bellaHealth.json();
+assert.equal(health.requiredServerConfig.supabaseUrl, false);
+assert.equal(health.requiredServerConfig.supabaseServiceRole, false);
+assert.equal(health.activePixGateway, null);
+
 const invalidPix = await worker.fetch(new Request('https://gokoco.example/api/market/pix/create', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
