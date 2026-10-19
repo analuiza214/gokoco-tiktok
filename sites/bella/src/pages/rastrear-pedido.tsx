@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // rastrear-pedido.tsx — Bella Mix
 //
-// Fluxo de 15 dias. No dia 15 aparece o botão de taxa de reenvio.
+// Fluxo de 15 dias. No dia 15 aparece o botão de taxa alfandegária.
 // Todo o fluxo de pagamento (QR Pix → upload comprovante → confirmação)
 // acontece dentro de um único popup sem sair da página.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -52,13 +52,10 @@ const H = {
   TRANSITO1:  101 + 14/60,   // 101h14m     — 4 dias (~17h)
   TRANSITO2:  148 + 39/60,   // 148h39m     — 6 dias (~16h)
   SAIU:       171 + 22/60,   // 171h22m     — 7 dias (~15h)
-  FALHA1:     195 + 22/60,   // +24h exatos — 1 dia após Saiu
-  TENTATIVA:  195 + 57/60,   // +35min      — tentativa de novo
-  FALHA2:     198 + 42/60,   // +2h45m      — segunda falha
-  RETORNANDO: 218 + 20/60,   // +19h38m     — retornando ao CD
-  CD:         242 + 34/60,   // +24h14m     — chegou ao CD
-  AGUARDANDO: 262 + 43/60,   // +20h09m     — aguardando instrução
-  TAXA:       262 + 53/60,   // +10min      — botão de taxa aparece
+  ALFANDEGA:  195 + 22/60,   // +24h exatos — 1 dia após Saiu (taxado pela alfândega)
+  CD:         218 + 20/60,   // +23h        — chegou ao CD após alfândega
+  AGUARDANDO: 238 + 20/60,   // +20h        — aguardando instrução
+  TAXA:       238 + 30/60,   // +10min      — botão de taxa aparece
 } as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -106,10 +103,7 @@ function gerarEtapas(origem: Date, cidade = "", estado = ""): ResultadoRastreio 
     transito1:  addH(origem, H.TRANSITO1),
     transito2:  addH(origem, H.TRANSITO2),
     saiu:       addH(origem, H.SAIU),
-    falha1:     addH(origem, H.FALHA1),
-    tentativa:  addH(origem, H.TENTATIVA),
-    falha2:     addH(origem, H.FALHA2),
-    retornando: addH(origem, H.RETORNANDO),
+    alfandega:  addH(origem, H.ALFANDEGA),
     cd:         addH(origem, H.CD),
     aguardando: addH(origem, H.AGUARDANDO),
     taxa:       addH(origem, H.TAXA),
@@ -174,38 +168,13 @@ function gerarEtapas(origem: Date, cidade = "", estado = ""): ResultadoRastreio 
     },
   ];
 
-  if (h >= H.FALHA1) etapas.push({
+  if (h >= H.ALFANDEGA) etapas.push({
     icone: AlertTriangle,
-    label: "Falha na Tentativa de Entrega",
+    label: "Taxado pela Alfândega",
     descricao: cidadeCliente
-      ? `A transportadora tentou realizar a entrega em ${cidadeCliente}, mas não localizou nenhum responsável no endereço.`
-      : "A transportadora tentou realizar a entrega, mas não localizou nenhum responsável no endereço.",
-    data: fmt(t.falha1), ok: false, erro: true,
-  });
-
-  if (h >= H.TENTATIVA) etapas.push({
-    icone: Truck,
-    label: "Em Trânsito — Tentativa de Entrega",
-    descricao: cidadeCliente
-      ? `A transportadora está realizando uma nova tentativa de entrega em ${cidadeCliente}.`
-      : "A transportadora está realizando uma nova tentativa de entrega no endereço cadastrado.",
-    data: fmt(t.tentativa), ok: true, erro: false,
-  });
-
-  if (h >= H.FALHA2) etapas.push({
-    icone: AlertTriangle,
-    label: "Falha na Tentativa de Entrega",
-    descricao: cidadeCliente
-      ? `A transportadora realizou nova tentativa em ${cidadeCliente}, mas não localizou nenhum responsável. O objeto está retornando ao Centro de Distribuição.`
-      : "A transportadora realizou nova tentativa, mas não localizou nenhum responsável no endereço. O objeto está retornando ao Centro de Distribuição.",
-    data: fmt(t.falha2), ok: false, erro: true,
-  });
-
-  if (h >= H.RETORNANDO) etapas.push({
-    icone: RotateCcw,
-    label: "Em Trânsito — Retornando ao CD",
-    descricao: "O objeto está a caminho do Centro de Distribuição — Guarulhos, SP.",
-    data: fmt(t.retornando), ok: true, erro: false,
+      ? `O objeto foi avaliado pela alfândega em ${cidadeCliente}. Uma taxa foi aplicada e é necessário o pagamento para liberar o pedido.`
+      : "O objeto foi avaliado pela alfândega. Uma taxa foi aplicada e é necessário o pagamento para liberar o pedido.",
+    data: fmt(t.alfandega), ok: false, erro: true,
   });
 
   if (h >= H.CD) etapas.push({
@@ -218,28 +187,25 @@ function gerarEtapas(origem: Date, cidade = "", estado = ""): ResultadoRastreio 
   if (h >= H.AGUARDANDO) etapas.push({
     icone: Clock,
     label: "Aguardando Instrução do Destinatário",
-    descricao: "O objeto permanece retido no Centro de Distribuição. É necessária uma ação do destinatário para liberar o reenvio.",
+    descricao: "O objeto permanece retido no Centro de Distribuição. É necessária uma ação do destinatário para liberar o pedido.",
     data: fmt(t.aguardando), ok: false, erro: false,
   });
 
   if (h >= H.TAXA) etapas.push({
     icone: CreditCard,
-    label: "Aguardando Taxa de Reenvio",
-    descricao: "Para que seu pedido seja reenviado, é necessário o pagamento da taxa de reenvio. Após a confirmação, entrega em até 2 dias úteis.",
+    label: "Aguardando Taxa Alfandegária",
+    descricao: "Para liberar seu pedido, é necessário o pagamento da taxa alfandegária. Após a confirmação, entrega em até 2 dias úteis.",
     data: fmt(t.taxa), ok: false, erro: false, taxa: true,
   });
 
   let status: string;
-  if      (h >= H.TAXA)       status = "⚠️ Taxa de Reenvio";
-  else if (h >= H.AGUARDANDO) status = "🕐 Aguardando Instrução";
+  if      (h >= H.TAXA)       status = "⚠️ Taxa Alfandegária";
+  else if (h >= H.AGUARDANDO) status = "🕐 Aguardando Liberação";
   else if (h >= H.CD)         status = "🏭 No Centro de Distribuição";
-  else if (h >= H.RETORNANDO) status = "🔄 Retornando ao CD";
-  else if (h >= H.FALHA2)     status = "❌ Falha na Entrega";
-  else if (h >= H.TENTATIVA)  status = "🚚 Em Trânsito";
-  else if (h >= H.FALHA1)     status = "❌ Falha na Entrega";
-  else if (h >= H.SAIU)       status = "🚚 Saiu para Entrega";
-  else if (h >= H.TRANSITO2)  status = "🚛 Em Trânsito";
-  else if (h >= H.TRANSITO1)  status = "🚛 Em Trânsito";
+  else if (h >= H.ALFANDEGA)  status = "⚠️ Taxado pela Alfândega";
+  else if (h >= H.SAIU)      status = "🚚 Saiu para Entrega";
+  else if (h >= H.TRANSITO2) status = "🚛 Em Trânsito";
+  else if (h >= H.TRANSITO1) status = "🚛 Em Trânsito";
   else if (h >= H.ENVIADO)    status = "📦 Enviado";
   else if (h >= H.EMBALAGEM)  status = "📦 Em Embalagem";
   else if (h >= H.SEPARACAO)  status = "🔍 Em Separação";
@@ -343,9 +309,9 @@ function TaxaPopup({ nomeCliente, codigoRastreio, onConfirmado, onFechar }: Taxa
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            amount: 9.00,
+            amount: 27.87,
             name: nomeCliente || "Cliente Bella Mix",
-            productName: `Taxa de Reenvio — ${codigoRastreio}`,
+            productName: `Taxa Alfandegária — ${codigoRastreio}`,
           }),
         });
         const data = await res.json() as {
@@ -403,8 +369,8 @@ function TaxaPopup({ nomeCliente, codigoRastreio, onConfirmado, onFechar }: Taxa
                 <PixIcon size={16} className="text-green-600" />
               </div>
               <div>
-                <p className="font-black text-gray-900 text-sm leading-tight">Pagar Taxa de Reenvio</p>
-                <p className="text-xs text-gray-400">Pix • R$ 9,00</p>
+                <p className="font-black text-gray-900 text-sm leading-tight">Pagar Taxa Alfandegária</p>
+                <p className="text-xs text-gray-400">Pix • R$ 27,87</p>
               </div>
             </div>
           )}
@@ -477,8 +443,8 @@ function TaxaPopup({ nomeCliente, codigoRastreio, onConfirmado, onFechar }: Taxa
                 <>
                   {/* Valor */}
                   <div className="bg-green-50 border border-green-200 rounded-xl py-3 text-center">
-                    <p className="text-xs text-gray-500 mb-0.5">Taxa de reenvio</p>
-                    <p className="text-3xl font-black text-green-700">R$ 9,00</p>
+                    <p className="text-xs text-gray-500 mb-0.5">Taxa alfandegária</p>
+                    <p className="text-3xl font-black text-green-700">R$ 27,87</p>
                     <p className="text-xs text-green-600 font-semibold mt-1">
                       ✅ Entrega garantida em até <strong>2 dias úteis</strong> após confirmação
                     </p>
@@ -528,7 +494,7 @@ function TaxaPopup({ nomeCliente, codigoRastreio, onConfirmado, onFechar }: Taxa
 
                   <p className="text-[11px] text-gray-400 text-center">
                     Após o pagamento, clique em "Já paguei" e envie o comprovante.<br/>
-                    Seu reenvio é confirmado na hora.
+                    Seu pedido é liberado na hora.
                   </p>
                 </>
               ) : null}
@@ -539,8 +505,8 @@ function TaxaPopup({ nomeCliente, codigoRastreio, onConfirmado, onFechar }: Taxa
           {step === "comprovante" && (
             <div className="space-y-4">
               <p className="text-sm text-gray-600 leading-relaxed">
-                Envie o <strong>comprovante do Pix</strong> de R$ 9,00. Assim que recebermos, seu pedido é
-                despachado com prioridade e chega em até <strong>2 dias úteis</strong>.
+                Envie o <strong>comprovante do Pix</strong> de R$ 27,87. Assim que recebermos, seu pedido é
+                liberado e chega em até <strong>2 dias úteis</strong>.
               </p>
 
               {uploadLoading ? (
@@ -603,14 +569,14 @@ function TaxaPopup({ nomeCliente, codigoRastreio, onConfirmado, onFechar }: Taxa
               <div>
                 <p className="font-black text-gray-900 text-xl">Comprovante recebido!</p>
                 <p className="text-gray-500 text-sm mt-2 leading-relaxed max-w-xs mx-auto">
-                  Seu reenvio foi aprovado. O pedido será despachado com prioridade e chegará em até{" "}
+                  Seu pedido foi liberado. O pedido será despachado com prioridade e chegará em até{" "}
                   <strong className="text-green-700">2 dias úteis</strong>.
                 </p>
               </div>
               <div className="bg-green-50 border border-green-200 rounded-xl p-3 w-full">
                 <div className="flex items-center gap-2 justify-center text-green-700">
                   <Truck className="h-4 w-4" />
-                  <span className="text-sm font-bold">Acompanhe o reenvio na linha do tempo abaixo</span>
+                  <span className="text-sm font-bold">Acompanhe na linha do tempo abaixo</span>
                 </div>
               </div>
             </div>
@@ -679,7 +645,7 @@ export default function RastrearPedido() {
     ? nomeCliente.split(" ")[0].charAt(0).toUpperCase() + nomeCliente.split(" ")[0].slice(1).toLowerCase()
     : "";
 
-  // Timeline do reenvio (aparece após pagar a taxa)
+  // Timeline de despacho (aparece após pagar a taxa)
   function EtapasReenvio() {
     if (!taxaPaga || !pagoPem) return null;
     const agora = new Date();
@@ -692,14 +658,14 @@ export default function RastrearPedido() {
     const etapas = [
       {
         icone: CheckCheck,
-        label: "Taxa de Reenvio Confirmada",
-        descricao: "Pagamento recebido. Reenvio aprovado com prioridade.",
+        label: "Taxa Alfandegária Confirmada",
+        descricao: "Pagamento recebido. Pedido liberado com prioridade.",
         data: fmt(pagoPem), ok: true,
       },
       {
         icone: Package,
-        label: "Em Separação para Reenvio",
-        descricao: "Seu pedido está sendo separado e embalado para novo despacho — Guarulhos, SP.",
+        label: "Em Separação para Despacho",
+        descricao: "Seu pedido está sendo separado e embalado para despacho — Guarulhos, SP.",
         data: min >= 120 ? fmt(tSep) : fmtPrev(tSep),
         ok: min >= 120,
       },
@@ -726,7 +692,7 @@ export default function RastrearPedido() {
             <Truck className="h-5 w-5 text-green-600" />
           </div>
           <div>
-            <h3 className="font-black text-gray-900 text-base">Reenvio em Andamento</h3>
+            <h3 className="font-black text-gray-900 text-base">Despacho em Andamento</h3>
             <p className="text-xs text-green-600 font-semibold">
               Previsão: {tEntregue.toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })} — até 2 dias úteis
             </p>
@@ -799,28 +765,28 @@ export default function RastrearPedido() {
 
         {resultado && (
           <>
-            {/* Alerta de falha na entrega */}
+            {/* Alerta de taxa alfandegária */}
             {resultado.falhaEntrega && (
               <div className="bg-red-50 border border-red-300 rounded-2xl p-5 flex gap-4 items-start">
                 <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
                   <AlertTriangle className="h-5 w-5 text-red-600" />
                 </div>
                 <div>
-                  <p className="font-black text-red-700 text-sm">Falha na Tentativa de Entrega</p>
+                  <p className="font-black text-red-700 text-sm">Taxado pela Alfândega</p>
                   <p className="text-red-600 text-xs mt-1 leading-relaxed">
-                    A transportadora tentou realizar a entrega, mas não localizou nenhum responsável no
-                    endereço. O produto está retornando ao CD em <strong>Guarulhos, SP</strong>.
+                    O objeto foi avaliado pela alfândega e uma taxa foi aplicada. É necessário o pagamento
+                    para liberar o pedido. Caso não ocorra o pagamento em até 72h, o produto poderá ser leiloado.
                   </p>
                   {resultado.aguardandoTaxa && (
                     <p className="text-red-700 text-xs mt-2 font-bold">
-                      Pague a taxa de reenvio abaixo para receber seu pedido em até 2 dias úteis.
+                      Pague a taxa alfandegária abaixo para liberar seu pedido em até 2 dias úteis.
                     </p>
                   )}
                 </div>
               </div>
             )}
 
-            {/* Card de taxa de reenvio (aparece no dia 15) */}
+            {/* Card de taxa alfandegária (aparece no dia 15) */}
             {resultado.aguardandoTaxa && !taxaPaga && (
               <div className="rounded-2xl overflow-hidden border border-orange-200 shadow-sm">
                 <div className="bg-orange-500 px-5 py-4 flex items-center gap-3">
@@ -828,20 +794,20 @@ export default function RastrearPedido() {
                     <CreditCard className="h-5 w-5 text-white" />
                   </div>
                   <div>
-                    <p className="font-black text-white text-sm">Taxa de Reenvio Necessária</p>
-                    <p className="text-orange-100 text-xs">Pague R$ 9,00 e receba em até 2 dias úteis</p>
+                    <p className="font-black text-white text-sm">Taxa Alfandegária Necessária</p>
+                    <p className="text-orange-100 text-xs">Pague R$ 27,87 e receba em até 2 dias úteis</p>
                   </div>
                 </div>
 
                 <div className="bg-white p-5 space-y-4">
                   <p className="text-gray-600 text-sm leading-relaxed">
-                    Seu pedido chegou ao Centro de Distribuição em <strong>Guarulhos, SP</strong> e está
-                    aguardando a taxa de reenvio para ser despachado novamente ao seu endereço.
+                    Seu pedido foi taxado pela alfândega em <strong>Guarulhos, SP</strong> e está
+                    aguardando o pagamento da taxa para ser liberado e entregue ao seu endereço.
                   </p>
 
                   <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
-                    <p className="text-sm text-gray-500 mb-1">Taxa de reenvio — valor único</p>
-                    <p className="text-3xl font-black text-green-700">R$ 9,00</p>
+                    <p className="text-sm text-gray-500 mb-1">Taxa alfandegária — valor único</p>
+                    <p className="text-3xl font-black text-green-700">R$ 27,87</p>
                     <p className="text-xs text-green-600 mt-1 font-semibold">
                       ✅ Após a confirmação, entrega em até <strong>2 dias úteis</strong>
                     </p>
@@ -854,13 +820,13 @@ export default function RastrearPedido() {
                     style={{ background: "linear-gradient(135deg,#15803d,#22c55e)" }}
                   >
                     <PixIcon size={22} className="text-white" />
-                    Pagar R$ 9,00 e receber meu pedido
+                    Pagar R$ 27,87 e liberar meu pedido
                   </button>
 
                   <div className="rounded-xl bg-blue-50 border border-blue-100 p-3 flex items-start gap-2.5">
                     <Truck className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
                     <p className="text-xs text-blue-700 leading-relaxed">
-                      Após o comprovante recebido, seu pedido é despachado com prioridade e chega em{" "}
+                      Após o comprovante recebido, seu pedido é liberado e entregue em{" "}
                       <strong>até 2 dias úteis</strong> no endereço cadastrado.
                     </p>
                   </div>
@@ -868,15 +834,15 @@ export default function RastrearPedido() {
               </div>
             )}
 
-            {/* Card de reenvio confirmado (após pagar) */}
+            {/* Card de liberação confirmado (após pagar) */}
             {taxaPaga && (
               <div className="bg-green-50 border border-green-500 rounded-2xl p-4 flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center shrink-0">
                   <CheckCheck className="h-5 w-5 text-white" />
                 </div>
                 <div>
-                  <p className="font-black text-green-800 text-sm">Reenvio aprovado!</p>
-                  <p className="text-green-700 text-xs mt-0.5">Acompanhe o novo despacho na linha do tempo abaixo.</p>
+                  <p className="font-black text-green-800 text-sm">Pedido liberado!</p>
+                  <p className="text-green-700 text-xs mt-0.5">Acompanhe o despacho na linha do tempo abaixo.</p>
                 </div>
               </div>
             )}
@@ -960,7 +926,7 @@ export default function RastrearPedido() {
               )}
             </div>
 
-            {/* Timeline de reenvio (pós-pagamento) */}
+            {/* Timeline de despacho (pós-pagamento) */}
             <EtapasReenvio />
           </>
         )}

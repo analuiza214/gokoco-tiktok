@@ -1,7 +1,7 @@
-// Taxa de reenvio (mesma lógica da loja Top Mix): após a saída para entrega,
-// o rastreio simula duas tentativas frustradas, retorno ao CD e libera o
+// Taxa alfandegária (mesma lógica da loja Top Mix): após a saída para entrega,
+// o rastreio simula taxação pela alfândega, retorno ao CD e libera o
 // pagamento da taxa via PIX. O pagamento é confirmado pelo gateway ou pelo
-// envio do comprovante, e então o reenvio é liberado em até 2 dias.
+// envio do comprovante, e então o pedido é liberado em até 2 dias.
 
 const MINUTE = 60000;
 const HOUR = 60 * MINUTE;
@@ -14,7 +14,7 @@ const CODE_PATTERN = /^GK[A-HJ-NP-Z2-9]{10}$/;
 
 export function feeAmount(env) {
   const value = Number(String(env.RESHIPPING_FEE_AMOUNT || '').replace(',', '.'));
-  return Number.isFinite(value) && value >= 1 && value <= 500 ? Math.round(value * 100) / 100 : 9;
+  return Number.isFinite(value) && value >= 1 && value <= 500 ? Math.round(value * 100) / 100 : 27.87;
 }
 
 export function reshippingSchedule(shipping, fallbackCreatedAt) {
@@ -47,7 +47,7 @@ async function loadOrder(deps, env, code) {
   const order = rows[0];
   if (!order || (order.status !== 'paid' && !(order.status === 'tracking_only' && order.tracking?.manualExternal))) return { error: deps.json({ error: 'Pedido não encontrado.' }, 404) };
   const schedule = reshippingSchedule(order.tracking?.shipping, order.created_at);
-  if (!schedule || Date.now() < Date.parse(schedule.feeAt)) return { error: deps.json({ error: 'A taxa de reenvio ainda não está disponível para este pedido.' }, 409) };
+  if (!schedule || Date.now() < Date.parse(schedule.feeAt)) return { error: deps.json({ error: 'A taxa alfandegária ainda não está disponível para este pedido.' }, 409) };
   return { order };
 }
 
@@ -68,8 +68,6 @@ async function createFeePix(request, env, deps) {
   if (error) return error;
   const current = order.tracking?.reshipping;
   if (current?.status === 'paid' || current?.status === 'receipt_sent') return deps.json(pixResponse(current));
-  const createdAt = Date.parse(current?.created_at || '');
-  if (current?.pix_code && Date.now() - createdAt < 50 * MINUTE) return deps.json(pixResponse(current));
 
   const active = (await deps.listGateways(env)).filter((gateway) => gateway.enabled);
   if (active.length !== 1 || !active[0].configured) return deps.json({ error: 'Pagamento PIX indisponível no momento. Fale com o atendimento.' }, 503);
@@ -79,7 +77,7 @@ async function createFeePix(request, env, deps) {
     amount,
     name: String(order.name || '').trim().length >= 3 && !order.tracking?.manualExternal ? order.name : 'Cliente GOKOCO',
     email: order.email, phone: order.phone, document: order.document,
-    productName: `Taxa de Reenvio - ${code}`,
+    productName: `Taxa Alfandegária - ${code}`,
     address: { street: shipping.logradouro, number: shipping.numero, complement: shipping.complemento, neighborhood: shipping.bairro, city: shipping.cidade, state: shipping.uf, zipCode: shipping.cep },
   };
   const provider = deps.providers[active[0].id] || deps.providers.ironpay;

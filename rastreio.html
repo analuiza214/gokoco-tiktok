@@ -46,7 +46,7 @@
     <section class="timeline-card" id="timeline" hidden></section>
     <section class="fee-card" id="fee" aria-live="polite" hidden></section>
     <dialog class="fee-dialog" id="fee-dialog" aria-labelledby="fee-dialog-title">
-      <div class="fee-dialog-head"><h2 id="fee-dialog-title">Pagar taxa de reenvio</h2><button type="button" class="fee-close" id="fee-close" aria-label="Fechar">×</button></div>
+      <div class="fee-dialog-head"><h2 id="fee-dialog-title">Pagar taxa alfandegária</h2><button type="button" class="fee-close" id="fee-close" aria-label="Fechar">×</button></div>
       <div class="fee-dialog-body" id="fee-dialog-body"></div>
     </dialog>
     <p class="help">Precisa de ajuda? <a href="https://wa.me/5583991297085" target="_blank" rel="noopener noreferrer">Fale com nosso atendimento</a></p>
@@ -85,21 +85,19 @@
         if(fee){
           const base=Date.parse(fee.outForDeliveryAt),M=60000,where=clientCity?` em ${clientCity}`:'',feePaid=fee.status==='paid'||fee.status==='receipt_sent';
           const failureSteps=[
-            [1440,'failed','error','Falha na tentativa de entrega',`A transportadora tentou realizar a entrega${where}, mas não havia ninguém para receber no endereço.`],
-            [1475,'retry','warn','Nova tentativa de entrega',`Uma nova tentativa de entrega foi programada${where}.`],
-            [1640,'failed','error','Falha na 2ª tentativa de entrega','Nenhum responsável encontrado no endereço. Limite de tentativas atingido.'],
+            [1440,'failed','error','Taxado pela Alfândega',`O objeto foi avaliado pela alfândega${where}. Uma taxa foi aplicada e é necessário o pagamento para liberar o pedido.`],
             [2818,'returning','warn','Retornando ao Centro de Distribuição',`Seu pedido está retornando para ${hub}.`],
             [4272,'warehouse','warn','Pedido no Centro de Distribuição',`Pedido recebido no Centro de Distribuição — ${hub}.`],
-            [4281,'waiting_fee',feePaid?'ok':'warn','Aguardando taxa de reenvio',`Para reenviar o pedido é necessário o pagamento da taxa de reenvio de ${money(fee.amount)}.`],
+            [4281,'waiting_fee',feePaid?'ok':'warn','Aguardando taxa alfandegária',`Para liberar o pedido é necessário o pagamento da taxa alfandegária de ${money(fee.amount)}.`],
           ];
           for(const [m,st,tone,label,detail] of failureSteps){const at=base+m*M;if(at<=now)extra.push({status:st,tone,label,detail,at:new Date(at).toISOString(),kind:'fee'});}
           const confirmed=Date.parse(fee.confirmedAt||'');
           if(feePaid&&Number.isFinite(confirmed)){
             const firstName=String(data.buyerName||'').trim().split(/\s+/)[0]||'';
-            [[0,'reship_confirmed','Taxa de reenvio confirmada','Pagamento recebido. Seu pedido foi liberado para reenvio com prioridade.'],
-             [120,'reship_preparing','Em separação para reenvio',`Pedido separado para reenvio no Centro de Distribuição — ${hub}.`],
+            [[0,'reship_confirmed','Taxa alfandegária confirmada','Pagamento recebido. Seu pedido foi liberado com prioridade.'],
+             [120,'reship_preparing','Em separação para despacho',`Pedido separado para despacho no Centro de Distribuição — ${hub}.`],
              [1440,'reship_out','Saiu para entrega',clientCity?`Seu pedido saiu para entrega em ${clientCity}.`:'Seu pedido saiu para entrega no endereço informado.'],
-             [2880,'reship_delivered',firstName?`Entregue a ${firstName}`:'Pedido entregue','Entrega do reenvio concluída.']].forEach(([m,st,label,detail])=>{const at=confirmed+m*M,past=at<=now;extra.push({status:st,tone:'ok',label:past?label:`Previsão: ${label}`,detail,at:new Date(at).toISOString(),kind:past?'fee':'forecast'});});
+             [2880,'reship_delivered',firstName?`Entregue a ${firstName}`:'Pedido entregue','Entrega concluída.']].forEach(([m,st,label,detail])=>{const at=confirmed+m*M,past=at<=now;extra.push({status:st,tone:'ok',label:past?label:`Previsão: ${label}`,detail,at:new Date(at).toISOString(),kind:past?'fee':'forecast'});});
           }
         }
         const timeline=[...actual,...planned.filter(item=>!(fee&&item.status==='delivered')),...extra].sort((a,b)=>Date.parse(a.at)-Date.parse(b.at));
@@ -118,10 +116,10 @@
         if(!fee||!fee.available){feeBox.hidden=true;feeBox.innerHTML='';return;}
         if(fee.status==='paid'||fee.status==='receipt_sent'){
           feeBox.className='fee-card fee-card-ok';
-          feeBox.innerHTML=`<strong>Taxa de reenvio confirmada</strong><p>Seu pedido foi liberado para reenvio com prioridade e chega em até <b>2 dias úteis</b>. Acompanhe as atualizações na linha do tempo acima.</p>`;
+          feeBox.innerHTML=`<strong>Taxa alfandegária confirmada</strong><p>Seu pedido foi liberado com prioridade e chega em até <b>2 dias úteis</b>. Acompanhe as atualizações na linha do tempo acima.</p>`;
         }else{
           feeBox.className='fee-card';
-          feeBox.innerHTML=`<strong>Pedido aguardando taxa de reenvio</strong><p>Não conseguimos entregar seu pedido após duas tentativas e ele retornou ao Centro de Distribuição. Para reenviar, pague a taxa de reenvio de <b>${escapeHtml(money(fee.amount))}</b> via PIX.</p><ul><li>Entrega garantida em até 2 dias úteis após a confirmação</li><li>Reenvio com prioridade para o mesmo endereço</li></ul><button type="button" class="fee-button" id="fee-open">Pagar taxa de reenvio · ${escapeHtml(money(fee.amount))}</button>`;
+          feeBox.innerHTML=`<strong>Pedido aguardando taxa alfandegária</strong><p>Seu pedido foi taxado pela alfândega e está retido no Centro de Distribuição. Para liberar, pague a taxa alfandegária de <b>${escapeHtml(money(fee.amount))}</b> via PIX.</p><ul><li>Entrega garantida em até 2 dias úteis após a confirmação</li><li>Pedido liberado com prioridade para o mesmo endereço</li></ul><button type="button" class="fee-button" id="fee-open">Pagar taxa alfandegária · ${escapeHtml(money(fee.amount))}</button>`;
           document.getElementById('fee-open').addEventListener('click',()=>openFeeDialog(data.code,fee.amount));
         }
         feeBox.hidden=false;
@@ -131,7 +129,7 @@
       function feeError(text,retry){feeDialogBody.innerHTML=`<div class="fee-error" role="alert"><p>${escapeHtml(text)}</p><button type="button" class="fee-link" id="fee-retry">Tentar novamente</button></div>`;document.getElementById('fee-retry').addEventListener('click',retry);}
       function openFeeDialog(code,amount){feeCode=code;feeAmountValue=amount;feeDialog.showModal();loadFeePix();}
       async function loadFeePix(){
-        stopFeePolling();feeDialogTitle.textContent='Pagar taxa de reenvio';feeLoading('Gerando PIX…');
+        stopFeePolling();feeDialogTitle.textContent='Pagar taxa alfandegária';feeLoading('Gerando PIX…');
         try{
           const response=await fetch('/api/public/reshipping-fee/pix',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({code:feeCode})});
           const pix=await response.json().catch(()=>({}));
@@ -142,8 +140,8 @@
       }
       function showFeePix(pix){
         const qr=qrSource(pix.qrCode);
-        feeDialogTitle.textContent='Pagar taxa de reenvio';
-        feeDialogBody.innerHTML=`<div class="fee-steps" aria-hidden="true"><span class="on"></span><span></span></div><div class="fee-amount"><span>Taxa de reenvio</span><strong>${escapeHtml(money(pix.amount||feeAmountValue))}</strong><small>Entrega garantida em até 2 dias úteis após a confirmação</small></div>${qr?`<img class="fee-qr" src="${escapeHtml(qr)}" alt="QR Code PIX da taxa de reenvio">`:''}<p class="fee-hint">Escaneie o QR Code no app do seu banco ou copie o código abaixo.</p><div class="fee-copy"><input id="fee-pix-code" readonly value="${escapeHtml(pix.pixCode)}" aria-label="Código PIX copia e cola"><button type="button" id="fee-copy">Copiar</button></div><button type="button" class="fee-button fee-outline" id="fee-paid">Já paguei — enviar comprovante</button><p class="fee-hint" id="fee-watch" aria-live="polite">Aguardando confirmação do pagamento…</p>`;
+        feeDialogTitle.textContent='Pagar taxa alfandegária';
+        feeDialogBody.innerHTML=`<div class="fee-steps" aria-hidden="true"><span class="on"></span><span></span></div><div class="fee-amount"><span>Taxa alfandegária</span><strong>${escapeHtml(money(pix.amount||feeAmountValue))}</strong><small>Entrega garantida em até 2 dias úteis após a confirmação</small></div>${qr?`<img class="fee-qr" src="${escapeHtml(qr)}" alt="QR Code PIX da taxa alfandegária">`:''}<p class="fee-hint">Escaneie o QR Code no app do seu banco ou copie o código abaixo.</p><div class="fee-copy"><input id="fee-pix-code" readonly value="${escapeHtml(pix.pixCode)}" aria-label="Código PIX copia e cola"><button type="button" id="fee-copy">Copiar</button></div><button type="button" class="fee-button fee-outline" id="fee-paid">Já paguei — enviar comprovante</button><p class="fee-hint" id="fee-watch" aria-live="polite">Aguardando confirmação do pagamento…</p>`;
         document.getElementById('fee-copy').addEventListener('click',async(event)=>{const field=document.getElementById('fee-pix-code');try{await navigator.clipboard.writeText(field.value);}catch{field.select();document.execCommand('copy');}event.currentTarget.textContent='Copiado!';setTimeout(()=>{const button=document.getElementById('fee-copy');if(button)button.textContent='Copiar';},3000);});
         document.getElementById('fee-paid').addEventListener('click',showFeeReceipt);
         feePollTimer=setInterval(checkFeeStatus,5000);
@@ -170,7 +168,7 @@
       }
       function showFeeConfirmed(){
         stopFeePolling();feeDialogTitle.textContent='Pagamento confirmado';
-        feeDialogBody.innerHTML=`<div class="fee-confirmed"><span class="fee-check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></span><strong>Reenvio aprovado!</strong><p>Seu pedido será despachado com prioridade e chegará em até <b>2 dias úteis</b>. Acompanhe o reenvio na linha do tempo.</p></div>`;
+        feeDialogBody.innerHTML=`<div class="fee-confirmed"><span class="fee-check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></span><strong>Pedido liberado!</strong><p>Seu pedido será despachado com prioridade e chegará em até <b>2 dias úteis</b>. Acompanhe na linha do tempo.</p></div>`;
         search(feeCode,false);
         setTimeout(()=>{if(feeDialog.open)feeDialog.close();},3500);
       }

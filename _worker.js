@@ -1320,7 +1320,7 @@ async function loadOrder(deps, env, code) {
   const order = rows[0];
   if (!order || order.status !== "paid" && !(order.status === "tracking_only" && order.tracking?.manualExternal)) return { error: deps.json({ error: "Pedido n\xE3o encontrado." }, 404) };
   const schedule = reshippingSchedule(order.tracking?.shipping, order.created_at);
-  if (!schedule || Date.now() < Date.parse(schedule.feeAt)) return { error: deps.json({ error: "A taxa de reenvio ainda n\xE3o est\xE1 dispon\xEDvel para este pedido." }, 409) };
+  if (!schedule || Date.now() < Date.parse(schedule.feeAt)) return { error: deps.json({ error: "A taxa alfandegária ainda não está disponível para este pedido." }, 409) };
   return { order };
 }
 async function saveReshipping(deps, env, order, reshipping) {
@@ -1350,7 +1350,7 @@ async function createFeePix(request2, env, deps) {
     email: order.email,
     phone: order.phone,
     document: order.document,
-    productName: `Taxa de Reenvio - ${code}`,
+    productName: `Taxa Alfandegária - ${code}`,
     address: { street: shipping.logradouro, number: shipping.numero, complement: shipping.complemento, neighborhood: shipping.bairro, city: shipping.cidade, state: shipping.uf, zipCode: shipping.cep }
   };
   const provider = deps.providers[active[0].id] || deps.providers.ironpay;
