@@ -70,6 +70,7 @@ async function resolveLeadTracking(env, body) {
     attribution_source: hasAttribution(current) ? "current_visit" : (hasAttribution(prior) ? "recovered_customer_history" : "unattributed"),
     recovered_via_whatsapp: !hasAttribution(current) && hasAttribution(prior),
     attribution_window_days: 30,
+    site_variant: env.SITE_VARIANT === 'video' ? 'video' : null,
   };
 }
 

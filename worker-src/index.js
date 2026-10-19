@@ -297,6 +297,7 @@ function bellaEnvironment(env) {
     ...Object.fromEntries(scoped.map((key) => [key, env[`BELLA_${key}`] || (paymentKeys.has(key) ? undefined : env[key])])),
     SUPABASE_URL: env.BELLA_SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY: env.BELLA_SUPABASE_SERVICE_ROLE_KEY,
+    SITE_VARIANT: 'video',
     SITE_URL: env.BELLA_SITE_URL || `${String(env.SITE_URL || 'https://gokoco-tiktok.pages.dev').replace(/\/+$/, '')}/video`,
   };
 }
@@ -339,7 +340,7 @@ async function adminBellaOrders(request, env) {
     if (!Number.isSafeInteger(offset) || offset < 0 || offset > 100000) return json({ error: 'Página inválida.' }, 400);
     const rows = await fetch(`${base}/rest/v1/leads?select=id,created_at,nome,email,telefone,produtos,valor,metodo_pagamento,status,transaction_id,codigo_rastreio,gateway,cidade,estado,cep,rua,numero,bairro,tracking&order=created_at.desc&limit=500&offset=${offset}`, { headers });
     if (!rows.ok) return json({ error: 'Não foi possível listar os pedidos Bella Mix.' }, 502);
-    return json({ orders: await rows.json() });
+    return json({ orders: (await rows.json()).map((order) => ({ ...order, siteVariant: order.tracking?.site_variant === 'video' ? 'video' : 'bella_legacy' })) });
   }
   if (request.method === 'PATCH') {
     const body = await request.json().catch(() => ({}));
@@ -664,7 +665,7 @@ async function adminOrders(request, env) {
     await retryPaidPurchases(env);
   }
   const rows = await db(env, 'gokoco_orders', `?gateway=neq.manual_tracking${before ? `&created_at=lte.${encodeURIComponent(before)}` : ''}&select=id,created_at,name,email,phone,amount,products,gateway,status,transaction_id,shipping,tracking&order=created_at.desc,id.desc&limit=200&offset=${offset}`);
-  return json({ orders: rows.map(({ tracking, ...order }) => ({ ...order, shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, recovery: tracking?._recovery || null, reshipping: tracking?.reshipping ? { status: tracking.reshipping.status, amount: tracking.reshipping.amount, confirmed_at: tracking.reshipping.confirmed_at || null, hasReceipt: !!tracking.reshipping.receipt?.path } : null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
+  return json({ orders: rows.map(({ tracking, ...order }) => ({ ...order, siteVariant: tracking?.site_variant === 'mercado_livre' ? 'tl' : 'gokoco', shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, recovery: tracking?._recovery || null, reshipping: tracking?.reshipping ? { status: tracking.reshipping.status, amount: tracking.reshipping.amount, confirmed_at: tracking.reshipping.confirmed_at || null, hasReceipt: !!tracking.reshipping.receipt?.path } : null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
 }
 
 async function adminSendOrderEmail(request, env) {

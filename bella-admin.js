@@ -28,7 +28,7 @@
     byId('bella-orders').innerHTML = visible.map((order) => `
       <article class="order-card" data-id="${escape(order.id)}">
         <div class="order-layout"><div class="order-main"><div class="order-info">
-          <div class="name-line"><strong class="customer-name">${escape(order.nome)}</strong><span class="status-pill">${escape(order.status)}</span></div>
+          <div class="name-line"><strong class="customer-name">${escape(order.nome)}</strong><span class="status-pill">${escape(order.status)}</span><span class="site-badge ${order.siteVariant === 'video' ? 'site-badge-video' : 'site-badge-legacy'}" aria-label="Origem da venda: ${order.siteVariant === 'video' ? 'VÍDEO' : 'Bella Mix anterior'}">${order.siteVariant === 'video' ? 'VÍDEO' : 'BELLA MIX ANTERIOR'}</span></div>
           <div class="order-detail">${escape(order.email)} · ${escape(order.telefone)}</div>
           <div class="order-detail">${escape(order.produtos)}</div>
           <div class="order-detail amount-line">${escape(money(order.valor))} · ${escape((order.metodo_pagamento || '').toUpperCase())} · ${escape(order.gateway || '')}</div>
