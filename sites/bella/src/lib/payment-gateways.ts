@@ -21,6 +21,7 @@ export const GATEWAY_NAMES: Record<string, string> = {
   umbrellapag: "UmbrellaPag",
   venuspay: "Venus Pay",
   venuspay_pix: "Venus Pay",
+  flevopay: "FlevoPay",
 };
 
 export function gatewayLabel(id?: string | null): string | null {

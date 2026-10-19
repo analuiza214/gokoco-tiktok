@@ -2,6 +2,7 @@ import { statusPixIronpay } from "./pix-gateways/ironpay.js";
 import { statusPixMasterfy } from "./pix-gateways/masterfy.js";
 import { statusPixUmbrellapag } from "./pix-gateways/umbrellapag.js";
 import { statusPixVenuspay } from "./pix-gateways/venuspay.js";
+import { statusPixFlevopay } from "./pix-gateways/flevopay.js";
 
 const headers = { "Content-Type": "application/json" };
 
@@ -11,6 +12,7 @@ export async function queryPixGatewayStatus(env, transactionId, gateway) {
   if (gateway === "masterfy") response = await statusPixMasterfy(context, headers, transactionId);
   else if (gateway === "umbrellapag") response = await statusPixUmbrellapag(context, headers, transactionId);
   else if (gateway === "venuspay_pix") response = await statusPixVenuspay(context, headers, transactionId);
+  else if (gateway === "flevopay") response = await statusPixFlevopay(context, headers, transactionId);
   else response = await statusPixIronpay(context, headers, transactionId);
   const data = await response.json();
   if (!response.ok) throw new Error(data?.error || `Gateway respondeu ${response.status}.`);

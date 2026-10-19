@@ -1,6 +1,6 @@
 -- Tabelas exclusivas da loja GOKOCO. Execute no SQL Editor do projeto Supabase.
 create table if not exists public.gokoco_gateways (
-  id text primary key check (id in ('ironpay','masterfy','umbrellapag','venuspay_pix')),
+  id text primary key check (id in ('ironpay','masterfy','umbrellapag','venuspay_pix','flevopay')),
   enabled boolean not null default false,
   updated_at timestamptz not null default now()
 );
@@ -35,5 +35,5 @@ alter table public.gokoco_orders enable row level security;
 
 -- Nenhuma policy pública: somente a chave secreta do servidor acessa os dados.
 insert into public.gokoco_gateways (id, enabled) values
- ('ironpay', false), ('masterfy', false), ('umbrellapag', false), ('venuspay_pix', false)
+ ('ironpay', false), ('masterfy', false), ('umbrellapag', false), ('venuspay_pix', false), ('flevopay', false)
 on conflict (id) do nothing;

@@ -7,7 +7,7 @@
 // Dashboard -> API -> Webhooks no painel da VenusPay (ela nao aceita
 // postback_url na requisicao). Eventos: sale.approved, sale.declined,
 // sale.refunded, sale.chargeback, pix.generated, checkout.started.
-import { fulfillPaidPixLead, updatePixLeadStatus } from "../../_lib/leads-store.js";
+import { fulfillPaidPixLead, getLeadById, updatePixLeadStatus } from "../../_lib/leads-store.js";
 import { queryPixGatewayStatus } from "../../_lib/pix-gateway-status.js";
 
 const corsHeaders = {
@@ -38,15 +38,18 @@ export async function onRequest(context) {
       !isUmbrellapag &&
       typeof notification.event === "string" &&
       !!notification.data?.transaction_id;
-    const isMasterfy = !isIronpay && !isUmbrellapag && !isVenuspay && !!notification.id;
+    const isFlevopay = !isIronpay && !isUmbrellapag && !isVenuspay && notification.webhook_type === "transaction" && !!(notification.store_reference || notification.external_id);
+    const isMasterfy = !isIronpay && !isUmbrellapag && !isVenuspay && !isFlevopay && !!notification.id;
     const event = isUmbrellapag
       ? "UMBRELLAPAG_WEBHOOK_RECEIVED"
       : isVenuspay
         ? "VENUSPAY_WEBHOOK_RECEIVED"
+        : isFlevopay
+          ? "FLEVOPAY_WEBHOOK_RECEIVED"
         : isMasterfy
           ? "MASTERFY_WEBHOOK_RECEIVED"
           : "IRONPAY_WEBHOOK_RECEIVED";
-    const paymentId =
+    let paymentId =
       notification.objectId ||
       notification.data?.transaction_id ||
       notification.data?.id ||
@@ -55,7 +58,13 @@ export async function onRequest(context) {
       notification.transaction_id ||
       notification.id ||
       null;
-    const gateway = isUmbrellapag ? "umbrellapag" : isVenuspay ? "venuspay_pix" : isMasterfy ? "masterfy" : "ironpay";
+    const gateway = isUmbrellapag ? "umbrellapag" : isVenuspay ? "venuspay_pix" : isFlevopay ? "flevopay" : isMasterfy ? "masterfy" : "ironpay";
+
+    if (isFlevopay) {
+      const reference = notification.store_reference || notification.external_id;
+      const lead = await getLeadById(context.env, reference);
+      paymentId = lead?.gateway === "flevopay" ? lead.transaction_id : null;
+    }
 
     if (paymentId) {
       try {

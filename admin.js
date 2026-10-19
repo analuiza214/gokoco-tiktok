@@ -14,7 +14,7 @@ let selectedSort = 'recentes';
 let page = 1;
 let busy = false;
 const PAGE_SIZE = 50;
-const gatewayNames = { ironpay: 'IronPay', masterfy: 'MasterFy', umbrellapag: 'UmbrellaPag', venuspay_pix: 'Venus Pay' };
+const gatewayNames = { ironpay: 'IronPay', masterfy: 'MasterFy', umbrellapag: 'UmbrellaPag', venuspay_pix: 'Venus Pay', flevopay: 'FlevoPay' };
 const statusInfo = {
   creating: { label: 'Criando PIX', fg: '#92400e', bg: '#fef3c7' },
   pending: { label: 'PIX gerado', fg: '#1d4ed8', bg: '#dbeafe' },

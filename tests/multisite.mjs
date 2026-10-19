@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import worker from '../_worker.js';
 import { safeCardSummary } from '../sites/bella/functions/_lib/card-summary.js';
+import { createPixFlevopay, statusPixFlevopay } from '../worker-src/providers/flevopay.js';
 
 assert.equal(safeCardSummary('Visa ••••1234'), 'Visa ••••1234');
 assert.equal(safeCardSummary('4111111111111234'), null);
@@ -50,6 +51,35 @@ assert.equal(health.requiredServerConfig.supabaseServiceRole, false);
 assert.equal(health.activePixGateway, null);
 
 const originalFetch = globalThis.fetch;
+try {
+  globalThis.fetch = async (url, options) => {
+    assert.equal(String(url), 'https://app.flevopag.com/api/v1/transaction');
+    assert.equal(options.headers['X-API-Key'], 'test-secret');
+    const payload = JSON.parse(options.body);
+    assert.equal(payload.amount, 3790);
+    assert.equal(payload.reference, 'order-123');
+    assert.equal(payload.source, 'api_externa');
+    assert.equal(payload.postback_url, 'https://gokoco.example/video/api/pix/webhook');
+    return Response.json({ transaction_id: 238, qr_code: 'pix-code', qr_code_base64: 'data:image/png;base64,AAA' });
+  };
+  const created = await createPixFlevopay({
+    request: new Request('https://gokoco.example/video/api/pix/create'), env: { FLEVOPAY_API_KEY: 'test-secret' },
+  }, { 'Content-Type': 'application/json' }, {
+    amount: 37.90, reference: 'order-123', name: 'Cliente Teste', email: 'cliente@example.com',
+    phone: '11999999999', document: '12345678901', productName: 'Escova GOKOCO',
+  });
+  assert.equal(created.status, 200);
+  assert.equal((await created.json()).transactionId, '238');
+  globalThis.fetch = async (url, options) => {
+    assert.equal(String(url), 'https://app.flevopag.com/api/v1/query?action=get_transaction&id=238');
+    assert.equal(options.headers['X-API-Key'], 'test-secret');
+    return Response.json({ id: 238, status: 'approved' });
+  };
+  const checked = await statusPixFlevopay({ env: { FLEVOPAY_API_KEY: 'test-secret' } }, {}, '238');
+  assert.equal((await checked.json()).isPaid, true);
+} finally {
+  globalThis.fetch = originalFetch;
+}
 try {
   globalThis.fetch = async (request) => {
     assert.match(String(request), /gokoco\.supabase\.co\/rest\/v1\/payment_gateways/);

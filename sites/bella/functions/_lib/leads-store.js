@@ -126,7 +126,7 @@ export async function getLeadById(env, leadId) {
   if (!leadId) return null;
   const response = await supabaseRequest(
     env,
-    `leads?id=eq.${encodeURIComponent(leadId)}&select=id,valor,produtos,metodo_pagamento,status&limit=1`,
+    `leads?id=eq.${encodeURIComponent(leadId)}&select=id,valor,produtos,metodo_pagamento,status,transaction_id,gateway&limit=1`,
   );
   const rows = await response.json();
   return Array.isArray(rows) && rows[0] ? rows[0] : null;

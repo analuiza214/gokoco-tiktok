@@ -6,6 +6,7 @@ const DEFAULT_GATEWAYS = [
   { id: "umbrellapag", name: "UmbrellaPag", method: "pix", enabled: false },
   { id: "venuspay", name: "Venus Pay", method: "card", enabled: true },
   { id: "venuspay_pix", name: "Venus Pay", method: "pix", enabled: false },
+  { id: "flevopay", name: "FlevoPay", method: "pix", enabled: false },
 ];
 
 function supabaseHeaders(key) {
@@ -45,6 +46,9 @@ export function gatewayConfigured(env, id) {
   }
   if (id === "umbrellapag") {
     return !!String(env.UMBRELLAPAG_API_KEY || "").trim();
+  }
+  if (id === "flevopay") {
+    return !!String(env.FLEVOPAY_API_KEY || "").trim();
   }
   // Cartão e PIX da Venus Pay usam a mesma credencial
   if (id === "venuspay" || id === "venuspay_pix") {

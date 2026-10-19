@@ -4,6 +4,7 @@ import { createPixIronpay } from './providers/ironpay.js';
 import { createPixMasterfy } from './providers/masterfy.js';
 import { createPixUmbrellapag } from './providers/umbrellapag.js';
 import { createPixVenuspay } from './providers/venuspay.js';
+import { createPixFlevopay } from './providers/flevopay.js';
 import { queryPixGatewayStatus } from './pix-gateway-status.js';
 import { capturePurchaseTracking, recoverCustomerAttribution, purchaseDestination, purchaseSummary, deliverPaidPurchase, deliverPendingPurchase } from './purchase-tracking.js';
 import { deliverPaidEmail, retryPaidEmails, sendManualOrderEmail } from './order-email.js';
@@ -33,6 +34,7 @@ const gateways = [
   { id: 'masterfy', name: 'MasterFy' },
   { id: 'umbrellapag', name: 'UmbrellaPag' },
   { id: 'venuspay_pix', name: 'Venus Pay PIX' },
+  { id: 'flevopay', name: 'FlevoPay' },
 ];
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
 const digits = (value) => String(value || '').replace(/\D/g, '');
@@ -97,6 +99,7 @@ function configured(env, id) {
   if (id === 'masterfy') return !!env.MASTERFY_API_KEY;
   if (id === 'umbrellapag') return !!env.UMBRELLAPAG_API_KEY;
   if (id === 'venuspay_pix') return !!env.VENUS_PAY_SECRET_KEY;
+  if (id === 'flevopay') return !!env.FLEVOPAY_API_KEY;
   return false;
 }
 
@@ -213,6 +216,7 @@ async function createPix(request, env, ctx, siteVariant = 'gokoco') {
   const gatewayContact = maskedGatewayContact(env, id, order);
   const payload = {
     amount: order.amount, name: order.name, email: gatewayContact.email, phone: gatewayContact.phone,
+    reference: id,
     document: order.document,
     productName: order.products.map((p) => p.name).filter(Boolean).join(' + ').slice(0, 255) || 'Escova Modeladora GOKOCO',
     address: {
@@ -226,6 +230,7 @@ async function createPix(request, env, ctx, siteVariant = 'gokoco') {
   const result = provider === 'masterfy' ? await createPixMasterfy(context, headers, payload)
     : provider === 'umbrellapag' ? await createPixUmbrellapag(context, headers, payload)
     : provider === 'venuspay_pix' ? await createPixVenuspay(context, headers, payload)
+    : provider === 'flevopay' ? await createPixFlevopay(context, headers, payload)
     : await createPixIronpay(context, headers, payload);
   const payment = await result.json().catch(() => ({}));
   if (!result.ok || !payment.pixCode || !payment.transactionId) {
@@ -291,7 +296,7 @@ function bellaSiteRequest(url, env) {
 }
 
 function bellaEnvironment(env) {
-  const scoped = ['IRONPAY_API_TOKEN', 'IRONPAY_OFFER_HASH', 'IRONPAY_PRODUCT_HASH', 'MASTERFY_API_KEY', 'UMBRELLAPAG_API_KEY', 'VENUS_PAY_SECRET_KEY', 'VENUS_PAY_PRODUCT_ID', 'RESEND_API_KEY', 'RESEND_FROM_EMAIL', 'UTMIFY_API_TOKEN', 'FB_PIXEL_ID', 'FB_ACCESS_TOKEN', 'VITE_GTM_ID', 'VITE_GA_ID', 'VITE_UTMIFY_PIXEL_ID'];
+  const scoped = ['IRONPAY_API_TOKEN', 'IRONPAY_OFFER_HASH', 'IRONPAY_PRODUCT_HASH', 'MASTERFY_API_KEY', 'UMBRELLAPAG_API_KEY', 'VENUS_PAY_SECRET_KEY', 'VENUS_PAY_PRODUCT_ID', 'FLEVOPAY_API_KEY', 'FLEVOPAY_PRODUCT_HASH', 'RESEND_API_KEY', 'RESEND_FROM_EMAIL', 'UTMIFY_API_TOKEN', 'FB_PIXEL_ID', 'FB_ACCESS_TOKEN', 'VITE_GTM_ID', 'VITE_GA_ID', 'VITE_UTMIFY_PIXEL_ID'];
   const paymentKeys = new Set(['IRONPAY_API_TOKEN', 'IRONPAY_OFFER_HASH', 'IRONPAY_PRODUCT_HASH', 'MASTERFY_API_KEY', 'UMBRELLAPAG_API_KEY', 'VENUS_PAY_PRODUCT_ID']);
   return {
     ...env,
@@ -363,7 +368,7 @@ async function adminBellaGateways(request, env) {
   if (request.method === 'GET') return json({ gateways: await listBellaGateways(bella) });
   if (request.method !== 'PATCH') return json({ error: 'Método inválido.' }, 405);
   const body = await request.json().catch(() => ({}));
-  if (typeof body.enabled !== 'boolean' || !['ironpay', 'masterfy', 'umbrellapag', 'venuspay', 'venuspay_pix'].includes(body.id)) return json({ error: 'Gateway inválido.' }, 400);
+  if (typeof body.enabled !== 'boolean' || !['ironpay', 'masterfy', 'umbrellapag', 'venuspay', 'venuspay_pix', 'flevopay'].includes(body.id)) return json({ error: 'Gateway inválido.' }, 400);
   return json({ gateways: await setBellaGatewayEnabled(bella, body.id, body.enabled) });
 }
 
@@ -451,7 +456,7 @@ async function webhook(request, env) {
   const notification = await request.json().catch(() => null);
   if (!notification) return json({ received: true });
   const ids = [
-    notification.objectId, notification.transactionId, notification.transaction_id, notification.transactionHash, notification.transaction_hash, notification.id,
+    notification.objectId, notification.transactionId, notification.transaction_id, notification.transactionHash, notification.transaction_hash, notification.id, notification.external_id, notification.store_reference,
     notification.object?.id, notification.object?.transaction_id, notification.object?.transactionId, notification.object?.hash,
     notification.transaction?.id, notification.transaction?.transaction_id, notification.transaction?.hash,
     notification.payment?.id, notification.payment?.transaction_id, notification.payment?.transactionId,
@@ -464,7 +469,8 @@ async function webhook(request, env) {
   for (const id of ids) {
     if (seenIds.has(id)) continue;
     seenIds.add(id);
-    const rows = await db(env, 'gokoco_orders', `?transaction_id=eq.${encodeURIComponent(String(id))}&select=id,transaction_id,gateway,status&limit=1`);
+    const byReference = notification.external_id === id || notification.store_reference === id;
+    const rows = await db(env, 'gokoco_orders', `?${byReference ? 'id' : 'transaction_id'}=eq.${encodeURIComponent(String(id))}&select=id,transaction_id,gateway,status&limit=1`);
     const order = rows[0];
     if (!order) continue;
     matchedOrder = true;
@@ -803,7 +809,7 @@ export default {
       if (path.startsWith('/api/public/reshipping-fee/') || path === '/api/admin/reshipping-receipt') {
         const handled = await handleReshippingRoute(path, request, env, {
           db, json, listGateways, requireAdmin, queryPixGatewayStatus,
-          providers: { ironpay: createPixIronpay, masterfy: createPixMasterfy, umbrellapag: createPixUmbrellapag, venuspay_pix: createPixVenuspay },
+          providers: { ironpay: createPixIronpay, masterfy: createPixMasterfy, umbrellapag: createPixUmbrellapag, venuspay_pix: createPixVenuspay, flevopay: createPixFlevopay },
         });
         if (handled) return handled;
       }

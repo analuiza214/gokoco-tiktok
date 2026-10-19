@@ -12,6 +12,7 @@ const DEFAULT_GATEWAYS: PaymentGateway[] = [
   { id: "umbrellapag", name: "UmbrellaPag", method: "pix", enabled: false, configured: true },
   { id: "venuspay", name: "Venus Pay", method: "card", enabled: true, configured: true },
   { id: "venuspay_pix", name: "Venus Pay", method: "pix", enabled: false, configured: true },
+  { id: "flevopay", name: "FlevoPay", method: "pix", enabled: false, configured: false },
 ];
 
 /** Ordem dos métodos dentro de cada gateway: Cartão primeiro, depois PIX */
