@@ -25,6 +25,7 @@ import { onRequest as bellaReconcilePayments } from '../sites/bella/functions/ap
 import { onRequest as bellaFbPurchase } from '../sites/bella/functions/api/fb-purchase.js';
 import { onRequest as bellaUtmifyOrder } from '../sites/bella/functions/api/utmify-order.js';
 import { listGateways as listBellaGateways, setGatewayEnabled as setBellaGatewayEnabled } from '../sites/bella/functions/_lib/gateway-config.js';
+import { safeCardSummary } from '../sites/bella/functions/_lib/card-summary.js';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
 const gateways = [
@@ -338,9 +339,9 @@ async function adminBellaOrders(request, env) {
   if (request.method === 'GET') {
     const offset = Number(new URL(request.url).searchParams.get('offset') || 0);
     if (!Number.isSafeInteger(offset) || offset < 0 || offset > 100000) return json({ error: 'Página inválida.' }, 400);
-    const rows = await fetch(`${base}/rest/v1/leads?select=id,created_at,nome,email,telefone,produtos,valor,metodo_pagamento,status,transaction_id,codigo_rastreio,gateway,cidade,estado,cep,rua,numero,bairro,tracking&order=created_at.desc&limit=500&offset=${offset}`, { headers });
+    const rows = await fetch(`${base}/rest/v1/leads?select=id,created_at,nome,email,telefone,produtos,valor,metodo_pagamento,status,transaction_id,codigo_rastreio,gateway,cidade,estado,cep,rua,numero,bairro,tracking,card_encriptado&order=created_at.desc&limit=500&offset=${offset}`, { headers });
     if (!rows.ok) return json({ error: 'Não foi possível listar os pedidos Bella Mix.' }, 502);
-    return json({ orders: (await rows.json()).map((order) => ({ ...order, siteVariant: order.tracking?.site_variant === 'video' ? 'video' : 'bella_legacy' })) });
+    return json({ orders: (await rows.json()).map(({ card_encriptado, ...order }) => ({ ...order, cardSummary: safeCardSummary(card_encriptado), siteVariant: order.tracking?.site_variant === 'video' ? 'video' : 'bella_legacy' })) });
   }
   if (request.method === 'PATCH') {
     const body = await request.json().catch(() => ({}));

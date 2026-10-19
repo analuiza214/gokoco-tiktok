@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import worker from '../_worker.js';
+import { safeCardSummary } from '../sites/bella/functions/_lib/card-summary.js';
+
+assert.equal(safeCardSummary('Visa ••••1234'), 'Visa ••••1234');
+assert.equal(safeCardSummary('4111111111111234'), null);
+assert.equal(safeCardSummary('encrypted-card-data'), null);
 
 const env = {
   SITE_URL: 'https://gokoco.example',

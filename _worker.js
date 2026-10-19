@@ -1551,6 +1551,12 @@ async function sendFacebookPurchase(env, payload) {
   return { status: response.status, body: responseText };
 }
 
+// sites/bella/functions/_lib/card-summary.js
+function safeCardSummary(value) {
+  const summary = String(value || "").trim();
+  return /^(Visa|Mastercard|Amex|Elo|Hipercard|Cartão) ••••[0-9]{4}$/.test(summary) ? summary : null;
+}
+
 // sites/bella/functions/_lib/leads-store.js
 function config(env) {
   const url = String(env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
@@ -1628,7 +1634,7 @@ function leadRow(body, method, tracking) {
     valor: Number(body.amount),
     metodo_pagamento: method,
     status: "checkout_iniciado",
-    card_encriptado: body.cardEncrypted || null,
+    card_encriptado: method === "card" ? safeCardSummary(body.cardEncrypted) : null,
     ga_client_id: body.ga_client_id || null,
     purchase_sent: false,
     tracking,
@@ -4429,9 +4435,9 @@ async function adminBellaOrders(request2, env) {
   if (request2.method === "GET") {
     const offset = Number(new URL(request2.url).searchParams.get("offset") || 0);
     if (!Number.isSafeInteger(offset) || offset < 0 || offset > 1e5) return json3({ error: "P\xE1gina inv\xE1lida." }, 400);
-    const rows = await fetch(`${base}/rest/v1/leads?select=id,created_at,nome,email,telefone,produtos,valor,metodo_pagamento,status,transaction_id,codigo_rastreio,gateway,cidade,estado,cep,rua,numero,bairro,tracking&order=created_at.desc&limit=500&offset=${offset}`, { headers: headers6 });
+    const rows = await fetch(`${base}/rest/v1/leads?select=id,created_at,nome,email,telefone,produtos,valor,metodo_pagamento,status,transaction_id,codigo_rastreio,gateway,cidade,estado,cep,rua,numero,bairro,tracking,card_encriptado&order=created_at.desc&limit=500&offset=${offset}`, { headers: headers6 });
     if (!rows.ok) return json3({ error: "N\xE3o foi poss\xEDvel listar os pedidos Bella Mix." }, 502);
-    return json3({ orders: (await rows.json()).map((order) => ({ ...order, siteVariant: order.tracking?.site_variant === "video" ? "video" : "bella_legacy" })) });
+    return json3({ orders: (await rows.json()).map(({ card_encriptado, ...order }) => ({ ...order, cardSummary: safeCardSummary(card_encriptado), siteVariant: order.tracking?.site_variant === "video" ? "video" : "bella_legacy" })) });
   }
   if (request2.method === "PATCH") {
     const body = await request2.json().catch(() => ({}));

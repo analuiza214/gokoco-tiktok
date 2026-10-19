@@ -1,5 +1,6 @@
 import { sendUtmifyOrder } from "./utmify.js";
 import { sendFacebookPurchase } from "./facebook.js";
+import { safeCardSummary } from "./card-summary.js";
 
 function config(env) {
   const url = String(env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
@@ -84,7 +85,7 @@ function leadRow(body, method, tracking) {
     valor: Number(body.amount),
     metodo_pagamento: method,
     status: "checkout_iniciado",
-    card_encriptado: body.cardEncrypted || null,
+    card_encriptado: method === "card" ? safeCardSummary(body.cardEncrypted) : null,
     ga_client_id: body.ga_client_id || null,
     purchase_sent: false,
     tracking,
