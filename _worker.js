@@ -1320,7 +1320,7 @@ async function loadOrder(deps, env, code) {
   const order = rows[0];
   if (!order || order.status !== "paid" && !(order.status === "tracking_only" && order.tracking?.manualExternal)) return { error: deps.json({ error: "Pedido n\xE3o encontrado." }, 404) };
   const schedule = reshippingSchedule(order.tracking?.shipping, order.created_at);
-  if (!schedule || Date.now() < Date.parse(schedule.feeAt)) return { error: deps.json({ error: "A taxa alfandegária ainda não está disponível para este pedido." }, 409) };
+  if (!schedule || Date.now() < Date.parse(schedule.feeAt)) return { error: deps.json({ error: "A taxa alfandeg\xE1ria ainda n\xE3o est\xE1 dispon\xEDvel para este pedido." }, 409) };
   return { order };
 }
 async function saveReshipping(deps, env, order, reshipping) {
@@ -1350,7 +1350,7 @@ async function createFeePix(request2, env, deps) {
     email: order.email,
     phone: order.phone,
     document: order.document,
-    productName: `Taxa Alfandegária - ${code}`,
+    productName: `Taxa Alfandeg\xE1ria - ${code}`,
     address: { street: shipping.logradouro, number: shipping.numero, complement: shipping.complemento, neighborhood: shipping.bairro, city: shipping.cidade, state: shipping.uf, zipCode: shipping.cep }
   };
   const provider = deps.providers[active[0].id] || deps.providers.ironpay;
@@ -4384,7 +4384,7 @@ function bellaSiteRequest(url, env) {
 }
 function bellaEnvironment(env) {
   const scoped = ["IRONPAY_API_TOKEN", "IRONPAY_OFFER_HASH", "IRONPAY_PRODUCT_HASH", "MASTERFY_API_KEY", "UMBRELLAPAG_API_KEY", "VENUS_PAY_SECRET_KEY", "VENUS_PAY_PRODUCT_ID", "RESEND_API_KEY", "RESEND_FROM_EMAIL", "UTMIFY_API_TOKEN", "FB_PIXEL_ID", "FB_ACCESS_TOKEN", "VITE_GTM_ID", "VITE_GA_ID", "VITE_UTMIFY_PIXEL_ID"];
-  const paymentKeys = /* @__PURE__ */ new Set(["IRONPAY_API_TOKEN", "IRONPAY_OFFER_HASH", "IRONPAY_PRODUCT_HASH", "MASTERFY_API_KEY", "UMBRELLAPAG_API_KEY", "VENUS_PAY_SECRET_KEY", "VENUS_PAY_PRODUCT_ID"]);
+  const paymentKeys = /* @__PURE__ */ new Set(["IRONPAY_API_TOKEN", "IRONPAY_OFFER_HASH", "IRONPAY_PRODUCT_HASH", "MASTERFY_API_KEY", "UMBRELLAPAG_API_KEY", "VENUS_PAY_PRODUCT_ID"]);
   return {
     ...env,
     ...Object.fromEntries(scoped.map((key) => [key, env[`BELLA_${key}`] || (paymentKeys.has(key) ? void 0 : env[key])])),

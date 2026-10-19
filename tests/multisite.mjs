@@ -44,6 +44,28 @@ assert.equal(health.requiredServerConfig.supabaseUrl, false);
 assert.equal(health.requiredServerConfig.supabaseServiceRole, false);
 assert.equal(health.activePixGateway, null);
 
+const originalFetch = globalThis.fetch;
+try {
+  globalThis.fetch = async (request) => {
+    assert.match(String(request), /gokoco\.supabase\.co\/rest\/v1\/payment_gateways/);
+    return new Response(JSON.stringify([{ id: 'venuspay_pix', name: 'Venus Pay', method: 'pix', enabled: true }]), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  };
+  const sharedGatewayHealth = await worker.fetch(new Request('https://gokoco.example/video/api/checkout-health'), {
+    ...env,
+    BELLA_SUPABASE_URL: 'https://gokoco.supabase.co',
+    BELLA_SUPABASE_SERVICE_ROLE_KEY: 'bella-database-only',
+    VENUS_PAY_SECRET_KEY: 'shared-payment-key',
+  });
+  assert.equal(sharedGatewayHealth.status, 200);
+  const sharedGateway = await sharedGatewayHealth.json();
+  assert.equal(sharedGateway.activePixGateway, 'venuspay_pix');
+  assert.equal(sharedGateway.databaseProject, 'gokoco');
+} finally {
+  globalThis.fetch = originalFetch;
+}
+
 const invalidPix = await worker.fetch(new Request('https://gokoco.example/api/market/pix/create', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },

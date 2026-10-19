@@ -291,7 +291,7 @@ function bellaSiteRequest(url, env) {
 
 function bellaEnvironment(env) {
   const scoped = ['IRONPAY_API_TOKEN', 'IRONPAY_OFFER_HASH', 'IRONPAY_PRODUCT_HASH', 'MASTERFY_API_KEY', 'UMBRELLAPAG_API_KEY', 'VENUS_PAY_SECRET_KEY', 'VENUS_PAY_PRODUCT_ID', 'RESEND_API_KEY', 'RESEND_FROM_EMAIL', 'UTMIFY_API_TOKEN', 'FB_PIXEL_ID', 'FB_ACCESS_TOKEN', 'VITE_GTM_ID', 'VITE_GA_ID', 'VITE_UTMIFY_PIXEL_ID'];
-  const paymentKeys = new Set(['IRONPAY_API_TOKEN', 'IRONPAY_OFFER_HASH', 'IRONPAY_PRODUCT_HASH', 'MASTERFY_API_KEY', 'UMBRELLAPAG_API_KEY', 'VENUS_PAY_SECRET_KEY', 'VENUS_PAY_PRODUCT_ID']);
+  const paymentKeys = new Set(['IRONPAY_API_TOKEN', 'IRONPAY_OFFER_HASH', 'IRONPAY_PRODUCT_HASH', 'MASTERFY_API_KEY', 'UMBRELLAPAG_API_KEY', 'VENUS_PAY_PRODUCT_ID']);
   return {
     ...env,
     ...Object.fromEntries(scoped.map((key) => [key, env[`BELLA_${key}`] || (paymentKeys.has(key) ? undefined : env[key])])),

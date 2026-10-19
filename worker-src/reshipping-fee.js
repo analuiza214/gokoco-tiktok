@@ -14,7 +14,7 @@ const CODE_PATTERN = /^GK[A-HJ-NP-Z2-9]{10}$/;
 
 export function feeAmount(env) {
   const value = Number(String(env.RESHIPPING_FEE_AMOUNT || '').replace(',', '.'));
-  return Number.isFinite(value) && value >= 1 && value <= 500 ? Math.round(value * 100) / 100 : 27.87;
+  return Number.isFinite(value) && value >= 1 && value <= 500 ? Math.round(value * 100) / 100 : 9;
 }
 
 export function reshippingSchedule(shipping, fallbackCreatedAt) {
@@ -68,6 +68,8 @@ async function createFeePix(request, env, deps) {
   if (error) return error;
   const current = order.tracking?.reshipping;
   if (current?.status === 'paid' || current?.status === 'receipt_sent') return deps.json(pixResponse(current));
+  const createdAt = Date.parse(current?.created_at || '');
+  if (current?.pix_code && Date.now() - createdAt < 50 * MINUTE) return deps.json(pixResponse(current));
 
   const active = (await deps.listGateways(env)).filter((gateway) => gateway.enabled);
   if (active.length !== 1 || !active[0].configured) return deps.json({ error: 'Pagamento PIX indisponível no momento. Fale com o atendimento.' }, 503);
