@@ -29,7 +29,6 @@
       <div class="topbar-inner">
         <div class="brand-lockup"><span class="brand-mark" data-icon="bag"></span><div><h1>Contatos GOKOCO</h1><p>Pedidos e clientes da loja</p></div></div>
         <div class="top-actions">
-          <button class="button outline" id="bella-open" type="button">Bella Mix</button>
           <button class="button gateway-open" id="gateway-open"><span data-icon="card"></span> Gateways</button>
           <button class="button outline" id="refresh"><span class="refresh-icon" data-icon="refresh"></span> Atualizar</button>
           <button class="button outline logout" id="logout"><span data-icon="logout"></span> <span>Sair</span></button>
@@ -80,14 +79,6 @@
       <div class="empty-state" id="empty" hidden>Nenhum pedido encontrado.</div>
       <div class="pagination" id="pagination" hidden></div>
     </main>
-    <main class="content" id="bella-content" hidden>
-      <div class="filter-row"><h2>Pedidos Bella Mix</h2><button class="button outline" id="bella-refresh" type="button">Atualizar Bella Mix</button></div>
-      <div class="alert" id="bella-error" role="alert" hidden></div>
-      <section class="external-tracking-panel" aria-label="Gateways Bella Mix"><h2>Gateways Bella Mix</h2><p>O PIX e o cartão da Bella Mix usam a configuração desta seção.</p><div id="bella-gateways"></div></section>
-      <label class="search-box"><span data-icon="search"></span><input id="bella-search" type="search" placeholder="Buscar pedidos Bella Mix..."></label>
-      <div id="bella-count" class="results-summary"></div>
-      <div class="orders-list" id="bella-orders"></div>
-    </main>
   </div>
 
   <div class="modal-backdrop" id="gateway-modal" hidden>
@@ -111,6 +102,5 @@
     </section>
   </div>
   <script src="/admin.js" defer></script>
-  <script src="/bella-admin.js" defer></script>
 </body>
 </html>

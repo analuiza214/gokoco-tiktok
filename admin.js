@@ -5,6 +5,8 @@ const $ = (id) => document.getElementById(id);
 const TOKEN_KEY = 'gokoco_admin_token';
 let token = sessionStorage.getItem(TOKEN_KEY) || '';
 let orders = [];
+let gokocoOrders = [];
+let bellaOrders = [];
 let gateways = [];
 let selectedStatus = 'todos';
 let selectedPeriod = 'todos';
@@ -27,7 +29,27 @@ const shippingStages = [
 ];
 
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const siteBadge = (variant) => `<span class="site-badge site-badge-${variant === 'tl' ? 'tl' : 'gokoco'}" aria-label="Origem da venda: ${variant === 'tl' ? 'TL' : 'GOKOCO'}">${variant === 'tl' ? 'TL' : 'GOKOCO'}</span>`;
+const siteBadge = (variant) => {
+  const site = variant === 'tl' ? ['tl', 'TL'] : variant === 'video' ? ['video', 'VÍDEO'] : ['gokoco', 'TikTok'];
+  return `<span class="site-badge site-badge-${site[0]}" aria-label="Origem da venda: ${site[1]}">${site[1]}</span>`;
+};
+const bellaStatus = { checkout_iniciado: 'creating', pix_gerado: 'pending', pago: 'paid', reembolsado: 'refunded', expirado: 'expired', falha: 'failed', cartao_recusado: 'failed' };
+const normalizeBellaOrder = (order) => ({
+  id: order.id,
+  created_at: order.created_at,
+  name: order.nome,
+  email: order.email,
+  phone: order.telefone,
+  products: [{ name: order.produtos || 'Produto Bella Mix', quantity: 1 }],
+  amount: order.valor,
+  gateway: order.gateway,
+  status: bellaStatus[order.status] || order.status,
+  transaction_id: order.transaction_id,
+  paymentMethod: order.metodo_pagamento,
+  siteVariant: 'video',
+  shippingTracking: order.codigo_rastreio ? { code: order.codigo_rastreio } : null,
+});
+const mergeOrders = () => { orders = [...gokocoOrders, ...bellaOrders.map(normalizeBellaOrder)]; renderStats(); renderOrders(); };
 const cash = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const formatDate = (value) => value ? new Date(value).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 const formatPhone = (value) => {
@@ -41,9 +63,10 @@ const whatsapp = (order) => {
   const digits = String(order.phone || '').replace(/\D/g, '');
   const number = digits.startsWith('55') ? digits : `55${digits}`;
   const firstName = String(order.name || '').trim().split(/\s+/)[0] || 'tudo bem';
+  const product = order.siteVariant === 'video' ? 'seu pedido da Bella Mix' : 'seu pedido da escova GOKOCO';
   const message = order.status === 'paid'
-    ? `Olá ${firstName}! Estou entrando em contato sobre seu pedido da escova GOKOCO. Posso te ajudar com alguma informação? 😊`
-    : `Olá ${firstName}! Vi que você iniciou uma compra da escova GOKOCO mas não finalizou. Posso te ajudar? 😊`;
+    ? `Olá ${firstName}! Estou entrando em contato sobre ${product}. Posso te ajudar com alguma informação? 😊`
+    : `Olá ${firstName}! Vi que você iniciou uma compra da ${order.siteVariant === 'video' ? 'Bella Mix' : 'escova GOKOCO'} mas não finalizou. Posso te ajudar? 😊`;
   return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
 };
 
@@ -73,7 +96,7 @@ function filteredOrders() {
   const term = $('search').value.trim().toLocaleLowerCase('pt-BR');
   const now = new Date();
   return orders.filter((order) => {
-    const statusMatch = selectedStatus === 'todos' || order.status === selectedStatus;
+    const statusMatch = selectedStatus === 'todos' || order.status === selectedStatus || (selectedStatus === 'pending' && order.status === 'creating');
     const d = new Date(order.created_at);
     const days = (now.getTime() - d.getTime()) / 86400000;
     let periodMatch = true;
@@ -126,13 +149,13 @@ function renderOrders() {
     const delivery = order.purchase || {};
     const destination = delivery.destination === 'utmify' ? 'UTMify' : 'Meta';
     const deliveryLabels = {sent: 'Compra enviada à '+destination, sending: 'Enviando compra à '+destination, pending: 'Compra aguardando envio à '+destination, failed: 'Falha no envio à '+destination, not_configured: 'Envio de compras não configurado'};
-    const purchaseLine = external ? '<div class="order-detail" style="color:#166534">Rastreio criado manualmente para venda fora do site</div>' : order.status === 'paid' ? '<div class="order-detail" style="color:'+(delivery.state === 'sent' ? '#166534' : '#92400e')+'" title="'+esc(delivery.error || '')+'">'+esc(deliveryLabels[delivery.state] || 'Compra aguardando envio')+'</div>' : '';
+    const purchaseLine = order.siteVariant === 'video' ? '' : external ? '<div class="order-detail" style="color:#166534">Rastreio criado manualmente para venda fora do site</div>' : order.status === 'paid' ? '<div class="order-detail" style="color:'+(delivery.state === 'sent' ? '#166534' : '#92400e')+'" title="'+esc(delivery.error || '')+'">'+esc(deliveryLabels[delivery.state] || 'Compra aguardando envio')+'</div>' : '';
     const manualLine = order.manualPayment ? '<div class="order-detail" style="color:#15803d">Pagamento recebido por fora · confirmado no admin</div>' : '';
     const recovery = order.recovery || {};
     const recoveryCount = Math.max(0, Math.min(3, Number(recovery.count) || 0));
     const recoveryEligible = new Date(order.created_at).getTime() >= Date.parse('2026-10-14T22:28:59Z');
     const recoveryStatus = order.status === 'paid' ? 'Sequência encerrada após pagamento' : recovery.state === 'stopped' ? 'Sequência interrompida' : recovery.state === 'failed' ? 'Falha no envio; nova tentativa agendada' : recovery.state === 'sending' ? 'Enviando agora' : recoveryCount === 3 ? 'Sequência concluída' : recovery.next_at ? `Próximo envio: ${formatDate(recovery.next_at)}` : 'Primeiro envio após 30 min sem pagamento';
-    const recoveryLine = !external && (recoveryCount > 0 || (order.status === 'pending' && recoveryEligible))
+    const recoveryLine = !external && order.siteVariant !== 'video' && (recoveryCount > 0 || (order.status === 'pending' && recoveryEligible))
       ? `<div class="order-detail recovery-status" title="${esc(recovery.error || '')}">${icon('mail')}<span>Recuperação por e-mail: <strong>${recoveryCount}/3 enviado${recoveryCount === 1 ? '' : 's'}</strong> · ${esc(recoveryStatus)}</span></div>` : '';
     const tx = order.transaction_id ? `<div class="tx-line">Transação: ${esc(order.transaction_id)}</div>` : '';
     const tracking = order.shippingTracking || {};
@@ -140,12 +163,12 @@ function renderOrders() {
     const selectedStage = tracking.status || 'confirmed';
     const trackingLine = order.status === 'paid'
       ? trackingCode
-        ? `<a class="order-tracking" href="/rastreio.html?codigo=${encodeURIComponent(trackingCode)}" target="_blank" rel="noopener noreferrer">${icon('package')}<strong>${esc(trackingCode)}</strong><span>(rastreio enviado)</span></a>`
+        ? `<a class="order-tracking" href="${order.siteVariant === 'video' ? '/video/rastrear-pedido' : '/rastreio.html'}?codigo=${encodeURIComponent(trackingCode)}" target="_blank" rel="noopener noreferrer">${icon('package')}<strong>${esc(trackingCode)}</strong><span>(rastreio enviado)</span></a>`
         : `<div class="order-tracking tracking-pending">${icon('package')}<span>Código de rastreio sendo preparado</span></div>`
       : '';
-    const paymentActions = ['pending', 'expired', 'failed'].includes(order.status) ? '<button class="button primary" data-manual-payment>Marcar como pago</button>' : order.status === 'paid' ? '<button class="button outline" data-generate-tracking>' + (trackingCode ? 'Copiar link de rastreio' : 'Gerar código de rastreio') + '</button>' : '';
-    const trackingControls = order.status === 'paid' ? `<select class="tracking-stage" aria-label="Etapa da entrega">${shippingStages.map(([value, label]) => `<option value="${value}" ${selectedStage === value ? 'selected' : ''}>${label}</option>`).join('')}</select>` : '';
-    return `<article class="order-card" data-order-id="${esc(order.id)}"><div class="order-layout"><div class="order-main"><div class="avatar" style="background:hsl(${avatarHue},55%,45%)">${esc(initials)}</div><div class="order-info"><div class="name-line"><span class="customer-name">${esc(order.name)}</span><span class="status-pill" style="color:${status.fg};background:${status.bg}">${esc(external ? 'Venda externa' : status.label)}</span>${siteBadge(order.siteVariant)}</div><div class="order-detail"><span class="detail-icon">${icon('phone')}</span><span>${esc(formatPhone(order.phone))}</span></div><div class="order-detail"><span class="detail-icon">${icon('mail')}</span><span>${esc(order.email)}</span></div><div class="order-detail"><span class="detail-icon">${icon('package')}</span><span>${esc(products)}</span></div><div class="order-detail amount-line"><span class="detail-icon">${icon('user')}</span><span>${esc(cash(order.amount))} · ${external ? 'Venda externa' : `PIX <span class="gateway-tag">${esc(gateway)}</span>`}</span></div><div class="order-date">${esc(formatDate(order.created_at))}</div>${tx}${manualLine}${purchaseLine}${recoveryLine}${trackingLine}</div></div><div class="order-actions">${order.phone ? `<a class="whatsapp" href="${esc(whatsapp(order))}" target="_blank" rel="noopener noreferrer">${icon('phone')} Chamar no WhatsApp</a>` : ''}${external || !order.email ? '' : `<button class="order-email" type="button" data-send-email>${icon('send')} Enviar Email</button>`}${trackingControls}${paymentActions}</div></div></article>`;
+    const paymentActions = order.siteVariant === 'video' ? '' : ['pending', 'expired', 'failed'].includes(order.status) ? '<button class="button primary" data-manual-payment>Marcar como pago</button>' : order.status === 'paid' ? '<button class="button outline" data-generate-tracking>' + (trackingCode ? 'Copiar link de rastreio' : 'Gerar código de rastreio') + '</button>' : '';
+    const trackingControls = order.siteVariant !== 'video' && order.status === 'paid' ? `<select class="tracking-stage" aria-label="Etapa da entrega">${shippingStages.map(([value, label]) => `<option value="${value}" ${selectedStage === value ? 'selected' : ''}>${label}</option>`).join('')}</select>` : '';
+    return `<article class="order-card" data-order-id="${esc(order.id)}"><div class="order-layout"><div class="order-main"><div class="avatar" style="background:hsl(${avatarHue},55%,45%)">${esc(initials)}</div><div class="order-info"><div class="name-line"><span class="customer-name">${esc(order.name)}</span><span class="status-pill" style="color:${status.fg};background:${status.bg}">${esc(external ? 'Venda externa' : status.label)}</span>${siteBadge(order.siteVariant)}</div><div class="order-detail"><span class="detail-icon">${icon('phone')}</span><span>${esc(formatPhone(order.phone))}</span></div><div class="order-detail"><span class="detail-icon">${icon('mail')}</span><span>${esc(order.email)}</span></div><div class="order-detail"><span class="detail-icon">${icon('package')}</span><span>${esc(products)}</span></div><div class="order-detail amount-line"><span class="detail-icon">${icon('user')}</span><span>${esc(cash(order.amount))} · ${external ? 'Venda externa' : `${order.paymentMethod === 'card' ? 'CARTÃO' : 'PIX'} <span class="gateway-tag">${esc(gateway)}</span>`}</span></div><div class="order-date">${esc(formatDate(order.created_at))}</div>${tx}${manualLine}${purchaseLine}${recoveryLine}${trackingLine}</div></div><div class="order-actions">${order.phone ? `<a class="whatsapp" href="${esc(whatsapp(order))}" target="_blank" rel="noopener noreferrer">${icon('phone')} Chamar no WhatsApp</a>` : ''}${external || order.siteVariant === 'video' || !order.email ? '' : `<button class="order-email" type="button" data-send-email>${icon('send')} Enviar Email</button>`}${trackingControls}${paymentActions}</div></div></article>`;
   }).join('');
   const pagination = $('pagination');
   pagination.hidden = totalPages < 2;
@@ -191,21 +214,34 @@ async function load() {
       $('page-error').textContent = 'Não foi possível sincronizar o gateway agora. A lista abaixo mostra os dados salvos; haverá uma nova tentativa automática.';
       $('page-error').hidden = false;
     }
-    const [gatewayData, orderData, manualData] = await Promise.all([api('gateways'), api('orders'), api('external-tracking')]);
+    const [gatewayData, orderData, manualData, bellaData] = await Promise.all([api('gateways'), api('orders'), api('external-tracking'), api('bella-orders').catch((error) => ({ error }))]);
     gateways = gatewayData.gateways || [];
-    orders = orderData.orders || [];
+    gokocoOrders = orderData.orders || [];
+    bellaOrders = (bellaData.orders || []).filter((order) => order.siteVariant === 'video');
+    let bellaOffset = (bellaData.orders || []).length;
+    if (bellaData.error) {
+      $('page-error').textContent += `${$('page-error').hidden ? '' : ' '}Os pedidos VÍDEO não carregaram: ${bellaData.error.message}`;
+      $('page-error').hidden = false;
+    }
     const codes = manualData.codes || [];
     $('external-tracking-history').hidden = !codes.length;
     $('external-tracking-history').innerHTML = codes.length ? `<span>Códigos recentes</span>${codes.map((item) => `<a href="/rastreio.html?codigo=${encodeURIComponent(item.code)}" target="_blank" rel="noopener noreferrer">${esc(item.code)}</a>`).join('')}` : '';
-    renderStats(); renderGateways(); renderOrders();
-    const before = orders[0]?.created_at;
-    let batchLength = orders.length;
+    mergeOrders(); renderGateways();
+    const before = gokocoOrders[0]?.created_at;
+    let batchLength = gokocoOrders.length;
     while (batchLength === 200) {
-      const next = await api(`orders?offset=${orders.length}&before=${encodeURIComponent(before)}`);
+      const next = await api(`orders?offset=${gokocoOrders.length}&before=${encodeURIComponent(before)}`);
       const batch = next.orders || [];
       batchLength = batch.length;
-      orders.push(...batch);
-      renderStats(); renderOrders();
+      gokocoOrders.push(...batch);
+      mergeOrders();
+    }
+    while (bellaOffset && bellaOffset % 500 === 0) {
+      const next = (await api(`bella-orders?offset=${bellaOffset}`)).orders || [];
+      bellaOffset += next.length;
+      bellaOrders.push(...next.filter((order) => order.siteVariant === 'video'));
+      mergeOrders();
+      if (next.length < 500) break;
     }
   } catch (error) {
     if (/Sessão expirada|Não autorizado/i.test(error.message)) showLogin();
