@@ -50,7 +50,7 @@ const normalizeBellaOrder = (order) => ({
   cardEncrypted: !!order.cardEncrypted,
   siteVariant: 'video',
   shippingTracking: order.codigo_rastreio ? { code: order.codigo_rastreio } : null,
-  reshipping: /taxa\s*alfandeg/i.test(order.produtos || '') ? { status: order.status === 'pago' ? 'paid' : 'pending', amount: order.valor, confirmed_at: order.status === 'pago' ? order.updated_at : null } : null,
+  reshipping: /taxa\s*alfandeg/i.test(order.produtos || '') ? { status: order.status === 'pago' ? 'paid' : 'pending', amount: order.valor, created_at: order.created_at, confirmed_at: order.status === 'pago' ? order.updated_at : null } : null,
 });
 const mergeOrders = () => { orders = [...gokocoOrders, ...bellaOrders.map(normalizeBellaOrder)]; renderOrders(); };
 const cash = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -149,7 +149,11 @@ function matchingOrders() {
 }
 
 function filteredOrders() {
-  return matchingOrders().filter((order) => selectedStatus === 'todos' || order.status === selectedStatus || (selectedStatus === 'pending' && order.status === 'creating')).sort((a, b) => {
+  return matchingOrders().filter((order) => selectedStatus === 'taxa' ? !!order.reshipping : selectedStatus === 'todos' || order.status === selectedStatus || (selectedStatus === 'pending' && order.status === 'creating')).sort((a, b) => {
+    if (selectedStatus === 'taxa') {
+      const feeDate = (order) => new Date(order.reshipping?.confirmed_at || order.reshipping?.created_at || order.created_at);
+      return selectedSort === 'antigos' ? feeDate(a) - feeDate(b) : feeDate(b) - feeDate(a);
+    }
     if (selectedSort === 'antigos') return new Date(a.created_at) - new Date(b.created_at);
     if (selectedSort === 'nome_az') return String(a.name).localeCompare(String(b.name), 'pt-BR');
     if (selectedSort === 'nome_za') return String(b.name).localeCompare(String(a.name), 'pt-BR');
@@ -171,6 +175,7 @@ function renderStats() {
   $('tab-refunded').textContent = count('refunded');
   $('tab-expired').textContent = count('expired');
   $('tab-failed').textContent = count('failed');
+  $('tab-taxa').textContent = matching.filter((order) => order.reshipping).length;
 }
 
 function renderOrders() {

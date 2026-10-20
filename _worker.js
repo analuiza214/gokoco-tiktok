@@ -4990,7 +4990,7 @@ async function adminOrders(request2, env) {
     await retryPaidPurchases(env);
   }
   const rows = await db(env, "gokoco_orders", `?gateway=neq.manual_tracking${before ? `&created_at=lte.${encodeURIComponent(before)}` : ""}&select=id,created_at,name,email,phone,amount,products,gateway,status,transaction_id,shipping,tracking&order=created_at.desc,id.desc&limit=200&offset=${offset}`);
-  return json3({ orders: rows.map(({ tracking, ...order }) => ({ ...order, siteVariant: tracking?.site_variant === "mercado_livre" ? "tl" : "gokoco", shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, recovery: tracking?._recovery || null, reshipping: tracking?.reshipping ? { status: tracking.reshipping.status, amount: tracking.reshipping.amount, confirmed_at: tracking.reshipping.confirmed_at || null, hasReceipt: !!tracking.reshipping.receipt?.path } : null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
+  return json3({ orders: rows.map(({ tracking, ...order }) => ({ ...order, siteVariant: tracking?.site_variant === "mercado_livre" ? "tl" : "gokoco", shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, recovery: tracking?._recovery || null, reshipping: tracking?.reshipping ? { status: tracking.reshipping.status, amount: tracking.reshipping.amount, created_at: tracking.reshipping.created_at || null, confirmed_at: tracking.reshipping.confirmed_at || null, hasReceipt: !!tracking.reshipping.receipt?.path } : null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
 }
 async function adminSendOrderEmail(request2, env) {
   const denied = await requireAdmin(request2, env);
@@ -5060,6 +5060,25 @@ async function reconcilePendingPayments(env, limit = 2, deferFulfillment = false
   }
   return summary;
 }
+async function reconcileReshippingFees(env, limit = 3) {
+  const rows = await db(env, "gokoco_orders", `?select=id,tracking,updated_at&tracking->reshipping->>status=eq.pending&order=updated_at.asc&limit=${Math.max(1, Math.min(10, Number(limit) || 3))}`);
+  const summary = { checked: 0, paid: 0 };
+  for (const order of rows) {
+    const fee = order.tracking?.reshipping;
+    if (!fee?.transaction_id) continue;
+    try {
+      const verified = await queryPixGatewayStatus(env, fee.transaction_id, fee.gateway).catch(() => ({}));
+      summary.checked++;
+      if (!verified?.isPaid) continue;
+      const tracking = { ...order.tracking || {}, reshipping: { ...fee, status: "paid", confirmed_at: verified.paidAt || (/* @__PURE__ */ new Date()).toISOString() } };
+      const saved = await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(order.id)}&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=id`, "PATCH", { tracking, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
+      if (saved.length) summary.paid++;
+    } catch (error) {
+      console.error("[reshipping/reconcile]", order.id, error?.message || error);
+    }
+  }
+  return summary;
+}
 async function reconcilePaymentsRoute(request2, env) {
   const cron = Boolean(env.CRON_SECRET && request2.headers.get("x-cron-secret") === env.CRON_SECRET);
   if (!cron) {
@@ -5067,7 +5086,9 @@ async function reconcilePaymentsRoute(request2, env) {
     if (denied) return denied;
   }
   if (request2.method !== "POST") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
-  return json3(await reconcilePendingPayments(env, 3, true, !cron));
+  const payments = await reconcilePendingPayments(env, 3, true, !cron);
+  payments.reshipping = await reconcileReshippingFees(env, payments.rateLimited ? 0 : 3);
+  return json3(payments);
 }
 async function fulfillConfirmedPayment(env) {
   const rows = await db(env, "gokoco_orders", "?status=eq.paid&gateway=neq.manual_tracking&tracking->shipping->>code=is.null&select=id,tracking,updated_at&order=updated_at.desc&limit=1");

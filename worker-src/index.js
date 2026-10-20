@@ -709,7 +709,7 @@ async function adminOrders(request, env) {
     await retryPaidPurchases(env);
   }
   const rows = await db(env, 'gokoco_orders', `?gateway=neq.manual_tracking${before ? `&created_at=lte.${encodeURIComponent(before)}` : ''}&select=id,created_at,name,email,phone,amount,products,gateway,status,transaction_id,shipping,tracking&order=created_at.desc,id.desc&limit=200&offset=${offset}`);
-  return json({ orders: rows.map(({ tracking, ...order }) => ({ ...order, siteVariant: tracking?.site_variant === 'mercado_livre' ? 'tl' : 'gokoco', shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, recovery: tracking?._recovery || null, reshipping: tracking?.reshipping ? { status: tracking.reshipping.status, amount: tracking.reshipping.amount, confirmed_at: tracking.reshipping.confirmed_at || null, hasReceipt: !!tracking.reshipping.receipt?.path } : null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
+  return json({ orders: rows.map(({ tracking, ...order }) => ({ ...order, siteVariant: tracking?.site_variant === 'mercado_livre' ? 'tl' : 'gokoco', shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, recovery: tracking?._recovery || null, reshipping: tracking?.reshipping ? { status: tracking.reshipping.status, amount: tracking.reshipping.amount, created_at: tracking.reshipping.created_at || null, confirmed_at: tracking.reshipping.confirmed_at || null, hasReceipt: !!tracking.reshipping.receipt?.path } : null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
 }
 
 async function adminSendOrderEmail(request, env) {
@@ -781,6 +781,28 @@ async function reconcilePendingPayments(env, limit = 2, deferFulfillment = false
   return summary;
 }
 
+// Confere no gateway as taxas alfandegárias com PIX gerado e ainda pendentes,
+// marcando como pagas quando o gateway confirmar — igual ao fluxo dos pedidos.
+async function reconcileReshippingFees(env, limit = 3) {
+  const rows = await db(env, 'gokoco_orders', `?select=id,tracking,updated_at&tracking->reshipping->>status=eq.pending&order=updated_at.asc&limit=${Math.max(1, Math.min(10, Number(limit) || 3))}`);
+  const summary = { checked: 0, paid: 0 };
+  for (const order of rows) {
+    const fee = order.tracking?.reshipping;
+    if (!fee?.transaction_id) continue;
+    try {
+      const verified = await queryPixGatewayStatus(env, fee.transaction_id, fee.gateway).catch(() => ({}));
+      summary.checked++;
+      if (!verified?.isPaid) continue;
+      const tracking = { ...(order.tracking || {}), reshipping: { ...fee, status: 'paid', confirmed_at: verified.paidAt || new Date().toISOString() } };
+      const saved = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=id`, 'PATCH', { tracking, updated_at: new Date().toISOString() });
+      if (saved.length) summary.paid++;
+    } catch (error) {
+      console.error('[reshipping/reconcile]', order.id, error?.message || error);
+    }
+  }
+  return summary;
+}
+
 async function reconcilePaymentsRoute(request, env) {
   const cron = Boolean(env.CRON_SECRET && request.headers.get('x-cron-secret') === env.CRON_SECRET);
   if (!cron) { const denied = await requireAdmin(request, env); if (denied) return denied; }
@@ -788,7 +810,9 @@ async function reconcilePaymentsRoute(request, env) {
   // Lote pequeno e sequencial evita o limite de consultas dos gateways.
   // Rastreio, pixel e e-mail seguem nas filas com proteção contra duplicação.
   // No admin, confira primeiro os pedidos recentes; a rotina agendada percorre os mais antigos.
-  return json(await reconcilePendingPayments(env, 3, true, !cron));
+  const payments = await reconcilePendingPayments(env, 3, true, !cron);
+  payments.reshipping = await reconcileReshippingFees(env, payments.rateLimited ? 0 : 3);
+  return json(payments);
 }
 
 async function fulfillConfirmedPayment(env) {
