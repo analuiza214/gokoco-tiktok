@@ -2,11 +2,17 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import worker from '../_worker.js';
 import { safeCardSummary } from '../sites/bella/functions/_lib/card-summary.js';
+import { encryptCardData, decryptCardData } from '../sites/bella/functions/_lib/card-crypto.js';
 import { createPixFlevopay, statusPixFlevopay } from '../worker-src/providers/flevopay.js';
 
 assert.equal(safeCardSummary('Visa ••••1234'), 'Visa ••••1234');
 assert.equal(safeCardSummary('4111111111111234'), null);
 assert.equal(safeCardSummary('encrypted-card-data'), null);
+
+const cardPayload = JSON.stringify({ numero: '4111111111111111', nome: 'MARIA SILVA', validade: '12/28', cvv: '123', cpf: '12345678901' });
+const encryptedCard = await encryptCardData(cardPayload, 'chave-teste');
+assert.equal(JSON.parse(await decryptCardData(encryptedCard, 'chave-teste')).numero, '4111111111111111');
+await assert.rejects(() => decryptCardData(encryptedCard, 'chave-errada'));
 
 const env = {
   SITE_URL: 'https://gokoco.example',
@@ -39,6 +45,10 @@ assert.equal(marketRedirect.headers.get('location'), 'https://gokoco.example/adm
 const privateOrders = await worker.fetch(new Request('https://gokoco.example/api/admin/bella-orders'), env);
 assert.equal(privateOrders.status, 401);
 
+const privateCard = await worker.fetch(new Request('https://gokoco.example/api/admin/bella-card?id=00000000-0000-0000-0000-000000000000'), env);
+assert.equal(privateCard.status, 401);
+
+// As lojas compartilham o mesmo backend: as variáveis principais já configuram a Bella Mix.
 const bellaHealth = await worker.fetch(new Request('https://gokoco.example/video/api/checkout-health'), {
   ...env,
   SUPABASE_URL: 'https://gokoco.supabase.co',
@@ -46,8 +56,8 @@ const bellaHealth = await worker.fetch(new Request('https://gokoco.example/video
   VENUS_PAY_SECRET_KEY: 'gokoco-only',
 });
 const health = await bellaHealth.json();
-assert.equal(health.requiredServerConfig.supabaseUrl, false);
-assert.equal(health.requiredServerConfig.supabaseServiceRole, false);
+assert.equal(health.requiredServerConfig.supabaseUrl, true);
+assert.equal(health.requiredServerConfig.supabaseServiceRole, true);
 assert.equal(health.activePixGateway, null);
 
 const originalFetch = globalThis.fetch;
@@ -87,6 +97,7 @@ try {
       headers: { 'Content-Type': 'application/json' },
     });
   };
+  // BELLA_* continua funcionando como sobrescrita opcional por rota.
   const sharedGatewayHealth = await worker.fetch(new Request('https://gokoco.example/video/api/checkout-health'), {
     ...env,
     BELLA_SUPABASE_URL: 'https://gokoco.supabase.co',

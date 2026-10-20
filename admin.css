@@ -12,3 +12,31 @@
 .email-modal{max-width:560px}.email-form{display:grid;gap:12px}.email-form label{display:grid;gap:5px;color:#374151;font-size:12px;font-weight:700}.email-form input,.email-form textarea{width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:9px;background:#fff;color:#111827;font:inherit;font-size:14px}.email-form input[readonly]{background:#f9fafb;color:#6b7280}.email-form textarea{resize:vertical;min-height:160px;line-height:1.5}.email-form .button{justify-self:end}.email-form .alert{margin:0}.email-form [role="status"]{margin:0;color:#166534;font-size:13px;font-weight:700}
 .site-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:800;line-height:16px;letter-spacing:.03em;white-space:nowrap}.site-badge-gokoco{background:#dcfce7;color:#166534}.site-badge-tl{background:#fef3c7;color:#92400e}.site-badge-video{background:#f3e8ff;color:#7e22ce}
 .site-badge-legacy{background:#f3f4f6;color:#4b5563}
+.order-card-data{margin-top:4px}
+.order-card-data>.button{gap:6px}
+.card-panel{margin-top:8px;max-width:340px}
+.card-summary{font-family:monospace;font-size:12px;color:#374151}
+.card-error{font-size:12px;color:#b91c1c}
+.card-visual{position:relative;overflow:hidden;padding:16px;border-radius:16px;color:#fff;background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);min-height:160px}
+.card-visual-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.card-visual-label{font-size:10px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:#d1d5db}
+.card-visual-tags{display:flex;align-items:center;gap:6px}
+.card-tier{padding:2px 6px;border-radius:999px;font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#fff}
+.card-brand{font-size:9px;font-weight:600;text-transform:uppercase;color:#9ca3af}
+.card-lock{display:inline-flex;color:#4ade80}
+.card-lock svg{width:14px;height:14px}
+.card-number{margin-bottom:16px;font-family:monospace;font-size:18px;font-weight:700;letter-spacing:.15em;color:#fff;overflow-wrap:anywhere}
+.card-visual-bottom{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.card-field-label{margin:0 0 2px;font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af}
+.card-field-gap{margin-top:6px}
+.card-field-value{margin:0;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.card-field-mono{font-family:monospace;text-transform:none}
+.card-field-right{text-align:right}
+.card-cvv{display:flex;align-items:center;justify-content:flex-end;gap:4px}
+.card-cvv button{display:flex;padding:0;border:0;background:none;color:#9ca3af}
+.card-cvv button:hover{color:#fff}
+.card-cvv svg{width:12px;height:12px}
+.card-deco{position:absolute;border-radius:50%;background:#fff;opacity:.1}
+.card-deco-a{right:-32px;top:-32px;width:128px;height:128px}
+.card-deco-b{right:-16px;bottom:-32px;width:96px;height:96px}
+.card-bank{margin:4px 0 0;text-align:center;font-size:10px;color:#9ca3af}

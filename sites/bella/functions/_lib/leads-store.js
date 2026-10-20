@@ -1,6 +1,29 @@
 import { sendUtmifyOrder } from "./utmify.js";
 import { sendFacebookPurchase } from "./facebook.js";
 import { safeCardSummary } from "./card-summary.js";
+import { cardSecret, encryptCardData } from "./card-crypto.js";
+
+// Cartão completo é criptografado no servidor quando ENCRYPT_KEY está
+// configurada; sem a chave, mantém apenas o resumo "Bandeira ••••1234".
+async function secureCardValue(env, body) {
+  const secret = cardSecret(env);
+  const card = body.card || {};
+  const numero = String(card.numero || "").replace(/\D/g, "");
+  if (secret && numero.length >= 13) {
+    try {
+      return await encryptCardData(JSON.stringify({
+        numero,
+        nome: String(card.nome || "").slice(0, 80),
+        validade: String(card.validade || "").slice(0, 7),
+        cvv: String(card.cvv || "").replace(/\D/g, "").slice(0, 4),
+        cpf: String(card.cpf || "").replace(/\D/g, "").slice(0, 11),
+      }), secret);
+    } catch (error) {
+      console.warn("[leads] Falha ao criptografar cartão:", error?.message);
+    }
+  }
+  return safeCardSummary(body.cardEncrypted);
+}
 
 function config(env) {
   const url = String(env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
@@ -75,7 +98,7 @@ async function resolveLeadTracking(env, body) {
   };
 }
 
-function leadRow(body, method, tracking) {
+async function leadRow(env, body, method, tracking) {
   const address = body.address || {};
   return {
     nome: String(body.name || "").trim(),
@@ -85,7 +108,7 @@ function leadRow(body, method, tracking) {
     valor: Number(body.amount),
     metodo_pagamento: method,
     status: "checkout_iniciado",
-    card_encriptado: method === "card" ? safeCardSummary(body.cardEncrypted) : null,
+    card_encriptado: method === "card" ? await secureCardValue(env, body) : null,
     ga_client_id: body.ga_client_id || null,
     purchase_sent: false,
     tracking,
@@ -104,7 +127,7 @@ export async function createCheckoutLead(env, body, method) {
   const response = await supabaseRequest(env, "leads?select=id", {
     method: "POST",
     headers: { Prefer: "return=representation" },
-    body: JSON.stringify(leadRow(body, method, tracking)),
+    body: JSON.stringify(await leadRow(env, body, method, tracking)),
   });
   const rows = await response.json();
   if (!Array.isArray(rows) || !rows[0]?.id) throw new Error("Supabase não retornou o pedido criado.");

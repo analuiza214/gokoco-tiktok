@@ -11,9 +11,9 @@ O admin GOKOCO em `/admin.html` contém a seção **Bella Mix**, que lista pedid
 ## Publicação
 
 1. Configurar o build de Pages como `npm run build`, com saída `dist`.
-2. O domínio atual atende os três visuais. `SITE_URL` permanece com a URL completa do GOKOCO. Configurar `BELLA_SITE_URL` como `https://gokoco-tiktok.pages.dev/video` para os links de rastreio enviados aos clientes Bella Mix.
-4. Manter as variáveis atuais do GOKOCO, incluindo `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_USER`, `ADMIN_PASS`, `ADMIN_SESSION_SECRET` e as credenciais do gateway ativo.
-5. Configurar `BELLA_SUPABASE_URL` e `BELLA_SUPABASE_SERVICE_ROLE_KEY` com o banco existente da Bella Mix. As credenciais de gateway da Bella Mix também exigem o prefixo `BELLA_` (por exemplo, `BELLA_VENUS_PAY_SECRET_KEY` e `BELLA_VENUS_PAY_PRODUCT_ID`), para que uma cobrança dessa loja nunca use por engano o gateway da GOKOCO. E-mail e marketing podem usar as variáveis atuais ou versões com prefixo `BELLA_` quando as contas forem diferentes. Também copiar as variáveis de build `VITE_ENCRYPT_KEY`, `VITE_GTM_ID`, `VITE_GA_ID`, `VITE_UTMIFY_PIXEL_ID`, `VITE_SUPPORT_WHATSAPP` e `VITE_SUPPORT_EMAIL` do projeto Bella Mix, conforme estiverem configuradas atualmente.
+2. O domínio atual atende os três visuais. `SITE_URL` permanece com a URL completa do GOKOCO. Os links de rastreio da Bella Mix usam `SITE_URL` + `/video` automaticamente (ou `BELLA_SITE_URL`, se configurada para um domínio próprio).
+4. Manter as variáveis atuais, incluindo `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_USER`, `ADMIN_PASS`, `ADMIN_SESSION_SECRET` e as credenciais do gateway ativo — todas compartilhadas entre os visuais, já que é um único backend.
+5. Para salvar e visualizar cartões da Bella Mix no admin, configurar `ENCRYPT_KEY` no Cloudflare (a antiga `VITE_ENCRYPT_KEY` também é aceita). Variáveis com prefixo `BELLA_` não são mais necessárias: caso existam, funcionam apenas como sobrescrita opcional por rota. As variáveis de build `VITE_GTM_ID`, `VITE_GA_ID`, `VITE_UTMIFY_PIXEL_ID`, `VITE_SUPPORT_WHATSAPP` e `VITE_SUPPORT_EMAIL` seguem como secrets do GitHub, conforme configuradas.
 6. Atualizar a URL de webhook PIX dos gateways usados pela Bella Mix para `https://gokoco-tiktok.pages.dev/video/api/pix/webhook`. O webhook do GOKOCO continua em `/api/pix/webhook`.
 7. Validar em homologação um pedido PIX de cada visual, um pedido de cartão Bella Mix, atualização de status e visualização dos pedidos no admin antes de trocar os domínios de produção.
 
