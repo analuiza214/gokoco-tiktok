@@ -270,15 +270,15 @@ export default function ProductPage() {
       </div>
       <div className="bg-white">
         <div className="text-sm text-muted-foreground px-4 py-3">
-          Novo | Escova modeladora 3 em 1
+          Escova modeladora 3 em 1
         </div>
 
         <div className="px-4 pb-2 flex items-center gap-0 w-fit">
           <span className="bg-orange-500 text-white text-[10px] font-semibold px-2 py-[3px] rounded-l-sm">
             MAIS VENDIDO
           </span>
-          <span className="bg-white border border-orange-500 text-ml-blue text-[10px] font-semibold px-2 py-[3px] rounded-r-sm border-t-[#ffffff] border-r-[#ffffff] border-b-[#ffffff] border-l-[#ffffff]">
-            Escovas modeladoras
+          <span className="bg-white text-ml-blue text-[10px] font-semibold px-2 py-[3px] border-l border-orange-500">
+            1º em Álbuns Copa do Mundo
           </span>
         </div>
 
@@ -287,7 +287,7 @@ export default function ProductPage() {
         </h1>
 
         <div className="px-4 py-2 flex items-center gap-1">
-          <span className="text-sm font-medium text-ml-blue">4.6</span>
+          <span className="text-sm font-medium text-ml-blue">4.9</span>
           <div className="flex text-ml-blue ml-1">
             <Star className="w-4 h-4 fill-current" />
             <Star className="w-4 h-4 fill-current" />
@@ -295,7 +295,7 @@ export default function ProductPage() {
             <Star className="w-4 h-4 fill-current" />
             <Star className="w-4 h-4 fill-current" />
           </div>
-          <span className="text-sm text-muted-foreground ml-1"></span>
+          <span className="text-sm text-muted-foreground ml-1">(2485)</span>
         </div>
 
         {/* Carousel */}
@@ -621,8 +621,31 @@ export default function ProductPage() {
           </div>
         </div>
       )}
-      {/* Mídia do produto */}
+      {/* Avaliações do produto */}
       <div className="bg-white p-4">
+        <h2 className="text-lg font-medium mb-4">Opiniões do produto</h2>
+        <div className="flex items-center gap-3 mb-5">
+          <span className="text-5xl font-light text-ml-blue">4.9</span>
+          <div>
+            <div className="flex text-yellow-400" aria-label="5 estrelas">
+              {[1, 2, 3, 4, 5].map((star) => <Star key={star} className="w-5 h-5 fill-current" />)}
+            </div>
+            <p className="text-sm text-gray-500 mt-1">2.485 avaliações</p>
+          </div>
+        </div>
+        <div className="space-y-1.5 mb-6" aria-label="Distribuição das avaliações">
+          {[[5, 92], [4, 5], [3, 2], [2, 1], [1, 0]].map(([stars, percent]) => (
+            <div key={stars} className="flex items-center gap-2 text-xs text-gray-500">
+              <span className="w-3">{stars}</span>
+              <Star className="w-3 h-3 fill-yellow-400 text-yellow-400 shrink-0" />
+              <div className="h-2 flex-1 rounded-full bg-gray-100 overflow-hidden">
+                <div className="h-full rounded-full bg-ml-blue" style={{ width: `${percent}%` }} />
+              </div>
+              <span className="w-8 text-right">{percent}%</span>
+            </div>
+          ))}
+        </div>
+        {/* Mídia do produto */}
         <h2 className="text-lg font-medium mb-4">Vídeos de depoimentos de pessoas reais</h2>
         <div className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory touch-pan-x" aria-label="Vídeos de depoimentos; deslize para ver mais">
           {testimonialVideos.map((src, i) => (
@@ -632,10 +655,10 @@ export default function ProductPage() {
           ))}
         </div>
         <div className="divide-y divide-gray-100 mt-5">
-          {brushReviews.map((review) => (
+          {brushReviews.map((review, index) => (
             <article key={review.name} className="py-4 first:pt-1">
               <div className="flex items-center gap-2">
-                <span className="w-9 h-9 rounded-full bg-blue-100 text-ml-blue text-xs font-semibold flex items-center justify-center shrink-0">{review.initials}</span>
+                <span className={`w-9 h-9 rounded-full text-white text-xs font-semibold flex items-center justify-center shrink-0 ${['bg-purple-700', 'bg-teal-600', 'bg-rose-600', 'bg-indigo-600', 'bg-orange-600', 'bg-emerald-700', 'bg-sky-700', 'bg-fuchsia-700'][index % 8]}`}>{review.initials}</span>
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm font-semibold text-gray-800">{review.name}</span>
