@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { ArrowLeft, Clock, CheckCircle2, Smartphone, ScanLine, ShieldCheck, Bell, RefreshCw } from "lucide-react";
 import { img } from "@/lib/img";
+import { trackingPayload } from "@/lib/tracking";
 
 interface PixData {
   transactionId?: string;
@@ -58,6 +59,7 @@ async function callPixApi(checkoutData: {
       document: checkoutData.document,
       address: checkoutData.address,
       productName: "Kit 3 em 1 - Escova Modeladora GOKOCO Bivolt",
+      ...trackingPayload(),
     }),
   });
   const data = await res.json() as { transactionId?: string; pixCode?: string; qrCodeBase64?: string; qrCodeImage?: string; error?: string };

@@ -258,7 +258,7 @@ function Countdown({ seconds }: { seconds: number }) {
   );
 }
 
-function fireTrackingEvents(amount: number, productName: string) {
+function fireTrackingEvents(amount: number, productName: string, transactionId?: string) {
   try {
     const utmify = (window as unknown as Record<string, unknown>).utmify as ((...a: unknown[]) => void) | undefined;
     if (typeof utmify === "function") {
@@ -268,6 +268,10 @@ function fireTrackingEvents(amount: number, productName: string) {
         content_name: productName,
       });
     }
+  } catch { /* silently ignore */ }
+  try {
+    const track = (window as unknown as Record<string, unknown>).trackGoogleAdsPurchase as ((a: number, t: string) => void) | undefined;
+    if (typeof track === "function" && transactionId) track(amount, transactionId);
   } catch { /* silently ignore */ }
 }
 
@@ -352,14 +356,14 @@ export default function Success() {
     // Dispara eventos de Purchase imediatamente ao confirmar
     if (!trackingFired.current) {
       trackingFired.current = true;
-      fireTrackingEvents(cardAmount, cardProduct);
+      fireTrackingEvents(cardAmount, cardProduct, cardTxId);
       pushEcommerceEvent("purchase", {
         transaction_id: cardTxId || `card_${Date.now()}`,
         currency: "BRL",
         value: cardAmount,
         payment_type: "credit_card",
         items: [{ item_id: "bellamix_order", item_name: cardProduct, price: cardAmount, quantity: 1 }],
-      }, { event_id: `card_${cardTxId || Date.now()}_purchase` });
+      }, { event_id: `${cardTxId || `card_${Date.now()}`}_purchase` });
     }
 
     clearCart();
@@ -397,7 +401,14 @@ export default function Success() {
           clearInterval(interval);
           if (!trackingFired.current) {
             trackingFired.current = true;
-            fireTrackingEvents(cardAmount, cardProduct);
+            fireTrackingEvents(cardAmount, cardProduct, cardTxId);
+            pushEcommerceEvent("purchase", {
+              transaction_id: cardTxId,
+              currency: "BRL",
+              value: cardAmount,
+              payment_type: "credit_card",
+              items: [{ item_id: "bellamix_order", item_name: cardProduct, price: cardAmount, quantity: 1 }],
+            }, { event_id: `${cardTxId}_purchase` });
           }
           clearCart();
           setPaymentConfirmed(true);
@@ -480,7 +491,14 @@ export default function Success() {
             if (pollInterval.current) clearInterval(pollInterval.current);
             if (!trackingFired.current) {
               trackingFired.current = true;
-              fireTrackingEvents(orderAmount, orderProductName);
+              fireTrackingEvents(orderAmount, orderProductName, pixData!.transactionId);
+              pushEcommerceEvent("purchase", {
+                transaction_id: pixData!.transactionId,
+                currency: "BRL",
+                value: orderAmount,
+                payment_type: "pix",
+                items: [{ item_id: "bellamix_order", item_name: orderProductName, price: orderAmount, quantity: 1 }],
+              }, { event_id: `${pixData!.transactionId}_purchase` });
             }
             clearCart();
             setPaymentConfirmed(true);

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { ArrowLeft, MapPin, ChevronRight, X, CreditCard, Navigation, Check, User, Pencil, AlertCircle } from "lucide-react";
 import { useLocation } from "wouter";
 import { img } from "@/lib/img";
+import { fbqTrack } from "@/lib/tracking";
 
 function formatCep(v: string) {
   const d = v.replace(/\D/g, "").slice(0, 8);
@@ -296,6 +297,16 @@ export default function CepPage() {
           amount: productPrice,
         })
       );
+      try {
+        const icKey = `tl_ic_${checkoutId}`;
+        if (!sessionStorage.getItem(icKey)) {
+          sessionStorage.setItem(icKey, "1");
+          fbqTrack("InitiateCheckout", {
+            value: productPrice, currency: "BRL", content_type: "product",
+            content_ids: ["gokoco_escova"], num_items: cartQty,
+          });
+        }
+      } catch { /* ignored */ }
     }
 
     navigate(`/success?payment=${payment}`);

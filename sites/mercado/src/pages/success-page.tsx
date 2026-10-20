@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { X, Clock, Info, AlertCircle, RefreshCw } from "lucide-react";
+import { trackingPayload, trackBrowserPurchase } from "@/lib/tracking";
 
 type Phase = "loading" | "dots" | "expand" | "content";
 
@@ -43,6 +44,7 @@ export default function SuccessPage() {
   const [pixError, setPixError] = useState<string | null>(null);
   const [paidTrackingCode, setPaidTrackingCode] = useState<string | null>(null);
   const [orderAmount, setOrderAmount] = useState(37.90);
+  const [orderQty, setOrderQty] = useState(1);
 
   useEffect(() => {
     const raw = sessionStorage.getItem("checkoutData");
@@ -50,6 +52,7 @@ export default function SuccessPage() {
       try {
         const cd = JSON.parse(raw);
         if (cd.amount && cd.amount > 0) setOrderAmount(cd.amount);
+        if (cd.quantity && cd.quantity > 0) setOrderQty(cd.quantity);
       } catch { /* ignored */ }
     }
   }, []);
@@ -108,6 +111,7 @@ export default function SuccessPage() {
             document: checkoutData.document,
             address: checkoutData.address,
             productName: "Kit 3 em 1 - Escova Modeladora GOKOCO Bivolt",
+            ...trackingPayload(),
           }),
         });
 
@@ -150,14 +154,21 @@ export default function SuccessPage() {
       try {
         const res = await fetch(`/api/public/pix/status?id=${encodeURIComponent(pixData.transactionId)}`, { cache: "no-store" });
         if (!res.ok || !active) return;
-        const data = await res.json() as { isPaid?: boolean; trackingCode?: string };
-        if (data.isPaid && active) setPaidTrackingCode(data.trackingCode || "confirmado");
+        const data = await res.json() as { isPaid?: boolean; trackingCode?: string; eventId?: string; purchaseDestination?: string; amount?: number };
+        if (data.isPaid && active) {
+          setPaidTrackingCode(data.trackingCode || "confirmado");
+          trackBrowserPurchase({
+            eventId: data.eventId, transactionId: pixData.transactionId,
+            purchaseDestination: data.purchaseDestination,
+            amount: Number(data.amount) || orderAmount, numItems: orderQty,
+          });
+        }
       } catch { /* Verificaremos novamente enquanto a página estiver aberta. */ }
     };
     void check();
     const timer = window.setInterval(check, 10000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [pixData?.transactionId, paidTrackingCode]);
+  }, [pixData?.transactionId, paidTrackingCode, orderAmount, orderQty]);
 
   async function handleCopy() {
     const code = pixData?.pixCode || "";
@@ -205,6 +216,7 @@ export default function SuccessPage() {
           document: checkoutData.document,
           address: checkoutData.address,
           productName: "Kit 3 em 1 - Escova Modeladora GOKOCO Bivolt",
+          ...trackingPayload(),
         }),
       });
 

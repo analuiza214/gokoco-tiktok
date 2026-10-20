@@ -4534,7 +4534,8 @@ async function createMarketPix(request2, env, ctx) {
       complemento: body.address?.complement || ""
     },
     products: [{ name: "Kit 3 em 1 - Escova Modeladora GOKOCO Bivolt", quantity, color: String(body.color || "").slice(0, 40), price: 37.9 }],
-    tracking: body.tracking || {}
+    tracking: body.tracking || {},
+    fb: body.fb || {}
   };
   const internal = new Request(request2, { body: JSON.stringify(adapted) });
   const result = await createPix(internal, env, ctx, "mercado_livre");

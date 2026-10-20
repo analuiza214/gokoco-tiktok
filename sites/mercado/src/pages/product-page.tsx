@@ -4,6 +4,7 @@ import { ArrowLeft, Search, ShoppingCart, Heart, MapPin, ChevronLeft, ChevronRig
 import { Button } from "@/components/ui/button";
 import { SiMercadopago } from "react-icons/si";
 import { img } from "@/lib/img";
+import { fbqTrack } from "@/lib/tracking";
 
 // ── Link de compartilhamento — edite aqui para mudar facilmente ──
 const SHARE_URL = window.location.href;
@@ -98,6 +99,10 @@ export default function ProductPage() {
   useEffect(() => {
     const raw = localStorage.getItem("topmix_address");
     if (raw) { try { setSavedAddress(JSON.parse(raw)); } catch { /* ignored */ } }
+    fbqTrack("ViewContent", {
+      content_name: "Kit 3 em 1 - Escova Modeladora GOKOCO Bivolt",
+      content_type: "product", content_ids: ["gokoco_escova"], value: 37.90, currency: "BRL",
+    });
   }, []);
 
   function formatCepAddr(v: string) {
