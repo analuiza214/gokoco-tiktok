@@ -1369,7 +1369,7 @@ async function processRecoveryQueue(env, db2, verifyPayment, limit = 3) {
 // worker-src/reshipping-fee.js
 var MINUTE = 6e4;
 var HOUR = 60 * MINUTE;
-var TRANSITO_OFFSET = 148 * HOUR + 39 * MINUTE;
+var TRANSITO_OFFSET = 30 * HOUR;
 var FEE_AFTER_TRANSITO = 5 * MINUTE;
 var RECEIPT_BUCKET = "comprovantes-taxa";
 var RECEIPT_MAX_BYTES = 8 * 1024 * 1024;

@@ -419,7 +419,7 @@ test('InitiateCheckout permanece apenas após dados preenchidos e transição à
 
 test('rastreio avança a simulação no minuto previsto sem chamá-la de confirmação real', async () => {
   const html = fs.readFileSync(new URL('../rastreio.html', import.meta.url), 'utf8');
-  const script = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map((match) => match[1])[0];
+  const script = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map((match) => match[1]).find((source) => source.includes('tracking-form'));
   const elements = new Map();
   const element = (id) => {
     if (!elements.has(id)) elements.set(id, { hidden: true, innerHTML: '', value: '', handlers: {}, addEventListener(type, handler) { this.handlers[type] = handler; }, querySelector() { return { disabled: false }; } });
@@ -461,7 +461,7 @@ test('rastreio avança a simulação no minuto previsto sem chamá-la de confirm
 
 test('rastreio avulso mostra só o código e etapas previstas, sem destinatário inventado', async () => {
   const html = fs.readFileSync(new URL('../rastreio.html', import.meta.url), 'utf8');
-  const script = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map((match) => match[1])[0];
+  const script = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map((match) => match[1]).find((source) => source.includes('tracking-form'));
   const elements = new Map();
   const element = (id) => {
     if (!elements.has(id)) elements.set(id, { hidden: true, innerHTML: '', value: '', addEventListener() {}, querySelector() { return { disabled: false }; } });
