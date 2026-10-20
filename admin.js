@@ -50,7 +50,7 @@ const normalizeBellaOrder = (order) => ({
   siteVariant: 'video',
   shippingTracking: order.codigo_rastreio ? { code: order.codigo_rastreio } : null,
 });
-const mergeOrders = () => { orders = [...gokocoOrders, ...bellaOrders.map(normalizeBellaOrder)]; renderStats(); renderOrders(); };
+const mergeOrders = () => { orders = [...gokocoOrders, ...bellaOrders.map(normalizeBellaOrder)]; renderOrders(); };
 const cash = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const formatDate = (value) => value ? new Date(value).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 const formatPhone = (value) => {
@@ -93,11 +93,12 @@ function showLogin() {
   $('shell').hidden = true;
   $('login').hidden = false;
 }
-function filteredOrders() {
+function matchingOrders() {
   const term = $('search').value.trim().toLocaleLowerCase('pt-BR');
+  const siteTerm = term.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const siteVariant = siteTerm === 'tl' ? 'tl' : siteTerm === 'video' ? 'video' : ['tiktok', 'tik tok'].includes(siteTerm) ? 'gokoco' : null;
   const now = new Date();
   return orders.filter((order) => {
-    const statusMatch = selectedStatus === 'todos' || order.status === selectedStatus || (selectedStatus === 'pending' && order.status === 'creating');
     const d = new Date(order.created_at);
     const days = (now.getTime() - d.getTime()) / 86400000;
     let periodMatch = true;
@@ -105,9 +106,15 @@ function filteredOrders() {
     else if (selectedPeriod === 'ontem') { const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1); periodMatch = d.toDateString() === yesterday.toDateString(); }
     else if (selectedPeriod === '7dias') periodMatch = days <= 7;
     else if (selectedPeriod === '30dias') periodMatch = days <= 30;
+    if (!periodMatch) return false;
+    if (siteVariant) return (order.siteVariant || 'gokoco') === siteVariant;
     const haystack = [order.name, order.email, order.phone, order.transaction_id, ...(Array.isArray(order.products) ? order.products.map((p) => p.name) : [])].join(' ').toLocaleLowerCase('pt-BR');
-    return statusMatch && periodMatch && (!term || haystack.includes(term));
-  }).sort((a, b) => {
+    return !term || haystack.includes(term);
+  });
+}
+
+function filteredOrders() {
+  return matchingOrders().filter((order) => selectedStatus === 'todos' || order.status === selectedStatus || (selectedStatus === 'pending' && order.status === 'creating')).sort((a, b) => {
     if (selectedSort === 'antigos') return new Date(a.created_at) - new Date(b.created_at);
     if (selectedSort === 'nome_az') return String(a.name).localeCompare(String(b.name), 'pt-BR');
     if (selectedSort === 'nome_za') return String(b.name).localeCompare(String(a.name), 'pt-BR');
@@ -118,11 +125,12 @@ function filteredOrders() {
 }
 
 function renderStats() {
-  const count = (status) => orders.filter((order) => order.status === status).length;
-  $('count-all').textContent = orders.length;
+  const matching = matchingOrders();
+  const count = (status) => matching.filter((order) => order.status === status).length;
+  $('count-all').textContent = matching.length;
   $('count-pending').textContent = count('pending') + count('creating');
   $('count-paid').textContent = count('paid');
-  $('tab-all').textContent = orders.length;
+  $('tab-all').textContent = matching.length;
   $('tab-pending').textContent = count('pending') + count('creating');
   $('tab-paid').textContent = count('paid');
   $('tab-refunded').textContent = count('refunded');
@@ -131,6 +139,7 @@ function renderStats() {
 }
 
 function renderOrders() {
+  renderStats();
   const rows = filteredOrders();
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   page = Math.min(page, totalPages);
