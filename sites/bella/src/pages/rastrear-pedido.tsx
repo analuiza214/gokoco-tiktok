@@ -10,7 +10,7 @@ import { useState, useRef } from "react";
 import { Link } from "wouter";
 import {
   Search, Package, Truck, CheckCircle, ShieldCheck,
-  ChevronRight, ArrowLeft, MapPin, Box, AlertTriangle,
+  ChevronRight, ChevronDown, ArrowLeft, MapPin, Box, AlertTriangle,
   RotateCcw, Warehouse, CreditCard, Copy, CheckCheck,
   X, Clock, Upload,
 } from "lucide-react";
@@ -579,6 +579,7 @@ export default function RastrearPedido() {
   const [showPopup, setShowPopup]     = useState(false);
   const [taxaPaga, setTaxaPaga]       = useState(false);
   const [pagoPem, setPagoPem]         = useState<Date | null>(null); // quando o comprovante foi enviado
+  const [faqOpen, setFaqOpen]         = useState<number | null>(null); // qual FAQ está aberto
 
   async function handleRastrear(e: React.FormEvent) {
     e.preventDefault();
@@ -814,6 +815,48 @@ export default function RastrearPedido() {
                       <strong>até 2 dias úteis</strong> no endereço cadastrado.
                     </p>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* FAQ - Dúvidas sobre a Taxa */}
+            {resultado.aguardandoTaxa && !taxaPaga && (
+              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                <h3 className="font-black text-gray-900 text-base mb-4">Dúvidas sobre a Taxa</h3>
+                <div className="space-y-3">
+                  {[
+                    {
+                      pergunta: "Por que preciso pagar essa taxa?",
+                      resposta: "Produtos importados estão sujeitos à avaliação da Receita Federal. Quando o valor declarado ultrapassa o limite permitido, uma taxa de importação é aplicada."
+                    },
+                    {
+                      pergunta: "O que acontece se eu não pagar?",
+                      resposta: "Caso o pagamento não seja efetuado dentro do prazo, o pacote será declarado como abandonado e encaminhado para leilão beneficente ou destruição."
+                    },
+                    {
+                      pergunta: "O pagamento é seguro?",
+                      resposta: "Sim. O pagamento é processado via PIX Instantâneo do Banco Central do Brasil, 100% seguro e regulamentado."
+                    }
+                  ].map((faq, index) => (
+                    <div key={index} className="border border-gray-200 rounded-xl overflow-hidden">
+                      <button
+                        onClick={() => setFaqOpen(faqOpen === index ? null : index)}
+                        className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50 transition-colors"
+                      >
+                        <span className="font-semibold text-gray-900 text-sm">{faq.pergunta}</span>
+                        {faqOpen === index ? (
+                          <ChevronDown className="h-4 w-4 text-gray-500" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-gray-500" />
+                        )}
+                      </button>
+                      {faqOpen === index && (
+                        <div className="px-4 pb-4 pt-0">
+                          <p className="text-sm text-gray-600 leading-relaxed">{faq.resposta}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
