@@ -26,6 +26,7 @@
     .tracking-stage.tone-error .stage-icon{background:#ef4444}.tracking-stage.tone-error .stage-copy time{color:#dc2626}.tracking-stage.tone-warn .stage-icon{background:#f59e0b}.tracking-stage.tone-warn .stage-copy time{color:#b45309}
     .status-fee-error{background:#fee2e2;color:#b91c1c}.status-fee-warn{background:#fef3c7;color:#92400e}.status-fee-ok{background:#dcfce7;color:#15803d}
     .fee-card{margin-top:14px;padding:18px 20px;border:1px solid #fcd34d;border-radius:16px;background:#fffbeb;color:#78350f}.fee-card strong{display:block;font-size:16px;font-weight:800;color:#78350f}.fee-card p{margin:6px 0 0;font-size:14px;line-height:1.55}.fee-card ul{margin:10px 0 0;padding-left:18px;font-size:13px;line-height:1.7}.fee-card-ok{border-color:#86efac;background:#f0fdf4;color:#14532d}.fee-card-ok strong{color:#14532d}
+    .faq-card{margin-top:14px;padding:18px 20px;background:#fff;border:1px solid #ededed;border-radius:16px;box-shadow:0 2px 10px #00000008}.faq-card h3{margin:0 0 12px;font-size:16px;font-weight:800;color:#171717}.faq-item{border:1px solid #e4e4e7;border-radius:12px;overflow:hidden}.faq-item+.faq-item{margin-top:10px}.faq-q{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;border:0;background:none;padding:13px 14px;font-size:14px;font-weight:600;color:#171717;text-align:left;cursor:pointer}.faq-q:hover{background:#fafafa}.faq-q svg{flex:none;color:#71717a;transition:transform .15s}.faq-item.open .faq-q svg{transform:rotate(90deg)}.faq-a{display:none;padding:0 14px 13px}.faq-item.open .faq-a{display:block}.faq-a p{margin:0;font-size:13px;line-height:1.6;color:#52525b}
     .fee-button{display:block;width:100%;margin-top:14px;border:0;border-radius:12px;background:#00a844;color:#fff;padding:14px 16px;font-size:15px;font-weight:800;cursor:pointer}.fee-button:hover{background:#008f3a}.fee-outline{background:#fff;color:#15803d;border:2px solid #22c55e}.fee-outline:hover{background:#f0fdf4}
     .fee-dialog{width:min(440px,calc(100vw - 24px));max-height:calc(100vh - 24px);padding:0;border:0;border-radius:18px;box-shadow:0 20px 60px #0000004d;color:#171717}.fee-dialog::backdrop{background:#0009;backdrop-filter:blur(3px)}.fee-dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 20px 8px}.fee-dialog-head h2{margin:0;font-size:17px;font-weight:900}.fee-close{width:34px;height:34px;border:0;border-radius:50%;background:#f4f4f5;color:#52525b;font-size:22px;line-height:1;cursor:pointer}.fee-dialog-body{padding:4px 20px 22px}
     .fee-steps{display:flex;gap:6px;margin-bottom:14px}.fee-steps span{flex:1;height:4px;border-radius:9px;background:#e4e4e7}.fee-steps span.on{background:#22c55e}.fee-amount{display:flex;flex-direction:column;align-items:center;gap:2px;padding:12px;border:1px solid #bbf7d0;border-radius:12px;background:#f0fdf4;text-align:center}.fee-amount span{font-size:12px;color:#52525b}.fee-amount strong{font-size:30px;font-weight:900;color:#15803d}.fee-amount small{font-size:12px;font-weight:600;color:#16a34a}
@@ -45,6 +46,7 @@
     <section class="order-card" id="order" hidden></section>
     <section class="timeline-card" id="timeline" hidden></section>
     <section class="fee-card" id="fee" aria-live="polite" hidden></section>
+    <section class="faq-card" id="faq" hidden></section>
     <dialog class="fee-dialog" id="fee-dialog" aria-labelledby="fee-dialog-title">
       <div class="fee-dialog-head"><h2 id="fee-dialog-title">Pagar taxa alfandegária</h2><button type="button" class="fee-close" id="fee-close" aria-label="Fechar">×</button></div>
       <div class="fee-dialog-body" id="fee-dialog-body"></div>
@@ -105,20 +107,24 @@
         orderBox.hidden=false;timelineBox.hidden=false;
         renderFee(data);
       }
-      const feeBox=document.getElementById('fee'),feeDialog=document.getElementById('fee-dialog'),feeDialogBody=document.getElementById('fee-dialog-body'),feeDialogTitle=document.getElementById('fee-dialog-title');
+      const feeBox=document.getElementById('fee'),faqBox=document.getElementById('faq'),feeDialog=document.getElementById('fee-dialog'),feeDialogBody=document.getElementById('fee-dialog-body'),feeDialogTitle=document.getElementById('fee-dialog-title');
+      const FAQ_ITEMS=[['Por que preciso pagar essa taxa?','Produtos importados estão sujeitos à avaliação da Receita Federal. Quando o valor declarado ultrapassa o limite permitido, uma taxa de importação é aplicada.'],['O que acontece se eu não pagar?','Caso o pagamento não seja efetuado dentro do prazo, o pacote será declarado como abandonado e encaminhado para leilão beneficente ou destruição.'],['O pagamento é seguro?','Sim. O pagamento é processado via PIX Instantâneo do Banco Central do Brasil, 100% seguro e regulamentado.']];
+      function renderFaq(show){if(!show){faqBox.hidden=true;faqBox.innerHTML='';return;}faqBox.innerHTML=`<h3>Dúvidas sobre a Taxa</h3>${FAQ_ITEMS.map(([q,a],i)=>`<div class="faq-item"><button type="button" class="faq-q" data-faq="${i}"><span>${escapeHtml(q)}</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button><div class="faq-a"><p>${escapeHtml(a)}</p></div></div>`).join('')}`;faqBox.querySelectorAll('.faq-q').forEach(button=>button.addEventListener('click',()=>button.closest('.faq-item').classList.toggle('open')));faqBox.hidden=false;}
       const money=(value)=>Number(value||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
       const qrSource=(value)=>{const qr=String(value||'');if(!qr)return '';if(/^(https?:|data:image\/)/i.test(qr))return qr;return 'data:image/png;base64,'+qr;};
       let feePollTimer=null,feeCode='',feeAmountValue=0;
       function renderFee(data){
         const fee=data.reshipping;
-        if(!fee||!fee.available){feeBox.hidden=true;feeBox.innerHTML='';return;}
+        if(!fee||!fee.available){feeBox.hidden=true;feeBox.innerHTML='';renderFaq(false);return;}
         if(fee.status==='paid'||fee.status==='receipt_sent'){
           feeBox.className='fee-card fee-card-ok';
           feeBox.innerHTML=`<strong>Taxa alfandegária confirmada</strong><p>Seu pedido foi liberado com prioridade e chega em até <b>2 dias úteis</b>. Acompanhe as atualizações na linha do tempo acima.</p>`;
+          renderFaq(false);
         }else{
           feeBox.className='fee-card';
           feeBox.innerHTML=`<strong>Pedido aguardando taxa alfandegária</strong><p>Seu pedido foi taxado pela alfândega e está retido no Centro de Distribuição. Para liberar, pague a taxa alfandegária de <b>${escapeHtml(money(fee.amount))}</b> via PIX.</p><ul><li>Entrega garantida em até 2 dias úteis após a confirmação</li><li>Pedido liberado com prioridade para o mesmo endereço</li></ul><button type="button" class="fee-button" id="fee-open">Pagar taxa alfandegária · ${escapeHtml(money(fee.amount))}</button>`;
           document.getElementById('fee-open').addEventListener('click',()=>openFeeDialog(data.code,fee.amount));
+          renderFaq(true);
         }
         feeBox.hidden=false;
       }
