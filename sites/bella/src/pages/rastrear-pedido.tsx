@@ -102,7 +102,6 @@ function gerarEtapas(origem: Date, cidade = "", estado = ""): ResultadoRastreio 
     enviado:    addH(origem, H.ENVIADO),
     transito1:  addH(origem, H.TRANSITO1),
     transito2:  addH(origem, H.TRANSITO2),
-    saiu:       addH(origem, H.SAIU),
     alfandega:  addH(origem, H.ALFANDEGA),
     cd:         addH(origem, H.CD),
     aguardando: addH(origem, H.AGUARDANDO),
@@ -157,15 +156,6 @@ function gerarEtapas(origem: Date, cidade = "", estado = ""): ResultadoRastreio 
       data: h >= H.TRANSITO2 ? fmt(t.transito2) : fmtPrev(t.transito2),
       ok: h >= H.TRANSITO2, erro: false,
     },
-    {
-      icone: MapPin,
-      label: "Saiu para Entrega",
-      descricao: cidadeCliente
-        ? `O pedido está com o entregador em ${cidadeCliente} e será entregue em breve.`
-        : "O pedido está com o entregador e será entregue em breve.",
-      data: h >= H.SAIU ? fmt(t.saiu) : fmtPrev(previsaoOriginal),
-      ok: h >= H.SAIU, erro: false,
-    },
   ];
 
   if (h >= H.ALFANDEGA) etapas.push({
@@ -203,7 +193,6 @@ function gerarEtapas(origem: Date, cidade = "", estado = ""): ResultadoRastreio 
   else if (h >= H.AGUARDANDO) status = "🕐 Aguardando Liberação";
   else if (h >= H.CD)         status = "🏭 No Centro de Distribuição";
   else if (h >= H.ALFANDEGA)  status = "⚠️ Taxado pela Alfândega";
-  else if (h >= H.SAIU)      status = "🚚 Saiu para Entrega";
   else if (h >= H.TRANSITO2) status = "🚛 Em Trânsito";
   else if (h >= H.TRANSITO1) status = "🚛 Em Trânsito";
   else if (h >= H.ENVIADO)    status = "📦 Enviado";
@@ -215,7 +204,7 @@ function gerarEtapas(origem: Date, cidade = "", estado = ""): ResultadoRastreio 
     etapas,
     previsao: previsaoOriginal.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" }),
     status,
-    falhaEntrega:   h >= H.FALHA1,
+    falhaEntrega:   h >= H.ALFANDEGA,
     aguardandoTaxa: h >= H.TAXA,
   };
 }

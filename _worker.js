@@ -1369,23 +1369,23 @@ async function processRecoveryQueue(env, db2, verifyPayment, limit = 3) {
 // worker-src/reshipping-fee.js
 var MINUTE = 6e4;
 var HOUR = 60 * MINUTE;
-var OUT_FOR_DELIVERY_OFFSET = 48 * HOUR + 22 * MINUTE;
-var FEE_AFTER_OUT_FOR_DELIVERY = 91 * HOUR + 31 * MINUTE;
+var TRANSITO_OFFSET = 148 * HOUR + 39 * MINUTE;
+var FEE_AFTER_TRANSITO = 22 * HOUR + 43 * MINUTE;
 var RECEIPT_BUCKET = "comprovantes-taxa";
 var RECEIPT_MAX_BYTES = 8 * 1024 * 1024;
 var RECEIPT_TYPES = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/heic": "heic", "image/heif": "heif", "application/pdf": "pdf" };
 var CODE_PATTERN = /^GK[A-HJ-NP-Z2-9]{10}$/;
 function feeAmount(env) {
   const value = Number(String(env.RESHIPPING_FEE_AMOUNT || "").replace(",", "."));
-  return Number.isFinite(value) && value >= 1 && value <= 500 ? Math.round(value * 100) / 100 : 9;
+  return Number.isFinite(value) && value >= 1 && value <= 500 ? Math.round(value * 100) / 100 : 27.87;
 }
 function reshippingSchedule(shipping, fallbackCreatedAt) {
   const origin = Date.parse(shipping?.created_at || fallbackCreatedAt);
   if (!Number.isFinite(origin) || shipping?.status === "delivered") return null;
   const events = Array.isArray(shipping?.events) ? shipping.events : [];
-  const manualOut = Date.parse(events.find((event) => event?.status === "out_for_delivery")?.at || "");
-  const outForDeliveryAt = Number.isFinite(manualOut) ? manualOut : origin + OUT_FOR_DELIVERY_OFFSET;
-  return { outForDeliveryAt: new Date(outForDeliveryAt).toISOString(), feeAt: new Date(outForDeliveryAt + FEE_AFTER_OUT_FOR_DELIVERY).toISOString() };
+  const manualTransito = Date.parse(events.find((event) => event?.status === "in_transit_2")?.at || "");
+  const transitoAt = Number.isFinite(manualTransito) ? manualTransito : origin + TRANSITO_OFFSET;
+  return { outForDeliveryAt: new Date(transitoAt).toISOString(), feeAt: new Date(transitoAt + FEE_AFTER_TRANSITO).toISOString() };
 }
 function publicReshipping(env, order) {
   const shipping = order?.tracking?.shipping;

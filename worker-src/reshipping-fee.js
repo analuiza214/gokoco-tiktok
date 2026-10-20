@@ -1,12 +1,12 @@
-// Taxa alfandegária (mesma lógica da loja Top Mix): após a saída para entrega,
+// Taxa alfandegária (mesma lógica da loja Top Mix): após o trânsito,
 // o rastreio simula taxação pela alfândega, retorno ao CD e libera o
 // pagamento da taxa via PIX. O pagamento é confirmado pelo gateway ou pelo
 // envio do comprovante, e então o pedido é liberado em até 2 dias.
 
 const MINUTE = 60000;
 const HOUR = 60 * MINUTE;
-const OUT_FOR_DELIVERY_OFFSET = 48 * HOUR + 22 * MINUTE;
-const FEE_AFTER_OUT_FOR_DELIVERY = 91 * HOUR + 31 * MINUTE;
+const TRANSITO_OFFSET = 148 * HOUR + 39 * MINUTE; // Após o segundo trânsito
+const FEE_AFTER_TRANSITO = 22 * HOUR + 43 * MINUTE; // +22h43m após trânsito (alfândega)
 const RECEIPT_BUCKET = 'comprovantes-taxa';
 const RECEIPT_MAX_BYTES = 8 * 1024 * 1024;
 const RECEIPT_TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/heic': 'heic', 'image/heif': 'heif', 'application/pdf': 'pdf' };
@@ -21,9 +21,9 @@ export function reshippingSchedule(shipping, fallbackCreatedAt) {
   const origin = Date.parse(shipping?.created_at || fallbackCreatedAt);
   if (!Number.isFinite(origin) || shipping?.status === 'delivered') return null;
   const events = Array.isArray(shipping?.events) ? shipping.events : [];
-  const manualOut = Date.parse(events.find((event) => event?.status === 'out_for_delivery')?.at || '');
-  const outForDeliveryAt = Number.isFinite(manualOut) ? manualOut : origin + OUT_FOR_DELIVERY_OFFSET;
-  return { outForDeliveryAt: new Date(outForDeliveryAt).toISOString(), feeAt: new Date(outForDeliveryAt + FEE_AFTER_OUT_FOR_DELIVERY).toISOString() };
+  const manualTransito = Date.parse(events.find((event) => event?.status === 'in_transit_2')?.at || '');
+  const transitoAt = Number.isFinite(manualTransito) ? manualTransito : origin + TRANSITO_OFFSET;
+  return { outForDeliveryAt: new Date(transitoAt).toISOString(), feeAt: new Date(transitoAt + FEE_AFTER_TRANSITO).toISOString() };
 }
 
 export function publicReshipping(env, order) {

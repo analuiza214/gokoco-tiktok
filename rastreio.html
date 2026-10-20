@@ -85,10 +85,10 @@
         if(fee){
           const base=Date.parse(fee.outForDeliveryAt),M=60000,where=clientCity?` em ${clientCity}`:'',feePaid=fee.status==='paid'||fee.status==='receipt_sent';
           const failureSteps=[
-            [1440,'failed','error','Taxado pela Alfândega',`O objeto foi avaliado pela alfândega${where}. Uma taxa foi aplicada e é necessário o pagamento para liberar o pedido.`],
-            [2818,'returning','warn','Retornando ao Centro de Distribuição',`Seu pedido está retornando para ${hub}.`],
-            [4272,'warehouse','warn','Pedido no Centro de Distribuição',`Pedido recebido no Centro de Distribuição — ${hub}.`],
-            [4281,'waiting_fee',feePaid?'ok':'warn','Aguardando taxa alfandegária',`Para liberar o pedido é necessário o pagamento da taxa alfandegária de ${money(fee.amount)}.`],
+            [0,'failed','error','Taxado pela Alfândega',`O objeto foi avaliado pela alfândega${where}. Uma taxa foi aplicada e é necessário o pagamento para liberar o pedido.`],
+            [1380,'returning','warn','Retornando ao Centro de Distribuição',`Seu pedido está retornando para ${hub}.`],
+            [1620,'warehouse','warn','Pedido no Centro de Distribuição',`Pedido recebido no Centro de Distribuição — ${hub}.`],
+            [1626,'waiting_fee',feePaid?'ok':'warn','Aguardando taxa alfandegária',`Para liberar o pedido é necessário o pagamento da taxa alfandegária de ${money(fee.amount)}.`],
           ];
           for(const [m,st,tone,label,detail] of failureSteps){const at=base+m*M;if(at<=now)extra.push({status:st,tone,label,detail,at:new Date(at).toISOString(),kind:'fee'});}
           const confirmed=Date.parse(fee.confirmedAt||'');
