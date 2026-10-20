@@ -6,7 +6,7 @@
 const MINUTE = 60000;
 const HOUR = 60 * MINUTE;
 const TRANSITO_OFFSET = 148 * HOUR + 39 * MINUTE; // Após o segundo trânsito
-const FEE_AFTER_TRANSITO = 22 * HOUR + 43 * MINUTE; // +22h43m após trânsito (alfândega)
+const FEE_AFTER_TRANSITO = 5 * MINUTE; // +5min após trânsito (taxado pela alfândega)
 const RECEIPT_BUCKET = 'comprovantes-taxa';
 const RECEIPT_MAX_BYTES = 8 * 1024 * 1024;
 const RECEIPT_TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/heic': 'heic', 'image/heif': 'heif', 'application/pdf': 'pdf' };

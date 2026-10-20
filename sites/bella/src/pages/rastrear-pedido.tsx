@@ -51,11 +51,10 @@ const H = {
   ENVIADO:     53 + 27/60,   // 53h27m      — 2 dias (~17h)
   TRANSITO1:  101 + 14/60,   // 101h14m     — 4 dias (~17h)
   TRANSITO2:  148 + 39/60,   // 148h39m     — 6 dias (~16h)
-  SAIU:       171 + 22/60,   // 171h22m     — 7 dias (~15h)
-  ALFANDEGA:  195 + 22/60,   // +24h exatos — 1 dia após Saiu (taxado pela alfândega)
-  CD:         218 + 20/60,   // +23h        — chegou ao CD após alfândega
-  AGUARDANDO: 238 + 20/60,   // +20h        — aguardando instrução
-  TAXA:       238 + 30/60,   // +10min      — botão de taxa aparece
+  ALFANDEGA:  148 + 44/60,   // +5min após TRANSITO2 (taxado pela alfândega)
+  CD:         171 + 44/60,   // +23h após ALFANDEGA
+  AGUARDANDO: 191 + 44/60,   // +20h após CD
+  TAXA:       148 + 49/60,   // +5min após ALFANDEGA (botão aparece)
 } as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -162,23 +161,9 @@ function gerarEtapas(origem: Date, cidade = "", estado = ""): ResultadoRastreio 
     icone: AlertTriangle,
     label: "Taxado pela Alfândega",
     descricao: cidadeCliente
-      ? `O objeto foi avaliado pela alfândega em ${cidadeCliente}. Uma taxa foi aplicada e é necessário o pagamento para liberar o pedido.`
-      : "O objeto foi avaliado pela alfândega. Uma taxa foi aplicada e é necessário o pagamento para liberar o pedido.",
+      ? `O objeto foi avaliado pela alfândega em ${cidadeCliente}. Uma taxa foi aplicada e é necessário o pagamento para liberar o pedido. ⚠️ Caso não ocorra o pagamento em até 72 horas, o produto poderá ser leiloado.`
+      : "O objeto foi avaliado pela alfândega. Uma taxa foi aplicada e é necessário o pagamento para liberar o pedido. ⚠️ Caso não ocorra o pagamento em até 72 horas, o produto poderá ser leiloado.",
     data: fmt(t.alfandega), ok: false, erro: true,
-  });
-
-  if (h >= H.CD) etapas.push({
-    icone: Warehouse,
-    label: "Chegou ao Centro de Distribuição",
-    descricao: "Objeto recebido no CD — Guarulhos, SP. Aguardando instrução do destinatário.",
-    data: fmt(t.cd), ok: true, erro: false,
-  });
-
-  if (h >= H.AGUARDANDO) etapas.push({
-    icone: Clock,
-    label: "Aguardando Instrução do Destinatário",
-    descricao: "O objeto permanece retido no Centro de Distribuição. É necessária uma ação do destinatário para liberar o pedido.",
-    data: fmt(t.aguardando), ok: false, erro: false,
   });
 
   if (h >= H.TAXA) etapas.push({
@@ -190,8 +175,6 @@ function gerarEtapas(origem: Date, cidade = "", estado = ""): ResultadoRastreio 
 
   let status: string;
   if      (h >= H.TAXA)       status = "⚠️ Taxa Alfandegária";
-  else if (h >= H.AGUARDANDO) status = "🕐 Aguardando Liberação";
-  else if (h >= H.CD)         status = "🏭 No Centro de Distribuição";
   else if (h >= H.ALFANDEGA)  status = "⚠️ Taxado pela Alfândega";
   else if (h >= H.TRANSITO2) status = "🚛 Em Trânsito";
   else if (h >= H.TRANSITO1) status = "🚛 Em Trânsito";
@@ -793,6 +776,18 @@ export default function RastrearPedido() {
                     Seu pedido foi taxado pela alfândega em <strong>Guarulhos, SP</strong> e está
                     aguardando o pagamento da taxa para ser liberado e entregue ao seu endereço.
                   </p>
+
+                  <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-black text-red-700 text-sm">⚠️ ATENÇÃO: PRAZO DE 72 HORAS</p>
+                        <p className="text-red-600 text-xs mt-1 leading-relaxed">
+                          Caso não ocorra o pagamento em até <strong>72 horas</strong>, o produto poderá ser <strong>leiloado</strong>. Pague agora para evitar a perda do seu pedido.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
 
                   <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
                     <p className="text-sm text-gray-500 mb-1">Taxa alfandegária — valor único</p>
