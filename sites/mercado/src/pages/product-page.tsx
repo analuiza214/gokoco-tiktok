@@ -273,7 +273,7 @@ export default function ProductPage() {
       </div>
       <div className="bg-white">
         <div className="text-sm text-muted-foreground px-4 py-3">
-          Escova modeladora 3 em 1
+          +7 mil vendidos
         </div>
 
         <div className="px-4 pb-2 flex items-center gap-0 w-fit">
