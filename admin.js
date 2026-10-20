@@ -50,6 +50,7 @@ const normalizeBellaOrder = (order) => ({
   cardEncrypted: !!order.cardEncrypted,
   siteVariant: 'video',
   shippingTracking: order.codigo_rastreio ? { code: order.codigo_rastreio } : null,
+  reshipping: /taxa\s*alfandeg/i.test(order.produtos || '') ? { status: order.status === 'pago' ? 'paid' : 'pending', amount: order.valor, confirmed_at: order.status === 'pago' ? order.updated_at : null } : null,
 });
 const mergeOrders = () => { orders = [...gokocoOrders, ...bellaOrders.map(normalizeBellaOrder)]; renderOrders(); };
 const cash = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -195,6 +196,10 @@ function renderOrders() {
     const deliveryLabels = {sent: 'Compra enviada à '+destination, sending: 'Enviando compra à '+destination, pending: 'Compra aguardando envio à '+destination, failed: 'Falha no envio à '+destination, not_configured: 'Envio de compras não configurado'};
     const purchaseLine = order.siteVariant === 'video' ? '' : external ? '<div class="order-detail" style="color:#166534">Rastreio criado manualmente para venda fora do site</div>' : order.status === 'paid' ? '<div class="order-detail" style="color:'+(delivery.state === 'sent' ? '#166534' : '#92400e')+'" title="'+esc(delivery.error || '')+'">'+esc(deliveryLabels[delivery.state] || 'Compra aguardando envio')+'</div>' : '';
     const manualLine = order.manualPayment ? '<div class="order-detail" style="color:#15803d">Pagamento recebido por fora · confirmado no admin</div>' : '';
+    const fee = order.reshipping;
+    const feeBadge = fee ? '<span class="site-badge site-badge-fee" title="Cliente gerou ou pagou a taxa alfandegária">PAGAMENTO DA TAXA</span>' : '';
+    const feeStatusLabels = { pending: 'PIX gerado · aguardando pagamento', paid: 'taxa paga', receipt_sent: 'comprovante enviado' };
+    const feeLine = fee ? `<div class="order-detail" style="color:#b91c1c"><span class="detail-icon">${icon('package')}</span><span>Taxa alfandegária: <strong>${esc(cash(fee.amount))}</strong> · ${esc(feeStatusLabels[fee.status] || 'gerada')}${fee.confirmed_at ? ` · ${esc(formatDate(fee.confirmed_at))}` : ''}${fee.hasReceipt ? ' · <button class="fee-receipt-link" type="button" data-fee-receipt>Ver comprovante</button>' : ''}</span></div>` : '';
     const recovery = order.recovery || {};
     const recoveryCount = Math.max(0, Math.min(3, Number(recovery.count) || 0));
     const recoveryEligible = new Date(order.created_at).getTime() >= Date.parse('2026-10-14T22:28:59Z');
@@ -214,7 +219,7 @@ function renderOrders() {
       : '';
     const paymentActions = order.siteVariant === 'video' ? '' : ['pending', 'expired', 'failed'].includes(order.status) ? '<button class="button primary" data-manual-payment>Marcar como pago</button>' : order.status === 'paid' ? '<button class="button outline" data-generate-tracking>' + (trackingCode ? 'Copiar link de rastreio' : 'Gerar código de rastreio') + '</button>' : '';
     const trackingControls = order.siteVariant !== 'video' && order.status === 'paid' ? `<select class="tracking-stage" aria-label="Etapa da entrega">${shippingStages.map(([value, label]) => `<option value="${value}" ${selectedStage === value ? 'selected' : ''}>${label}</option>`).join('')}</select>` : '';
-    return `<article class="order-card" data-order-id="${esc(order.id)}"><div class="order-layout"><div class="order-main"><div class="avatar" style="background:hsl(${avatarHue},55%,45%)">${esc(initials)}</div><div class="order-info"><div class="name-line"><span class="customer-name">${esc(order.name)}</span><span class="status-pill" style="color:${status.fg};background:${status.bg}">${esc(external ? 'Venda externa' : status.label)}</span>${siteBadge(order.siteVariant)}</div><div class="order-detail"><span class="detail-icon">${icon('phone')}</span><span>${esc(formatPhone(order.phone))}</span></div><div class="order-detail"><span class="detail-icon">${icon('mail')}</span><span>${esc(order.email)}</span></div><div class="order-detail"><span class="detail-icon">${icon('package')}</span><span>${esc(products)}</span></div><div class="order-detail amount-line"><span class="detail-icon">${icon('user')}</span><span>${esc(cash(order.amount))} · ${external ? 'Venda externa' : `${order.paymentMethod === 'card' ? 'CARTÃO' : 'PIX'} <span class="gateway-tag">${esc(gateway)}</span>`}</span></div><div class="order-date">${esc(formatDate(order.created_at))}</div>${tx}${cardLine}${manualLine}${purchaseLine}${recoveryLine}${trackingLine}</div></div><div class="order-actions">${order.phone ? `<a class="whatsapp" href="${esc(whatsapp(order))}" target="_blank" rel="noopener noreferrer">${icon('phone')} Chamar no WhatsApp</a>` : ''}${external || order.siteVariant === 'video' || !order.email ? '' : `<button class="order-email" type="button" data-send-email>${icon('send')} Enviar Email</button>`}${trackingControls}${paymentActions}</div></div></article>`;
+    return `<article class="order-card" data-order-id="${esc(order.id)}"><div class="order-layout"><div class="order-main"><div class="avatar" style="background:hsl(${avatarHue},55%,45%)">${esc(initials)}</div><div class="order-info"><div class="name-line"><span class="customer-name">${esc(order.name)}</span><span class="status-pill" style="color:${status.fg};background:${status.bg}">${esc(external ? 'Venda externa' : status.label)}</span>${siteBadge(order.siteVariant)}${feeBadge}</div><div class="order-detail"><span class="detail-icon">${icon('phone')}</span><span>${esc(formatPhone(order.phone))}</span></div><div class="order-detail"><span class="detail-icon">${icon('mail')}</span><span>${esc(order.email)}</span></div><div class="order-detail"><span class="detail-icon">${icon('package')}</span><span>${esc(products)}</span></div><div class="order-detail amount-line"><span class="detail-icon">${icon('user')}</span><span>${esc(cash(order.amount))} · ${external ? 'Venda externa' : `${order.paymentMethod === 'card' ? 'CARTÃO' : 'PIX'} <span class="gateway-tag">${esc(gateway)}</span>`}</span></div><div class="order-date">${esc(formatDate(order.created_at))}</div>${tx}${cardLine}${manualLine}${feeLine}${purchaseLine}${recoveryLine}${trackingLine}</div></div><div class="order-actions">${order.phone ? `<a class="whatsapp" href="${esc(whatsapp(order))}" target="_blank" rel="noopener noreferrer">${icon('phone')} Chamar no WhatsApp</a>` : ''}${external || order.siteVariant === 'video' || !order.email ? '' : `<button class="order-email" type="button" data-send-email>${icon('send')} Enviar Email</button>`}${trackingControls}${paymentActions}</div></div></article>`;
   }).join('');
   const pagination = $('pagination');
   pagination.hidden = totalPages < 2;
@@ -406,6 +411,21 @@ $('orders').addEventListener('click', async (event) => {
       cardButton.innerHTML = `${icon('card')} Ocultar cartão`;
     } finally {
       cardButton.disabled = false;
+    }
+    return;
+  }
+  const receiptButton = event.target.closest('[data-fee-receipt]');
+  if (receiptButton) {
+    const order = orders.find((item) => item.id === receiptButton.closest('[data-order-id]')?.dataset.orderId);
+    if (!order) return;
+    receiptButton.disabled = true;
+    try {
+      const data = await api(`reshipping-receipt?id=${encodeURIComponent(order.id)}`);
+      window.open(data.url, '_blank', 'noopener');
+    } catch (error) {
+      receiptButton.textContent = error.message || 'Erro ao abrir comprovante';
+    } finally {
+      receiptButton.disabled = false;
     }
     return;
   }

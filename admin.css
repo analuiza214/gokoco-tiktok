@@ -12,6 +12,8 @@
 .email-modal{max-width:560px}.email-form{display:grid;gap:12px}.email-form label{display:grid;gap:5px;color:#374151;font-size:12px;font-weight:700}.email-form input,.email-form textarea{width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:9px;background:#fff;color:#111827;font:inherit;font-size:14px}.email-form input[readonly]{background:#f9fafb;color:#6b7280}.email-form textarea{resize:vertical;min-height:160px;line-height:1.5}.email-form .button{justify-self:end}.email-form .alert{margin:0}.email-form [role="status"]{margin:0;color:#166534;font-size:13px;font-weight:700}
 .site-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:800;line-height:16px;letter-spacing:.03em;white-space:nowrap}.site-badge-gokoco{background:#dcfce7;color:#166534}.site-badge-tl{background:#fef3c7;color:#92400e}.site-badge-video{background:#f3e8ff;color:#7e22ce}
 .site-badge-legacy{background:#f3f4f6;color:#4b5563}
+.site-badge-fee{background:#fee2e2;color:#b91c1c}
+.fee-receipt-link{border:0;background:none;padding:0;color:#b91c1c;font-size:inherit;font-weight:700;text-decoration:underline;cursor:pointer}.fee-receipt-link:disabled{opacity:.6;cursor:wait}
 .order-card-data{margin-top:4px}
 .order-card-data>.button{gap:6px}
 .card-panel{margin-top:8px;max-width:340px}
