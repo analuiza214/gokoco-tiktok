@@ -172,7 +172,6 @@ function renderStats() {
   $('tab-all').textContent = matching.length;
   $('tab-pending').textContent = count('pending') + count('creating');
   $('tab-paid').textContent = count('paid');
-  $('tab-refunded').textContent = count('refunded');
   $('tab-expired').textContent = count('expired');
   $('tab-failed').textContent = count('failed');
   $('tab-taxa').textContent = matching.filter((order) => order.reshipping).length;
