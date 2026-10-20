@@ -53,6 +53,7 @@ export default function ProductPage() {
   const [helpful, setHelpful] = useState(false);
   const [showMoreReviews, setShowMoreReviews] = useState(false);
   const [helpfulExtra, setHelpfulExtra] = useState<Record<number, boolean>>({});
+  const [openReviewMenu, setOpenReviewMenu] = useState<number | null>(null);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [cartCount, setCartCount] = useState(0);
   const [showCart, setShowCart] = useState(false);
@@ -225,6 +226,8 @@ export default function ProductPage() {
     { name: 'Beatriz Costa', initials: 'BC', text: 'Aquece rápido. Mal terminei de separar o cabelo e já estava pronta para usar.', photos: [13] },
     { name: 'Larissa Teixeira', initials: 'LT', text: 'Gostei. Cumpre o que promete.', photos: [14] },
   ];
+  const reviewHelpfulCounts = [18, 12, 26, 9, 15, 21, 7, 11];
+  const reviewDaysAgo = [3, 5, 6, 8, 10, 12, 14, 17];
   const testimonialVideos = [1, 2, 3, 4].map((n) => img(`/videos/creator-${n}.mp4`));
   const commonQuestions = [
     { question: 'A escova é bivolt?', answer: 'Sim. O modelo anunciado é bivolt.' },
@@ -679,6 +682,42 @@ export default function ProductPage() {
                     </button>
                   );
                 })}
+              </div>
+              <div className="flex justify-end mt-3 pb-4">
+                <button
+                  type="button"
+                  aria-pressed={Boolean(helpfulExtra[index])}
+                  onClick={() => setHelpfulExtra((current) => ({ ...current, [index]: !current[index] }))}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors ${helpfulExtra[index] ? 'border-ml-blue bg-ml-blue text-white' : 'border-gray-300 bg-white text-gray-600'}`}
+                >
+                  <ThumbsUp className={`w-3.5 h-3.5 ${helpfulExtra[index] ? 'fill-current' : ''}`} />
+                  Útil <span>{reviewHelpfulCounts[index] + (helpfulExtra[index] ? 1 : 0)}</span>
+                </button>
+              </div>
+              <div className="flex items-center justify-between border-t border-gray-100 pt-3 text-xs text-gray-400">
+                <span>Há {reviewDaysAgo[index]} dias</span>
+                <div className="relative">
+                  <button
+                    type="button"
+                    aria-label={`Mais opções da opinião de ${review.name}`}
+                    aria-expanded={openReviewMenu === index}
+                    onClick={() => setOpenReviewMenu(openReviewMenu === index ? null : index)}
+                    className="p-1 rounded-full hover:bg-gray-100"
+                  >
+                    <MoreVertical className="w-4 h-4" />
+                  </button>
+                  {openReviewMenu === index && (
+                    <div className="absolute right-0 top-full z-10 min-w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-md">
+                      <button
+                        type="button"
+                        onClick={() => { void navigator.clipboard?.writeText(review.text); setOpenReviewMenu(null); }}
+                        className="w-full rounded px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                      >
+                        Copiar opinião
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </article>
           ))}
