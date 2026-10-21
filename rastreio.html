@@ -181,7 +181,7 @@
         stopFeePolling();feeDialogTitle.textContent='Comprovante recebido';
         feeDialogBody.innerHTML=`<div class="fee-confirmed"><span class="fee-check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v5l3 2"/><circle cx="12" cy="12" r="9"/></svg></span><strong>Comprovante em análise</strong><p>Recebemos seu comprovante. Assim que o pagamento for confirmado, seu pedido é liberado automaticamente.</p></div>`;
         search(feeCode,false);
-        setTimeout(()=>{if(feeDialog.open)feeDialog.close();},3500);
+        setTimeout(()=>{if(feeDialog.open)feeDialog.close();},60000);
       }
       function showFeeConfirmed(){
         stopFeePolling();feeDialogTitle.textContent='Pagamento confirmado';
