@@ -442,6 +442,20 @@ async function adminBellaTrackingEmail(request, env) {
 
 async function siteAsset(request, env) {
   const url = new URL(request.url);
+  const upsell = {
+    '/upsell1': 'original',
+    '/tl/upsell1': 'tl',
+    '/video/upsell1': 'bella',
+  }[url.pathname.replace(/\/$/, '').replace(/\.html$/, '')];
+  if (upsell) {
+    if (!['GET', 'HEAD'].includes(request.method)) return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
+    url.pathname = '/upsell-pages/' + upsell + '.txt';
+    const asset = await env.ASSETS.fetch(new Request(url, request));
+    const headers = new Headers(asset.headers);
+    headers.set('Content-Type', 'text/html; charset=utf-8');
+    headers.set('X-Robots-Tag', 'noindex, nofollow');
+    return new Response(asset.body, { status: asset.status, headers });
+  }
   const site = marketSiteRequest(url, env) ? 'tl' : bellaSiteRequest(url, env) ? 'video' : null;
   if (!site) return env.ASSETS.fetch(request);
   let pathname = url.pathname.replace(new RegExp(`^/${site}(?=/|$)`), '') || '/';
