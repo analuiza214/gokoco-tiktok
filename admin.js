@@ -9,6 +9,7 @@ let gokocoOrders = [];
 let bellaOrders = [];
 let gateways = [];
 let selectedStatus = 'todos';
+let selectedFee = 'todas';
 let selectedPeriod = 'todos';
 let selectedSort = 'recentes';
 let page = 1;
@@ -149,7 +150,8 @@ function matchingOrders() {
 }
 
 function filteredOrders() {
-  return matchingOrders().filter((order) => selectedStatus === 'taxa' ? !!order.reshipping : selectedStatus === 'todos' || order.status === selectedStatus || (selectedStatus === 'pending' && order.status === 'creating')).sort((a, b) => {
+  const feeMatch = (order) => order.reshipping && (selectedFee === 'todas' || (selectedFee === 'pendentes' ? order.reshipping.status === 'pending' : selectedFee === 'pagas' ? order.reshipping.status === 'paid' : order.reshipping.status === 'receipt_sent'));
+  return matchingOrders().filter((order) => selectedStatus === 'taxa' ? feeMatch(order) : selectedStatus === 'todos' || order.status === selectedStatus || (selectedStatus === 'pending' && order.status === 'creating')).sort((a, b) => {
     if (selectedStatus === 'taxa') {
       const feeDate = (order) => new Date(order.reshipping?.confirmed_at || order.reshipping?.created_at || order.created_at);
       return selectedSort === 'antigos' ? feeDate(a) - feeDate(b) : feeDate(b) - feeDate(a);
@@ -174,7 +176,12 @@ function renderStats() {
   $('tab-paid').textContent = count('paid');
   $('tab-expired').textContent = count('expired');
   $('tab-failed').textContent = count('failed');
-  $('tab-taxa').textContent = matching.filter((order) => order.reshipping).length;
+  const feeOrders = matching.filter((order) => order.reshipping);
+  $('tab-taxa').textContent = feeOrders.length;
+  $('fee-all').textContent = feeOrders.length;
+  $('fee-pending').textContent = feeOrders.filter((order) => order.reshipping.status === 'pending').length;
+  $('fee-receipt').textContent = feeOrders.filter((order) => order.reshipping.status === 'receipt_sent').length;
+  $('fee-paid').textContent = feeOrders.filter((order) => order.reshipping.status === 'paid').length;
 }
 
 function renderOrders() {
@@ -363,10 +370,18 @@ document.querySelectorAll('[data-period]').forEach((button) => button.addEventLi
 $('status-filters').addEventListener('click', (event) => {
   const button = event.target.closest('[data-status]'); if (!button) return;
   selectedStatus = button.dataset.status; page = 1;
+  $('fee-filters').hidden = selectedStatus !== 'taxa';
   $('status-filters').querySelectorAll('button').forEach((item) => item.classList.toggle('selected', item === button)); renderOrders();
 });
+$('fee-filters').addEventListener('click', (event) => {
+  const button = event.target.closest('[data-fee]'); if (!button) return;
+  selectedFee = button.dataset.fee; page = 1;
+  $('fee-filters').querySelectorAll('button').forEach((item) => item.classList.toggle('selected', item === button)); renderOrders();
+});
 $('reset-filters').addEventListener('click', () => {
-  selectedPeriod = 'todos'; selectedStatus = 'todos'; selectedSort = 'recentes'; page = 1;
+  selectedPeriod = 'todos'; selectedStatus = 'todos'; selectedFee = 'todas'; selectedSort = 'recentes'; page = 1;
+  $('fee-filters').hidden = true;
+  $('fee-filters').querySelectorAll('button').forEach((item) => item.classList.toggle('selected', item.dataset.fee === 'todas'));
   $('search').value = ''; $('clear-search').hidden = true; $('sort').value = selectedSort;
   document.querySelectorAll('[data-period]').forEach((item) => item.classList.toggle('selected', item.dataset.period === 'todos'));
   $('status-filters').querySelectorAll('button').forEach((item) => item.classList.toggle('selected', item.dataset.status === 'todos')); renderOrders();
