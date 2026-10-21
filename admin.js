@@ -140,7 +140,7 @@ function matchingOrders() {
   const siteVariant = siteTerm === 'tl' ? 'tl' : siteTerm === 'video' ? 'video' : ['tiktok', 'tik tok'].includes(siteTerm) ? 'gokoco' : null;
   const now = new Date();
   return orders.filter((order) => {
-    const d = new Date(order.created_at);
+    const d = new Date(selectedStatus === 'taxa' && order.reshipping ? (order.reshipping.confirmed_at || order.reshipping.created_at || order.created_at) : order.created_at);
     const days = (now.getTime() - d.getTime()) / 86400000;
     let periodMatch = true;
     if (selectedPeriod === 'hoje') periodMatch = d.toDateString() === now.toDateString();
@@ -224,7 +224,8 @@ function renderOrders() {
       ? '<span class="site-badge site-badge-fee-paid" title="Cliente pagou a taxa alfandegária">PAGAMENTO DA TAXA CONCLUÍDO</span>'
       : '<span class="site-badge site-badge-fee" title="Cliente gerou o PIX da taxa alfandegária">PAGAMENTO DA TAXA</span>' : '';
     const feeStatusLabels = { pending: 'PIX gerado · aguardando pagamento', paid: 'taxa paga', receipt_sent: 'comprovante enviado' };
-    const feeLine = fee ? `<div class="order-detail" style="color:${feePaid ? '#7e22ce' : '#b91c1c'}"><span class="detail-icon">${icon('package')}</span><span>Taxa alfandegária: <strong>${esc(cash(fee.amount))}</strong> · ${esc(feeStatusLabels[fee.status] || 'gerada')}${fee.confirmed_at ? ` · ${esc(formatDate(fee.confirmed_at))}` : ''}${fee.hasReceipt ? ' · <button class="fee-receipt-link" type="button" data-fee-receipt>Ver comprovante</button>' : ''}</span></div>` : '';
+    const feeDateLabel = fee ? (feePaid && fee.confirmed_at ? `paga ${formatDate(fee.confirmed_at)}` : fee.created_at ? `gerada ${formatDate(fee.created_at)}` : '') : '';
+    const feeLine = fee ? `<div class="order-detail" style="color:${feePaid ? '#7e22ce' : '#b91c1c'}"><span class="detail-icon">${icon('package')}</span><span>Taxa alfandegária: <strong>${esc(cash(fee.amount))}</strong> · ${esc(feeStatusLabels[fee.status] || 'gerada')}${feeDateLabel ? ` · ${esc(feeDateLabel)}` : ''}${fee.hasReceipt ? ' · <button class="fee-receipt-link" type="button" data-fee-receipt>Ver comprovante</button>' : ''}</span></div>` : '';
     const feeTxLine = fee?.transaction_id ? `<div class="tx-line">Transação da taxa: ${esc(fee.transaction_id)}</div>` : '';
     const recovery = order.recovery || {};
     const recoveryCount = Math.max(0, Math.min(3, Number(recovery.count) || 0));
