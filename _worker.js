@@ -4310,6 +4310,7 @@ var json3 = (data, status = 200) => new Response(JSON.stringify(data), { status,
 var digits = (value) => String(value || "").replace(/\D/g, "");
 var BUMPS = { necessaire: 19.47, siage: 32.63, wella: 45.7 };
 var COLORS = { Preta: 37.9, Branca: 37.9, Rosa: 37.9 };
+var PRODUCTS2 = { escova: 37.9, pincel: 29.9 };
 var SHIPPING = { "Frete Gr\xE1tis": 0, JADLOG: 18.47, "SEDEX 12": 33.4 };
 function normalizeBuyerEmail(value) {
   const email = String(value || "").trim().toLowerCase();
@@ -4318,8 +4319,10 @@ function normalizeBuyerEmail(value) {
 }
 function cartTotal(cart) {
   if (!cart || !Number.isInteger(cart.qty) || cart.qty < 1 || cart.qty > 10) return null;
-  let base = 37.9 * cart.qty;
+  const productKey = cart.product === "pincel" ? "pincel" : "escova";
+  let base = PRODUCTS2[productKey] * cart.qty;
   if (Array.isArray(cart.colors) && cart.colors.length) {
+    if (productKey !== "escova") return null;
     if (cart.colors.length > 3 || cart.colors.some((c) => !Object.hasOwn(COLORS, c.label) || !Number.isInteger(c.quantity) || c.quantity < 1 || c.quantity > 10)) return null;
     if (cart.colors.reduce((sum2, c) => sum2 + c.quantity, 0) !== cart.qty) return null;
     base = cart.colors.reduce((sum2, c) => sum2 + COLORS[c.label] * c.quantity, 0);
@@ -4692,6 +4695,23 @@ async function adminBellaTrackingEmail(request2, env) {
 }
 async function siteAsset(request2, env) {
   const url = new URL(request2.url);
+  const upsell = {
+    "/upsell1": "original",
+    "/tl/upsell1": "tl",
+    "/video/upsell1": "bella",
+    "/pagamento-pincel": "pagamento",
+    "/tl/pagamento-pincel": "pagamento",
+    "/video/pagamento-pincel": "pagamento"
+  }[url.pathname.replace(/\/$/, "").replace(/\.html$/, "")];
+  if (upsell) {
+    if (!["GET", "HEAD"].includes(request2.method)) return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD" } });
+    url.pathname = "/upsell-pages/" + upsell + ".txt";
+    const asset2 = await env.ASSETS.fetch(new Request(url, request2));
+    const headers7 = new Headers(asset2.headers);
+    headers7.set("Content-Type", "text/html; charset=utf-8");
+    headers7.set("X-Robots-Tag", "noindex, nofollow");
+    return new Response(asset2.body, { status: asset2.status, headers: headers7 });
+  }
   const site = marketSiteRequest(url, env) ? "tl" : bellaSiteRequest(url, env) ? "video" : null;
   if (!site) return env.ASSETS.fetch(request2);
   let pathname = url.pathname.replace(new RegExp(`^/${site}(?=/|$)`), "") || "/";

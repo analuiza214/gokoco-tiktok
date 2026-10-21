@@ -41,6 +41,7 @@ const json = (data, status = 200) => new Response(JSON.stringify(data), { status
 const digits = (value) => String(value || '').replace(/\D/g, '');
 const BUMPS = { necessaire: 19.47, siage: 32.63, wella: 45.70 };
 const COLORS = { Preta: 37.90, Branca: 37.90, Rosa: 37.90 };
+const PRODUCTS = { escova: 37.90, pincel: 29.90 };
 const SHIPPING = { 'Frete Grátis': 0, JADLOG: 18.47, 'SEDEX 12': 33.40 };
 function normalizeBuyerEmail(value) {
   const email = String(value || '').trim().toLowerCase();
@@ -49,8 +50,10 @@ function normalizeBuyerEmail(value) {
 }
 function cartTotal(cart) {
   if (!cart || !Number.isInteger(cart.qty) || cart.qty < 1 || cart.qty > 10) return null;
-  let base = 37.90 * cart.qty;
+  const productKey = cart.product === 'pincel' ? 'pincel' : 'escova';
+  let base = PRODUCTS[productKey] * cart.qty;
   if (Array.isArray(cart.colors) && cart.colors.length) {
+    if (productKey !== 'escova') return null;
     if (cart.colors.length > 3 || cart.colors.some((c) => !Object.hasOwn(COLORS, c.label) || !Number.isInteger(c.quantity) || c.quantity < 1 || c.quantity > 10)) return null;
     if (cart.colors.reduce((sum, c) => sum + c.quantity, 0) !== cart.qty) return null;
     base = cart.colors.reduce((sum, c) => sum + COLORS[c.label] * c.quantity, 0);
@@ -446,6 +449,9 @@ async function siteAsset(request, env) {
     '/upsell1': 'original',
     '/tl/upsell1': 'tl',
     '/video/upsell1': 'bella',
+    '/pagamento-pincel': 'pagamento',
+    '/tl/pagamento-pincel': 'pagamento',
+    '/video/pagamento-pincel': 'pagamento',
   }[url.pathname.replace(/\/$/, '').replace(/\.html$/, '')];
   if (upsell) {
     if (!['GET', 'HEAD'].includes(request.method)) return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });

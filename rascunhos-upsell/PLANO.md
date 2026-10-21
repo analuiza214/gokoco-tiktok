@@ -36,3 +36,28 @@ Verificar no código ativo a causa do desaparecimento da confirmação. Preserva
 
 ## Revisão
 Sintaxe JavaScript e simulação automatizada de interações verificadas. Revisão visual no navegador bloqueada: servidor local inacessível neste ambiente e protocolo file: não permitido. Conferir desktop/mobile e reprodução do vídeo manualmente antes da integração.
+
+## Publicação das demonstrações — 21/10/2026
+Rotas preparadas: /upsell1 (Original), /tl/upsell1 (TL), /video/upsell1 (Bella).
+Conteúdo público permanece em modo demonstração: sem cobrança, sem eventos de compra e com avaliações identificadas como fictícias.
+Nenhum arquivo de checkout ou de confirmação de pagamento foi modificado. Não há encaminhamento de clientes para o upsell.
+Builds das duas lojas, empacotamento, sintaxe JS e testes multi-site passaram; aceite e recusa foram conferidos na versão online de teste.
+Revisão de código: https://github.com/analuiza214/gokoco-tiktok/pull/2
+
+Publicação confirmada no domínio principal e páginas abertas no navegador:
+- https://gokoco-tiktok.pages.dev/upsell1
+- https://gokoco-tiktok.pages.dev/tl/upsell1
+- https://gokoco-tiktok.pages.dev/video/upsell1
+Merge de publicação: 7014bd6054ea835e210b57dddb3f3658833755b2. As três páginas responderam com a identidade e o conteúdo de demonstração corretos.
+
+## Correção de estrutura — 21/10/2026
+A pedido do usuário, os upsells deixam de usar o layout editorial inicial e passam a reutilizar as estruturas das lojas:
+- Original: HTML e classes do index.html, com produto, descrição, galeria e exemplos de avaliações substituídos.
+- TL: componente ProductPage e CSS da loja Mercado, com dados do kit e carrinho isolado em demonstração.
+- Bella: componente Product, Header e Footer e CSS da Bella, com produto e avaliações ilustrativas do kit.
+O gerador scripts/build-upsell.mjs é executado ao final do empacotamento. Não modifica os arquivos-fonte das lojas, o checkout ou o pós-pagamento.
+Validação: builds e testes locais passaram; preview Cloudflare aprovado; galerias, compra Original, compra Bella e finalizar carrinho TL verificados no navegador, sem cobrança.
+Revisão: https://github.com/analuiza214/gokoco-tiktok/pull/3
+Commit integrado: a0f92d14547b0a8feb67452874c41b9e54095ed0.
+
+Correção publicada e conferida no domínio principal: /upsell1 agora usa TikTok, /tl/upsell1 usa ProductPage Mercado, /video/upsell1 usa Product/Header/Footer Bella. Conteúdo do kit e avaliações ilustrativas confirmados nas três páginas. Fluxo pós-pagamento permanece sem alteração.
