@@ -150,7 +150,7 @@ function matchingOrders() {
 }
 
 function filteredOrders() {
-  const feeMatch = (order) => order.reshipping && (selectedFee === 'todas' || (selectedFee === 'pendentes' ? order.reshipping.status === 'pending' : selectedFee === 'pagas' ? order.reshipping.status === 'paid' : order.reshipping.status === 'receipt_sent'));
+  const feeMatch = (order) => order.reshipping && (selectedFee === 'todas' || (selectedFee === 'pendentes' ? order.reshipping.status !== 'paid' : order.reshipping.status === 'paid'));
   return matchingOrders().filter((order) => selectedStatus === 'taxa' ? feeMatch(order) : selectedStatus === 'todos' || order.status === selectedStatus || (selectedStatus === 'pending' && order.status === 'creating')).sort((a, b) => {
     if (selectedStatus === 'taxa') {
       const feeDate = (order) => new Date(order.reshipping?.confirmed_at || order.reshipping?.created_at || order.created_at);
@@ -179,8 +179,7 @@ function renderStats() {
   const feeOrders = matching.filter((order) => order.reshipping);
   $('tab-taxa').textContent = feeOrders.length;
   $('fee-all').textContent = feeOrders.length;
-  $('fee-pending').textContent = feeOrders.filter((order) => order.reshipping.status === 'pending').length;
-  $('fee-receipt').textContent = feeOrders.filter((order) => order.reshipping.status === 'receipt_sent').length;
+  $('fee-pending').textContent = feeOrders.filter((order) => order.reshipping.status !== 'paid').length;
   $('fee-paid').textContent = feeOrders.filter((order) => order.reshipping.status === 'paid').length;
 }
 
