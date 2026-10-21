@@ -4620,13 +4620,13 @@ async function adminBellaOrders(request2, env) {
     const body = await request2.json().catch(() => ({}));
     if (!/^[0-9a-f-]{36}$/i.test(String(body.id || ""))) return json3({ error: "Pedido inv\xE1lido." }, 400);
     if (body.mark_paid) {
-      const leadRows = await fetch(`${base}/rest/v1/leads?id=eq.${encodeURIComponent(body.id)}&select=id,produtos,status&limit=1`, { headers: headers6 });
+      const leadRows = await fetch(`${base}/rest/v1/leads?id=eq.${encodeURIComponent(body.id)}&select=id,produtos,status,tracking&limit=1`, { headers: headers6 });
       const lead = (await leadRows.json().catch(() => []))[0];
       if (!lead) return json3({ error: "Pedido n\xE3o encontrado." }, 404);
       if (!/taxa/i.test(String(lead.produtos || ""))) return json3({ error: "Apenas pagamentos de taxa podem ser marcados por aqui." }, 409);
       if (lead.status === "pago") return json3({ status: "pago" });
       const paidAt = (/* @__PURE__ */ new Date()).toISOString();
-      const changed2 = await fetch(`${base}/rest/v1/leads?id=eq.${encodeURIComponent(body.id)}&status=eq.${encodeURIComponent(lead.status)}&select=id,status`, { method: "PATCH", headers: headers6, body: JSON.stringify({ status: "pago", updated_at: paidAt }) });
+      const changed2 = await fetch(`${base}/rest/v1/leads?id=eq.${encodeURIComponent(body.id)}&status=eq.${encodeURIComponent(lead.status)}&select=id,status`, { method: "PATCH", headers: headers6, body: JSON.stringify({ status: "pago", tracking: { ...lead.tracking || {}, fee_manual: { paidAt, source: "admin" } }, updated_at: paidAt }) });
       if (!changed2.ok || !(await changed2.json().catch(() => [])).length) return json3({ error: "O pedido foi atualizado. Tente novamente." }, 409);
       return json3({ status: "pago", confirmedAt: paidAt });
     }
@@ -5006,7 +5006,7 @@ async function adminOrders(request2, env) {
     await retryPaidPurchases(env);
   }
   const rows = await db(env, "gokoco_orders", `?gateway=neq.manual_tracking${before ? `&created_at=lte.${encodeURIComponent(before)}` : ""}&select=id,created_at,name,email,phone,amount,products,gateway,status,transaction_id,shipping,tracking&order=created_at.desc,id.desc&limit=200&offset=${offset}`);
-  return json3({ orders: rows.map(({ tracking, ...order }) => ({ ...order, siteVariant: tracking?.site_variant === "mercado_livre" ? "tl" : "gokoco", shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, recovery: tracking?._recovery || null, reshipping: tracking?.reshipping ? { status: tracking.reshipping.status, amount: tracking.reshipping.amount, transaction_id: tracking.reshipping.transaction_id || null, created_at: tracking.reshipping.created_at || null, confirmed_at: tracking.reshipping.confirmed_at || null, hasReceipt: !!tracking.reshipping.receipt?.path } : null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
+  return json3({ orders: rows.map(({ tracking, ...order }) => ({ ...order, siteVariant: tracking?.site_variant === "mercado_livre" ? "tl" : "gokoco", shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, recovery: tracking?._recovery || null, reshipping: tracking?.reshipping ? { status: tracking.reshipping.status, amount: tracking.reshipping.amount, transaction_id: tracking.reshipping.transaction_id || null, created_at: tracking.reshipping.created_at || null, confirmed_at: tracking.reshipping.confirmed_at || null, manual: !!tracking.reshipping.manual, hasReceipt: !!tracking.reshipping.receipt?.path } : null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
 }
 async function adminSendOrderEmail(request2, env) {
   const denied = await requireAdmin(request2, env);

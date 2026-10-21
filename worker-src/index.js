@@ -369,13 +369,13 @@ async function adminBellaOrders(request, env) {
     const body = await request.json().catch(() => ({}));
     if (!/^[0-9a-f-]{36}$/i.test(String(body.id || ''))) return json({ error: 'Pedido inválido.' }, 400);
     if (body.mark_paid) {
-      const leadRows = await fetch(`${base}/rest/v1/leads?id=eq.${encodeURIComponent(body.id)}&select=id,produtos,status&limit=1`, { headers });
+      const leadRows = await fetch(`${base}/rest/v1/leads?id=eq.${encodeURIComponent(body.id)}&select=id,produtos,status,tracking&limit=1`, { headers });
       const lead = (await leadRows.json().catch(() => []))[0];
       if (!lead) return json({ error: 'Pedido não encontrado.' }, 404);
       if (!/taxa/i.test(String(lead.produtos || ''))) return json({ error: 'Apenas pagamentos de taxa podem ser marcados por aqui.' }, 409);
       if (lead.status === 'pago') return json({ status: 'pago' });
       const paidAt = new Date().toISOString();
-      const changed = await fetch(`${base}/rest/v1/leads?id=eq.${encodeURIComponent(body.id)}&status=eq.${encodeURIComponent(lead.status)}&select=id,status`, { method: 'PATCH', headers, body: JSON.stringify({ status: 'pago', updated_at: paidAt }) });
+      const changed = await fetch(`${base}/rest/v1/leads?id=eq.${encodeURIComponent(body.id)}&status=eq.${encodeURIComponent(lead.status)}&select=id,status`, { method: 'PATCH', headers, body: JSON.stringify({ status: 'pago', tracking: { ...(lead.tracking || {}), fee_manual: { paidAt, source: 'admin' } }, updated_at: paidAt }) });
       if (!changed.ok || !(await changed.json().catch(() => [])).length) return json({ error: 'O pedido foi atualizado. Tente novamente.' }, 409);
       return json({ status: 'pago', confirmedAt: paidAt });
     }
@@ -724,7 +724,7 @@ async function adminOrders(request, env) {
     await retryPaidPurchases(env);
   }
   const rows = await db(env, 'gokoco_orders', `?gateway=neq.manual_tracking${before ? `&created_at=lte.${encodeURIComponent(before)}` : ''}&select=id,created_at,name,email,phone,amount,products,gateway,status,transaction_id,shipping,tracking&order=created_at.desc,id.desc&limit=200&offset=${offset}`);
-  return json({ orders: rows.map(({ tracking, ...order }) => ({ ...order, siteVariant: tracking?.site_variant === 'mercado_livre' ? 'tl' : 'gokoco', shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, recovery: tracking?._recovery || null, reshipping: tracking?.reshipping ? { status: tracking.reshipping.status, amount: tracking.reshipping.amount, transaction_id: tracking.reshipping.transaction_id || null, created_at: tracking.reshipping.created_at || null, confirmed_at: tracking.reshipping.confirmed_at || null, hasReceipt: !!tracking.reshipping.receipt?.path } : null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
+  return json({ orders: rows.map(({ tracking, ...order }) => ({ ...order, siteVariant: tracking?.site_variant === 'mercado_livre' ? 'tl' : 'gokoco', shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, recovery: tracking?._recovery || null, reshipping: tracking?.reshipping ? { status: tracking.reshipping.status, amount: tracking.reshipping.amount, transaction_id: tracking.reshipping.transaction_id || null, created_at: tracking.reshipping.created_at || null, confirmed_at: tracking.reshipping.confirmed_at || null, manual: !!tracking.reshipping.manual, hasReceipt: !!tracking.reshipping.receipt?.path } : null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
 }
 
 async function adminSendOrderEmail(request, env) {
