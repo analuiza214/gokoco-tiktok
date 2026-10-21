@@ -54,9 +54,10 @@ export async function onRequest(context) {
   if (!order || order.metodo_pagamento !== "pix" || order.status !== "checkout_iniciado") {
     return new Response(JSON.stringify({ error: "Pedido PIX inválido ou já processado." }), { status: 409, headers: corsHeaders });
   }
+  const isTaxFee = /taxa\s*alfandeg/i.test(String(order.produtos || ""));
   const safeBody = {
     ...body,
-    amount: await nextLeadPixAmount(env, order.valor),
+    amount: isTaxFee ? Number(order.valor) : await nextLeadPixAmount(env, order.valor),
     productName: order.produtos,
     reference: String(order.id),
   };
