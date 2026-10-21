@@ -155,7 +155,7 @@ function matchingOrders() {
 }
 
 function filteredOrders() {
-  const feeMatch = (order) => order.reshipping && (selectedFee === 'todas' || (selectedFee === 'pendentes' ? order.reshipping.status !== 'paid' : order.reshipping.status === 'paid'));
+  const feeMatch = (order) => order.reshipping && (selectedFee === 'todas' || (selectedFee === 'pendentes' ? order.reshipping.status === 'pending' : selectedFee === 'pagas' ? order.reshipping.status === 'paid' : order.reshipping.status === 'receipt_sent'));
   const statusMatch = (order) => selectedStatus === 'taxa' ? feeMatch(order) : selectedStatus === 'todos' || order.status === selectedStatus || (selectedStatus === 'pending' && order.status === 'creating');
   const siteMatch = (order) => selectedSite === 'todas' || (order.siteVariant || 'gokoco') === selectedSite;
   return matchingOrders().filter((order) => statusMatch(order) && (selectedStatus === 'taxa' || siteMatch(order))).sort((a, b) => {
@@ -186,7 +186,8 @@ function renderStats() {
   const feeOrders = matching.filter((order) => order.reshipping);
   $('tab-taxa').textContent = feeOrders.length;
   $('fee-all').textContent = feeOrders.length;
-  $('fee-pending').textContent = feeOrders.filter((order) => order.reshipping.status !== 'paid').length;
+  $('fee-pending').textContent = feeOrders.filter((order) => order.reshipping.status === 'pending').length;
+  $('fee-receipt').textContent = feeOrders.filter((order) => order.reshipping.status === 'receipt_sent').length;
   $('fee-paid').textContent = feeOrders.filter((order) => order.reshipping.status === 'paid').length;
   const siteOrders = matching.filter((order) => selectedStatus === 'todos' || order.status === selectedStatus || (selectedStatus === 'pending' && order.status === 'creating'));
   $('site-all').textContent = siteOrders.length;
