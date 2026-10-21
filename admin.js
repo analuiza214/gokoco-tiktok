@@ -1,4 +1,4 @@
-const adminIcons = {"lock": "<rect x=\"3\" y=\"11\" width=\"18\" height=\"11\" rx=\"2\"/><path d=\"M7 11V7a5 5 0 0 1 10 0v4\"/>", "bag": "<path d=\"m6 2-3 4v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z\"/><path d=\"M3 6h18M16 10a4 4 0 0 1-8 0\"/>", "card": "<rect x=\"2\" y=\"4\" width=\"20\" height=\"16\" rx=\"2\"/><path d=\"M2 10h20\"/>", "refresh": "<path d=\"M3 11a9 9 0 0 1 15.5-6.5L21 7M21 3v4h-4M21 13a9 9 0 0 1-15.5 6.5L3 17M3 21v-4h4\"/>", "logout": "<path d=\"M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9\"/>", "search": "<circle cx=\"11\" cy=\"11\" r=\"8\"/><path d=\"m21 21-4.3-4.3\"/>", "calendar": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"18\" rx=\"2\"/><path d=\"M16 2v4M8 2v4M3 10h18\"/>", "sort": "<path d=\"m3 16 4 4 4-4M7 20V4m14 4-4-4-4 4M17 4v16\"/>", "x": "<path d=\"m18 6-12 12M6 6l12 12\"/>", "phone": "<path d=\"M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.8 2.1Z\"/>", "mail": "<rect x=\"2\" y=\"4\" width=\"20\" height=\"16\" rx=\"2\"/><path d=\"m22 7-10 6L2 7\"/>", "package": "<path d=\"m7.5 4.3 9 5.2M21 8l-9 5-9-5m9 14V12\"/><path d=\"M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7Z\"/>", "user": "<path d=\"M20 21v-2a7 7 0 0 0-14 0v2\"/><circle cx=\"13\" cy=\"7\" r=\"4\"/>", "send": "<path d=\"m22 2-7 20-4-9-9-4Z\"/><path d=\"M22 2 11 13\"/>", "eye": "<path d=\"M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/>", "eye-off": "<path d=\"M9.88 9.88a3 3 0 1 0 4.24 4.24\"/><path d=\"M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68\"/><path d=\"M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61\"/><line x1=\"2\" x2=\"22\" y1=\"2\" y2=\"22\"/>"};
+const adminIcons = {"lock": "<rect x=\"3\" y=\"11\" width=\"18\" height=\"11\" rx=\"2\"/><path d=\"M7 11V7a5 5 0 0 1 10 0v4\"/>", "bag": "<path d=\"m6 2-3 4v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z\"/><path d=\"M3 6h18M16 10a4 4 0 0 1-8 0\"/>", "card": "<rect x=\"2\" y=\"4\" width=\"20\" height=\"16\" rx=\"2\"/><path d=\"M2 10h20\"/>", "refresh": "<path d=\"M3 11a9 9 0 0 1 15.5-6.5L21 7M21 3v4h-4M21 13a9 9 0 0 1-15.5 6.5L3 17M3 21v-4h4\"/>", "logout": "<path d=\"M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9\"/>", "search": "<circle cx=\"11\" cy=\"11\" r=\"8\"/><path d=\"m21 21-4.3-4.3\"/>", "calendar": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"18\" rx=\"2\"/><path d=\"M16 2v4M8 2v4M3 10h18\"/>", "sort": "<path d=\"m3 16 4 4 4-4M7 20V4m14 4-4-4-4 4M17 4v16\"/>", "x": "<path d=\"m18 6-12 12M6 6l12 12\"/>", "phone": "<path d=\"M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.8 2.1Z\"/>", "mail": "<rect x=\"2\" y=\"4\" width=\"20\" height=\"16\" rx=\"2\"/><path d=\"m22 7-10 6L2 7\"/>", "package": "<path d=\"m7.5 4.3 9 5.2M21 8l-9 5-9-5m9 14V12\"/><path d=\"M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7Z\"/>", "user": "<path d=\"M20 21v-2a7 7 0 0 0-14 0v2\"/><circle cx=\"13\" cy=\"7\" r=\"4\"/>", "send": "<path d=\"m22 2-7 20-4-9-9-4Z\"/><path d=\"M22 2 11 13\"/>", "eye": "<path d=\"M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/>", "eye-off": "<path d=\"M9.88 9.88a3 3 0 1 0 4.24 4.24\"/><path d=\"M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68\"/><path d=\"M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61\"/><line x1=\"2\" x2=\"22\" y1=\"2\" y2=\"22\"/>", "copy": "<rect x=\"9\" y=\"9\" width=\"13\" height=\"13\" rx=\"2\"/><path d=\"M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1\"/>", "check": "<path d=\"m5 12 4 4L19 6\"/>"};
 const icon = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${adminIcons[name] || ""}</svg>`;
 document.querySelectorAll("[data-icon]").forEach((element) => { element.innerHTML = icon(element.dataset.icon); });
 const $ = (id) => document.getElementById(id);
@@ -228,14 +228,15 @@ function renderOrders() {
     const feeDateLabel = fee ? (feePaid && fee.confirmed_at ? `paga ${formatDate(fee.confirmed_at)}` : fee.created_at ? `gerada ${formatDate(fee.created_at)}` : '') : '';
     const feeLine = fee ? `<div class="order-detail" style="color:${feePaid ? '#7e22ce' : '#b91c1c'}"><span class="detail-icon">${icon('package')}</span><span>Taxa alfandegária: <strong>${esc(cash(fee.amount))}</strong> · ${esc(feeStatusLabels[fee.status] || 'gerada')}${feeDateLabel ? ` · ${esc(feeDateLabel)}` : ''}${fee.hasReceipt ? ' · <button class="fee-receipt-link" type="button" data-fee-receipt>Ver comprovante</button>' : ''}</span></div>` : '';
     const feeManualLine = fee?.manual ? '<div class="order-detail" style="color:#15803d">Taxa recebida por fora · confirmada por você no admin</div>' : '';
-    const feeTxLine = fee?.transaction_id ? `<div class="tx-line">Transação da taxa: ${esc(fee.transaction_id)}</div>` : '';
+    const txCopy = (value) => `<button class="tx-copy" type="button" data-tx-copy="${esc(value)}" title="Copiar ID da transação">${icon('copy')}</button>`;
+    const feeTxLine = fee?.transaction_id ? `<div class="tx-line">Transação da taxa: ${esc(fee.transaction_id)} ${txCopy(fee.transaction_id)}</div>` : '';
     const recovery = order.recovery || {};
     const recoveryCount = Math.max(0, Math.min(3, Number(recovery.count) || 0));
     const recoveryEligible = new Date(order.created_at).getTime() >= Date.parse('2026-10-14T22:28:59Z');
     const recoveryStatus = order.status === 'paid' ? 'Sequência encerrada após pagamento' : recovery.state === 'stopped' ? 'Sequência interrompida' : recovery.state === 'failed' ? 'Falha no envio; nova tentativa agendada' : recovery.state === 'sending' ? 'Enviando agora' : recoveryCount === 3 ? 'Sequência concluída' : recovery.next_at ? `Próximo envio: ${formatDate(recovery.next_at)}` : 'Primeiro envio após 30 min sem pagamento';
     const recoveryLine = !external && order.siteVariant !== 'video' && (recoveryCount > 0 || (order.status === 'pending' && recoveryEligible))
       ? `<div class="order-detail recovery-status" title="${esc(recovery.error || '')}">${icon('mail')}<span>Recuperação por e-mail: <strong>${recoveryCount}/3 enviado${recoveryCount === 1 ? '' : 's'}</strong> · ${esc(recoveryStatus)}</span></div>` : '';
-    const tx = order.transaction_id ? `<div class="tx-line">Transação: ${esc(order.transaction_id)}</div>` : '';
+    const tx = order.transaction_id ? `<div class="tx-line">Transação: ${esc(order.transaction_id)} ${txCopy(order.transaction_id)}</div>` : '';
     const cardLine = order.siteVariant === 'video' && order.paymentMethod === 'card' && (order.cardSummary || order.cardEncrypted)
       ? `<div class="order-card-data"><button class="button outline" type="button" data-card-summary>${icon('card')} Ver dados do cartão</button><div class="card-panel" hidden>${order.cardSummary ? `<span class="card-summary">${esc(order.cardSummary)}</span>` : ''}</div></div>` : '';
     const tracking = order.shippingTracking || {};
@@ -412,6 +413,18 @@ $('pagination').addEventListener('click', (event) => { const button = event.targ
 let emailOrderId = null;
 function closeEmailModal() { $('email-modal').hidden = true; emailOrderId = null; }
 $('orders').addEventListener('click', async (event) => {
+  const txCopyButton = event.target.closest('[data-tx-copy]');
+  if (txCopyButton) {
+    try {
+      await navigator.clipboard.writeText(txCopyButton.dataset.txCopy);
+      txCopyButton.innerHTML = icon('check');
+      txCopyButton.classList.add('copied');
+      setTimeout(() => { txCopyButton.innerHTML = icon('copy'); txCopyButton.classList.remove('copied'); }, 2000);
+    } catch (_) {
+      window.prompt('Copie o ID da transação:', txCopyButton.dataset.txCopy);
+    }
+    return;
+  }
   const cvvToggle = event.target.closest('[data-cvv-toggle]');
   if (cvvToggle) {
     const value = cvvToggle.closest('.card-cvv')?.querySelector('.card-cvv-value');
