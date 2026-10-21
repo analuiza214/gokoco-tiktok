@@ -10,6 +10,7 @@ let bellaOrders = [];
 let gateways = [];
 let selectedStatus = 'todos';
 let selectedFee = 'todas';
+let selectedSite = 'todas';
 let selectedPeriod = 'todos';
 let selectedSort = 'recentes';
 let page = 1;
@@ -151,7 +152,9 @@ function matchingOrders() {
 
 function filteredOrders() {
   const feeMatch = (order) => order.reshipping && (selectedFee === 'todas' || (selectedFee === 'pendentes' ? order.reshipping.status !== 'paid' : order.reshipping.status === 'paid'));
-  return matchingOrders().filter((order) => selectedStatus === 'taxa' ? feeMatch(order) : selectedStatus === 'todos' || order.status === selectedStatus || (selectedStatus === 'pending' && order.status === 'creating')).sort((a, b) => {
+  const statusMatch = (order) => selectedStatus === 'taxa' ? feeMatch(order) : selectedStatus === 'todos' || order.status === selectedStatus || (selectedStatus === 'pending' && order.status === 'creating');
+  const siteMatch = (order) => selectedSite === 'todas' || (order.siteVariant || 'gokoco') === selectedSite;
+  return matchingOrders().filter((order) => statusMatch(order) && (selectedStatus === 'taxa' || siteMatch(order))).sort((a, b) => {
     if (selectedStatus === 'taxa') {
       const feeDate = (order) => new Date(order.reshipping?.confirmed_at || order.reshipping?.created_at || order.created_at);
       return selectedSort === 'antigos' ? feeDate(a) - feeDate(b) : feeDate(b) - feeDate(a);
@@ -181,6 +184,11 @@ function renderStats() {
   $('fee-all').textContent = feeOrders.length;
   $('fee-pending').textContent = feeOrders.filter((order) => order.reshipping.status !== 'paid').length;
   $('fee-paid').textContent = feeOrders.filter((order) => order.reshipping.status === 'paid').length;
+  const siteOrders = matching.filter((order) => selectedStatus === 'todos' || order.status === selectedStatus || (selectedStatus === 'pending' && order.status === 'creating'));
+  $('site-all').textContent = siteOrders.length;
+  $('site-gokoco').textContent = siteOrders.filter((order) => (order.siteVariant || 'gokoco') === 'gokoco').length;
+  $('site-tl').textContent = siteOrders.filter((order) => order.siteVariant === 'tl').length;
+  $('site-video').textContent = siteOrders.filter((order) => order.siteVariant === 'video').length;
 }
 
 function renderOrders() {
@@ -370,7 +378,13 @@ $('status-filters').addEventListener('click', (event) => {
   const button = event.target.closest('[data-status]'); if (!button) return;
   selectedStatus = button.dataset.status; page = 1;
   $('fee-filters').hidden = selectedStatus !== 'taxa';
+  $('site-filters').hidden = selectedStatus === 'taxa';
   $('status-filters').querySelectorAll('button').forEach((item) => item.classList.toggle('selected', item === button)); renderOrders();
+});
+$('site-filters').addEventListener('click', (event) => {
+  const button = event.target.closest('[data-site]'); if (!button) return;
+  selectedSite = button.dataset.site; page = 1;
+  $('site-filters').querySelectorAll('button').forEach((item) => item.classList.toggle('selected', item === button)); renderOrders();
 });
 $('fee-filters').addEventListener('click', (event) => {
   const button = event.target.closest('[data-fee]'); if (!button) return;
@@ -378,9 +392,11 @@ $('fee-filters').addEventListener('click', (event) => {
   $('fee-filters').querySelectorAll('button').forEach((item) => item.classList.toggle('selected', item === button)); renderOrders();
 });
 $('reset-filters').addEventListener('click', () => {
-  selectedPeriod = 'todos'; selectedStatus = 'todos'; selectedFee = 'todas'; selectedSort = 'recentes'; page = 1;
+  selectedPeriod = 'todos'; selectedStatus = 'todos'; selectedFee = 'todas'; selectedSite = 'todas'; selectedSort = 'recentes'; page = 1;
   $('fee-filters').hidden = true;
+  $('site-filters').hidden = false;
   $('fee-filters').querySelectorAll('button').forEach((item) => item.classList.toggle('selected', item.dataset.fee === 'todas'));
+  $('site-filters').querySelectorAll('button').forEach((item) => item.classList.toggle('selected', item.dataset.site === 'todas'));
   $('search').value = ''; $('clear-search').hidden = true; $('sort').value = selectedSort;
   document.querySelectorAll('[data-period]').forEach((item) => item.classList.toggle('selected', item.dataset.period === 'todos'));
   $('status-filters').querySelectorAll('button').forEach((item) => item.classList.toggle('selected', item.dataset.status === 'todos')); renderOrders();
