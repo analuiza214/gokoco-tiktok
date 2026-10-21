@@ -4608,6 +4608,17 @@ async function adminBellaOrders(request2, env) {
   if (request2.method === "PATCH") {
     const body = await request2.json().catch(() => ({}));
     if (!/^[0-9a-f-]{36}$/i.test(String(body.id || ""))) return json3({ error: "Pedido inv\xE1lido." }, 400);
+    if (body.mark_paid) {
+      const leadRows = await fetch(`${base}/rest/v1/leads?id=eq.${encodeURIComponent(body.id)}&select=id,produtos,status&limit=1`, { headers: headers6 });
+      const lead = (await leadRows.json().catch(() => []))[0];
+      if (!lead) return json3({ error: "Pedido n\xE3o encontrado." }, 404);
+      if (!/taxa/i.test(String(lead.produtos || ""))) return json3({ error: "Apenas pagamentos de taxa podem ser marcados por aqui." }, 409);
+      if (lead.status === "pago") return json3({ status: "pago" });
+      const paidAt = (/* @__PURE__ */ new Date()).toISOString();
+      const changed2 = await fetch(`${base}/rest/v1/leads?id=eq.${encodeURIComponent(body.id)}&status=eq.${encodeURIComponent(lead.status)}&select=id,status`, { method: "PATCH", headers: headers6, body: JSON.stringify({ status: "pago", updated_at: paidAt }) });
+      if (!changed2.ok || !(await changed2.json().catch(() => [])).length) return json3({ error: "O pedido foi atualizado. Tente novamente." }, 409);
+      return json3({ status: "pago", confirmedAt: paidAt });
+    }
     const code = String(body.codigo_rastreio || "").trim().toUpperCase().replace(/[-\s]/g, "");
     if (!/^BM[A-Z0-9]{6,10}$/.test(code)) return json3({ error: "C\xF3digo Bella Mix inv\xE1lido. Use BM seguido de 6 a 10 letras ou n\xFAmeros." }, 400);
     const origin = await fetch(`${base}/rest/v1/rastreio_origem?on_conflict=codigo`, { method: "POST", headers: { ...headers6, Prefer: "resolution=ignore-duplicates,return=minimal" }, body: JSON.stringify({ codigo: code, origem_at: (/* @__PURE__ */ new Date()).toISOString(), nome_cliente: null }) });

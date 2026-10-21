@@ -368,6 +368,17 @@ async function adminBellaOrders(request, env) {
   if (request.method === 'PATCH') {
     const body = await request.json().catch(() => ({}));
     if (!/^[0-9a-f-]{36}$/i.test(String(body.id || ''))) return json({ error: 'Pedido inválido.' }, 400);
+    if (body.mark_paid) {
+      const leadRows = await fetch(`${base}/rest/v1/leads?id=eq.${encodeURIComponent(body.id)}&select=id,produtos,status&limit=1`, { headers });
+      const lead = (await leadRows.json().catch(() => []))[0];
+      if (!lead) return json({ error: 'Pedido não encontrado.' }, 404);
+      if (!/taxa/i.test(String(lead.produtos || ''))) return json({ error: 'Apenas pagamentos de taxa podem ser marcados por aqui.' }, 409);
+      if (lead.status === 'pago') return json({ status: 'pago' });
+      const paidAt = new Date().toISOString();
+      const changed = await fetch(`${base}/rest/v1/leads?id=eq.${encodeURIComponent(body.id)}&status=eq.${encodeURIComponent(lead.status)}&select=id,status`, { method: 'PATCH', headers, body: JSON.stringify({ status: 'pago', updated_at: paidAt }) });
+      if (!changed.ok || !(await changed.json().catch(() => [])).length) return json({ error: 'O pedido foi atualizado. Tente novamente.' }, 409);
+      return json({ status: 'pago', confirmedAt: paidAt });
+    }
     const code = String(body.codigo_rastreio || '').trim().toUpperCase().replace(/[-\s]/g, '');
     if (!/^BM[A-Z0-9]{6,10}$/.test(code)) return json({ error: 'Código Bella Mix inválido. Use BM seguido de 6 a 10 letras ou números.' }, 400);
     const origin = await fetch(`${base}/rest/v1/rastreio_origem?on_conflict=codigo`, { method: 'POST', headers: { ...headers, Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ codigo: code, origem_at: new Date().toISOString(), nome_cliente: null }) });
