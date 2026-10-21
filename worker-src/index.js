@@ -874,7 +874,7 @@ export default {
       if (path === '/api/admin/generate-tracking') return await adminGenerateTracking(request, env);
       if (path === '/api/admin/external-tracking') return await adminCreateExternalTracking(request, env);
       if (path === '/api/public/order-tracking' && request.method === 'GET') return await publicOrderTracking(request, env);
-      if (path.startsWith('/api/public/reshipping-fee/') || path === '/api/admin/reshipping-receipt') {
+      if (path.startsWith('/api/public/reshipping-fee/') || path === '/api/admin/reshipping-receipt' || path === '/api/admin/reshipping-fee/paid') {
         const handled = await handleReshippingRoute(path, request, env, {
           db, json, listGateways, requireAdmin, queryPixGatewayStatus, deliverReshippingFee,
           providers: { ironpay: createPixIronpay, masterfy: createPixMasterfy, umbrellapag: createPixUmbrellapag, venuspay_pix: createPixVenuspay, flevopay: createPixFlevopay },

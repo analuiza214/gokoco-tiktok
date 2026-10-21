@@ -171,10 +171,29 @@ async function adminReceiptUrl(request, env, deps) {
   return deps.json({ url: `${base}/storage/v1${signed.signedURL}` });
 }
 
+async function adminMarkPaid(request, env, deps) {
+  const denied = await deps.requireAdmin(request, env); if (denied) return denied;
+  const body = await request.json().catch(() => ({}));
+  const id = String(body.id || '');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return deps.json({ error: 'Pedido inválido.' }, 400);
+  const rows = await deps.db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(id)}&select=id,tracking&limit=1`);
+  const order = rows[0];
+  if (!order) return deps.json({ error: 'Pedido não encontrado.' }, 404);
+  const current = order.tracking?.reshipping;
+  if (!current?.pix_code) return deps.json({ error: 'Este pedido não tem taxa gerada.' }, 404);
+  if (current.status === 'paid' || current.status === 'receipt_sent') return deps.json({ status: current.status, confirmedAt: current.confirmed_at });
+  const confirmedAt = new Date().toISOString();
+  const reshipping = { ...current, status: 'paid', confirmed_at: confirmedAt, manual: { paidAt: confirmedAt, source: 'admin' } };
+  if (!(await saveReshipping(deps, env, order, reshipping))) return deps.json({ error: 'O pedido foi atualizado. Tente novamente.' }, 409);
+  await deps.deliverReshippingFee(env, deps.db, order.id).catch((e) => console.error('[reshipping/utmify]', order.id, e?.message || e));
+  return deps.json({ status: 'paid', confirmedAt });
+}
+
 export async function handleReshippingRoute(path, request, env, deps) {
   if (path === '/api/public/reshipping-fee/pix' && request.method === 'POST') return createFeePix(request, env, deps);
   if (path === '/api/public/reshipping-fee/status' && request.method === 'GET') return feeStatus(request, env, deps);
   if (path === '/api/public/reshipping-fee/receipt' && request.method === 'POST') return sendReceipt(request, env, deps);
   if (path === '/api/admin/reshipping-receipt' && request.method === 'GET') return adminReceiptUrl(request, env, deps);
+  if (path === '/api/admin/reshipping-fee/paid' && request.method === 'POST') return adminMarkPaid(request, env, deps);
   return null;
 }

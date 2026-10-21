@@ -206,7 +206,7 @@ function renderOrders() {
       ? '<span class="site-badge site-badge-fee-paid" title="Cliente pagou a taxa alfandegária">PAGAMENTO DA TAXA CONCLUÍDO</span>'
       : '<span class="site-badge site-badge-fee" title="Cliente gerou o PIX da taxa alfandegária">PAGAMENTO DA TAXA</span>' : '';
     const feeStatusLabels = { pending: 'PIX gerado · aguardando pagamento', paid: 'taxa paga', receipt_sent: 'comprovante enviado' };
-    const feeLine = fee ? `<div class="order-detail" style="color:${feePaid ? '#7e22ce' : '#b91c1c'}"><span class="detail-icon">${icon('package')}</span><span>Taxa alfandegária: <strong>${esc(cash(fee.amount))}</strong> · ${esc(feeStatusLabels[fee.status] || 'gerada')}${fee.confirmed_at ? ` · ${esc(formatDate(fee.confirmed_at))}` : ''}${fee.hasReceipt ? ' · <button class="fee-receipt-link" type="button" data-fee-receipt>Ver comprovante</button>' : ''}</span></div>` : '';
+    const feeLine = fee ? `<div class="order-detail" style="color:${feePaid ? '#7e22ce' : '#b91c1c'}"><span class="detail-icon">${icon('package')}</span><span>Taxa alfandegária: <strong>${esc(cash(fee.amount))}</strong> · ${esc(feeStatusLabels[fee.status] || 'gerada')}${fee.confirmed_at ? ` · ${esc(formatDate(fee.confirmed_at))}` : ''}${fee.hasReceipt ? ' · <button class="fee-receipt-link" type="button" data-fee-receipt>Ver comprovante</button>' : ''}${!feePaid && order.siteVariant !== 'video' ? ' · <button class="fee-receipt-link" type="button" data-fee-paid>Marcar taxa como paga</button>' : ''}</span></div>` : '';
     const feeTxLine = fee?.transaction_id ? `<div class="tx-line">Transação da taxa: ${esc(fee.transaction_id)}</div>` : '';
     const recovery = order.recovery || {};
     const recoveryCount = Math.max(0, Math.min(3, Number(recovery.count) || 0));
@@ -420,6 +420,20 @@ $('orders').addEventListener('click', async (event) => {
     } finally {
       cardButton.disabled = false;
     }
+    return;
+  }
+  const feePaidButton = event.target.closest('[data-fee-paid]');
+  if (feePaidButton) {
+    const order = orders.find((item) => item.id === feePaidButton.closest('[data-order-id]')?.dataset.orderId);
+    if (!order?.reshipping) return;
+    if (!window.confirm('Você confirma que recebeu o pagamento da taxa de ' + cash(order.reshipping.amount) + ' deste cliente?')) return;
+    feePaidButton.disabled = true;
+    try {
+      const saved = await api('reshipping-fee/paid', { method: 'POST', body: JSON.stringify({ id: order.id }) });
+      order.reshipping.status = saved.status; order.reshipping.confirmed_at = saved.confirmedAt;
+      renderOrders();
+    } catch (error) { window.alert(error.message || 'Não foi possível marcar a taxa como paga.'); }
+    finally { feePaidButton.disabled = false; }
     return;
   }
   const receiptButton = event.target.closest('[data-fee-receipt]');

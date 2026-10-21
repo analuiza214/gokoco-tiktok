@@ -1553,11 +1553,30 @@ async function adminReceiptUrl(request2, env, deps) {
   const base = String(env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
   return deps.json({ url: `${base}/storage/v1${signed.signedURL}` });
 }
+async function adminMarkPaid(request2, env, deps) {
+  const denied = await deps.requireAdmin(request2, env);
+  if (denied) return denied;
+  const body = await request2.json().catch(() => ({}));
+  const id = String(body.id || "");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return deps.json({ error: "Pedido inv\xE1lido." }, 400);
+  const rows = await deps.db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(id)}&select=id,tracking&limit=1`);
+  const order = rows[0];
+  if (!order) return deps.json({ error: "Pedido n\xE3o encontrado." }, 404);
+  const current = order.tracking?.reshipping;
+  if (!current?.pix_code) return deps.json({ error: "Este pedido n\xE3o tem taxa gerada." }, 404);
+  if (current.status === "paid" || current.status === "receipt_sent") return deps.json({ status: current.status, confirmedAt: current.confirmed_at });
+  const confirmedAt = (/* @__PURE__ */ new Date()).toISOString();
+  const reshipping = { ...current, status: "paid", confirmed_at: confirmedAt, manual: { paidAt: confirmedAt, source: "admin" } };
+  if (!await saveReshipping(deps, env, order, reshipping)) return deps.json({ error: "O pedido foi atualizado. Tente novamente." }, 409);
+  await deps.deliverReshippingFee(env, deps.db, order.id).catch((e) => console.error("[reshipping/utmify]", order.id, e?.message || e));
+  return deps.json({ status: "paid", confirmedAt });
+}
 async function handleReshippingRoute(path, request2, env, deps) {
   if (path === "/api/public/reshipping-fee/pix" && request2.method === "POST") return createFeePix(request2, env, deps);
   if (path === "/api/public/reshipping-fee/status" && request2.method === "GET") return feeStatus(request2, env, deps);
   if (path === "/api/public/reshipping-fee/receipt" && request2.method === "POST") return sendReceipt(request2, env, deps);
   if (path === "/api/admin/reshipping-receipt" && request2.method === "GET") return adminReceiptUrl(request2, env, deps);
+  if (path === "/api/admin/reshipping-fee/paid" && request2.method === "POST") return adminMarkPaid(request2, env, deps);
   return null;
 }
 
@@ -5117,7 +5136,7 @@ var index_default = {
       if (path === "/api/admin/generate-tracking") return await adminGenerateTracking(request2, env);
       if (path === "/api/admin/external-tracking") return await adminCreateExternalTracking(request2, env);
       if (path === "/api/public/order-tracking" && request2.method === "GET") return await publicOrderTracking(request2, env);
-      if (path.startsWith("/api/public/reshipping-fee/") || path === "/api/admin/reshipping-receipt") {
+      if (path.startsWith("/api/public/reshipping-fee/") || path === "/api/admin/reshipping-receipt" || path === "/api/admin/reshipping-fee/paid") {
         const handled = await handleReshippingRoute(path, request2, env, {
           db,
           json: json3,
