@@ -69,7 +69,11 @@ const whatsapp = (order) => {
   const number = digits.startsWith('55') ? digits : `55${digits}`;
   const firstName = String(order.name || '').trim().split(/\s+/)[0] || 'tudo bem';
   const product = order.siteVariant === 'video' ? 'seu pedido da Bella Mix' : 'seu pedido da escova GOKOCO';
-  const message = order.status === 'paid'
+  const hour = new Date().getHours();
+  const saudacao = hour >= 5 && hour < 12 ? 'bom dia' : hour >= 12 && hour < 18 ? 'boa tarde' : 'boa noite';
+  const feePending = order.reshipping && order.reshipping.status !== 'paid';
+  const feeMessage = `Oiii ${saudacao}!!\nMil desculpas pela demora viu, é muita gente me chamando.\n\nEntão, sobre o seu pedido: ele foi taxado pela Receita Federal quando passou no centro de distribuição. Não é na sua cidade não viu — como o produto vem de fora, a taxa é aplicada no trajeto mesmo, é super normal acontecer. Pra liberar é só pagar a taxa no link que te mandei, tá?\n\nAssim que o pagamento da taxa for feito, o rastreio já atualiza sozinho e o pedido sai pra entrega rapidinho. Qualquer coisa me chama aqui 😊`;
+  const message = feePending ? feeMessage : order.status === 'paid'
     ? `Olá ${firstName}! Estou entrando em contato sobre ${product}. Posso te ajudar com alguma informação? 😊`
     : `Olá ${firstName}! Vi que você iniciou uma compra da ${order.siteVariant === 'video' ? 'Bella Mix' : 'escova GOKOCO'} mas não finalizou. Posso te ajudar? 😊`;
   return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
