@@ -41,4 +41,5 @@ const upsellScriptPath = path.join(output, 'upsell-assets', 'app.js');
 const upsellScript = fs.readFileSync(upsellScriptPath, 'utf8')
   .replace('href="'+String.fromCharCode(36)+'{key}.html"', 'href="'+String.fromCharCode(36)+'{({original:"/upsell1",bella:"/video/upsell1",tl:"/tl/upsell1"})[key]}"');
 fs.writeFileSync(upsellScriptPath, upsellScript);
+await import('./build-upsell.mjs');
 console.log(`Assets de publicação preparados em ${output}`);
