@@ -799,7 +799,7 @@ async function reconcilePendingPayments(env, limit = 2, deferFulfillment = false
 // Confere no gateway as taxas alfandegárias com PIX gerado e ainda pendentes,
 // marcando como pagas quando o gateway confirmar — igual ao fluxo dos pedidos.
 async function reconcileReshippingFees(env, limit = 3) {
-  const rows = await db(env, 'gokoco_orders', `?select=id,tracking,updated_at&tracking->reshipping->>status=eq.pending&order=updated_at.asc&limit=${Math.max(1, Math.min(10, Number(limit) || 3))}`);
+  const rows = await db(env, 'gokoco_orders', `?select=id,tracking,updated_at&tracking->reshipping->>status=in.(pending,receipt_sent)&order=updated_at.asc&limit=${Math.max(1, Math.min(10, Number(limit) || 3))}`);
   const summary = { checked: 0, paid: 0 };
   for (const order of rows) {
     const fee = order.tracking?.reshipping;

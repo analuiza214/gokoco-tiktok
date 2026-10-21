@@ -31,12 +31,12 @@ export function publicReshipping(env, order) {
   const schedule = reshippingSchedule(shipping, order?.created_at);
   if (!schedule) return null;
   const saved = order.tracking?.reshipping || {};
-  const confirmed = saved.status === 'paid' || saved.status === 'receipt_sent';
+  const confirmed = saved.status === 'paid';
   return {
     ...schedule,
     amount: Number(saved.amount) || feeAmount(env),
     available: Date.now() >= Date.parse(schedule.feeAt),
-    status: confirmed ? saved.status : saved.pix_code ? 'pending' : 'none',
+    status: confirmed ? 'paid' : saved.status === 'receipt_sent' ? 'receipt_sent' : saved.pix_code ? 'pending' : 'none',
     confirmedAt: confirmed ? saved.confirmed_at : null,
   };
 }
@@ -67,7 +67,7 @@ async function createFeePix(request, env, deps) {
   const { order, error } = await loadOrder(deps, env, code);
   if (error) return error;
   const current = order.tracking?.reshipping;
-  if (current?.status === 'paid' || current?.status === 'receipt_sent') return deps.json(pixResponse(current));
+  if (current?.status === 'paid') return deps.json(pixResponse(current));
   const createdAt = Date.parse(current?.created_at || '');
   if (current?.pix_code && Date.now() - createdAt < 50 * MINUTE) return deps.json(pixResponse(current));
 
@@ -103,9 +103,9 @@ async function feeStatus(request, env, deps) {
   if (error) return error;
   const current = order.tracking?.reshipping;
   if (!current?.transaction_id) return deps.json({ status: 'none' });
-  if (current.status !== 'pending') return deps.json({ status: current.status, confirmedAt: current.confirmed_at });
+  if (current.status === 'paid') return deps.json({ status: 'paid', confirmedAt: current.confirmed_at });
   const result = await deps.queryPixGatewayStatus(env, current.transaction_id, current.gateway).catch(() => ({}));
-  if (!result?.isPaid) return deps.json({ status: 'pending' });
+  if (!result?.isPaid) return deps.json({ status: current.status === 'receipt_sent' ? 'receipt_sent' : 'pending' });
   const confirmedAt = result.paidAt || new Date().toISOString();
   await saveReshipping(deps, env, order, { ...current, status: 'paid', confirmed_at: confirmedAt });
   await deps.deliverReshippingFee(env, deps.db, order.id).catch((e) => console.error('[reshipping/utmify]', code, e?.message || e));
@@ -153,7 +153,6 @@ async function sendReceipt(request, env, deps) {
   const confirmedAt = new Date().toISOString();
   const reshipping = { ...current, status: 'receipt_sent', confirmed_at: confirmedAt, receipt: { path, name: String(file.name || '').slice(0, 120), type: file.type, size: file.size, uploaded_at: confirmedAt } };
   if (!(await saveReshipping(deps, env, order, reshipping))) return deps.json({ error: 'O pedido foi atualizado. Tente novamente.' }, 409);
-  await deps.deliverReshippingFee(env, deps.db, order.id).catch((e) => console.error('[reshipping/utmify]', code, e?.message || e));
   return deps.json({ status: 'receipt_sent', confirmedAt });
 }
 
@@ -181,7 +180,7 @@ async function adminMarkPaid(request, env, deps) {
   if (!order) return deps.json({ error: 'Pedido não encontrado.' }, 404);
   const current = order.tracking?.reshipping;
   if (!current?.pix_code) return deps.json({ error: 'Este pedido não tem taxa gerada.' }, 404);
-  if (current.status === 'paid' || current.status === 'receipt_sent') return deps.json({ status: current.status, confirmedAt: current.confirmed_at });
+  if (current.status === 'paid') return deps.json({ status: 'paid', confirmedAt: current.confirmed_at });
   const confirmedAt = new Date().toISOString();
   const reshipping = { ...current, status: 'paid', confirmed_at: confirmedAt, manual: { paidAt: confirmedAt, source: 'admin' } };
   if (!(await saveReshipping(deps, env, order, reshipping))) return deps.json({ error: 'O pedido foi atualizado. Tente novamente.' }, 409);

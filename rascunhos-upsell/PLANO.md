@@ -22,3 +22,17 @@ Nome, fotos, benefícios comprováveis, preço, condições, entrega e destino d
 
 ## Integração futura
 Verificar no código ativo a causa do desaparecimento da confirmação. Preservar o status e os dados do pedido principal e os eventos de conversão existentes. Tratar pagamento do upsell separadamente e impedir duplicidade de cobrança. Testar aprovação, permanência da tela, clique manual, aceite e recusa em ambiente de teste antes de publicar.
+
+## Demonstração implementada
+- Kit Proteção & Brilho: protetor térmico + sérum, R$ 29,90 de teste.
+- Recusa abre oferta de somente protetor, R$ 19,90 de teste; segunda recusa encerra a simulação.
+- Aceite abre resumo e confirmação simulada; sem rede de pagamento, cadastro, armazenamento ou eventos de conversão.
+- Botão no rodapé permite testar a confirmação de pagamento, que permanece aberta até “Continuar” ou fechamento explícito. A página de pagamento real permanece intacta.
+- Galeria com imagens geradas de produtos fictícios; avaliações, estrelas e fotos claramente identificadas como ilustrativas. Substituir por produto e avaliações reais antes de produção.
+- Tutorial externo: https://www.youtube.com/watch?v=PW7swU9ReKI (referência de categoria, não do kit); player carrega só após clique, com alternativa de abrir no YouTube. Reprodução ainda não verificada.
+- Orientação educativa de referência: https://www.tresemme.com/br/look/tutoriais.html
+- Original: GOKOCO, preto e rosa. Bella: Bella Mix, dourado e verde. TL: amarelo, conforme a base local da versão /tl/.
+- Arquivos desta pasta não são incluídos pelo scripts/prepare-deploy.mjs atual. Nenhuma configuração de publicação foi alterada.
+
+## Revisão
+Sintaxe JavaScript e simulação automatizada de interações verificadas. Revisão visual no navegador bloqueada: servidor local inacessível neste ambiente e protocolo file: não permitido. Conferir desktop/mobile e reprodução do vídeo manualmente antes da integração.

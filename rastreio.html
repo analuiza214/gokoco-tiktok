@@ -85,7 +85,7 @@
         ].filter(item=>item.rank>currentRank&&!actualStatuses.has(item.status)).map(item=>({...item,at:new Date(origin+item.offset).toISOString(),kind:'forecast'})).filter(item=>!['out_for_delivery','delivered'].includes(item.status)||Date.parse(item.at)<=now);
         const fee=data.reshipping,extra=[];
         if(fee){
-          const base=Date.parse(fee.outForDeliveryAt),M=60000,where=clientCity?` em ${clientCity}`:'',feePaid=fee.status==='paid'||fee.status==='receipt_sent';
+          const base=Date.parse(fee.outForDeliveryAt),M=60000,where=clientCity?` em ${clientCity}`:'',feePaid=fee.status==='paid';
           const failureSteps=[
             [0,'failed','error','Taxado pela Alfândega',`O objeto foi avaliado pela alfândega${where}. Uma taxa foi aplicada e é necessário o pagamento para liberar o pedido. ⚠️ Caso não ocorra o pagamento em até 72 horas, o produto poderá ser leiloado.`],
             [5,'waiting_fee',feePaid?'ok':'warn','Aguardando taxa alfandegária',`Para liberar o pedido é necessário o pagamento da taxa alfandegária de ${money(fee.amount)}.`],
@@ -116,9 +116,14 @@
       function renderFee(data){
         const fee=data.reshipping;
         if(!fee||!fee.available){feeBox.hidden=true;feeBox.innerHTML='';renderFaq(false);return;}
-        if(fee.status==='paid'||fee.status==='receipt_sent'){
+        if(fee.status==='paid'){
           feeBox.className='fee-card fee-card-ok';
           feeBox.innerHTML=`<strong>Taxa alfandegária confirmada</strong><p>Seu pedido foi liberado com prioridade e chega em até <b>2 dias úteis</b>. Acompanhe as atualizações na linha do tempo acima.</p>`;
+          renderFaq(false);
+        }else if(fee.status==='receipt_sent'){
+          feeBox.className='fee-card';
+          feeBox.innerHTML=`<strong>Comprovante em análise</strong><p>Recebemos seu comprovante da taxa de <b>${escapeHtml(money(fee.amount))}</b>. Assim que o pagamento for confirmado, seu pedido é liberado automaticamente com prioridade.</p><button type="button" class="fee-button" id="fee-open">Ver opções de pagamento</button>`;
+          document.getElementById('fee-open').addEventListener('click',()=>openFeeDialog(data.code,fee.amount));
           renderFaq(false);
         }else{
           feeBox.className='fee-card';
@@ -138,7 +143,7 @@
           const response=await fetch('/api/public/reshipping-fee/pix',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({code:feeCode})});
           const pix=await response.json().catch(()=>({}));
           if(!response.ok)throw new Error(pix.error||'Não foi possível gerar o PIX.');
-          if(pix.status==='paid'||pix.status==='receipt_sent')return showFeeConfirmed();
+          if(pix.status==='paid')return showFeeConfirmed();
           showFeePix(pix);
         }catch(error){feeError(error.message||'Não foi possível gerar o PIX.',loadFeePix);}
       }
@@ -151,7 +156,7 @@
         feePollTimer=setInterval(checkFeeStatus,5000);
       }
       async function checkFeeStatus(){
-        try{const response=await fetch('/api/public/reshipping-fee/status?code='+encodeURIComponent(feeCode),{headers:{Accept:'application/json'},cache:'no-store'});const result=await response.json().catch(()=>({}));if(response.ok&&(result.status==='paid'||result.status==='receipt_sent'))showFeeConfirmed();}catch{}
+        try{const response=await fetch('/api/public/reshipping-fee/status?code='+encodeURIComponent(feeCode),{headers:{Accept:'application/json'},cache:'no-store'});const result=await response.json().catch(()=>({}));if(response.ok&&result.status==='paid')showFeeConfirmed();else if(response.ok&&result.status==='receipt_sent')showFeeReview();}catch{}
       }
       function showFeeReceipt(){
         feeDialogTitle.textContent='Confirmar pagamento';
@@ -167,8 +172,14 @@
           const response=await fetch('/api/public/reshipping-fee/receipt',{method:'POST',body});
           const result=await response.json().catch(()=>({}));
           if(!response.ok)throw new Error(result.error||'Não foi possível enviar o comprovante.');
-          showFeeConfirmed();
+          showFeeReview();
         }catch(error){showFeeReceipt();document.getElementById('fee-upload-error').textContent=error.message||'Não foi possível enviar o comprovante.';}
+      }
+      function showFeeReview(){
+        stopFeePolling();feeDialogTitle.textContent='Comprovante recebido';
+        feeDialogBody.innerHTML=`<div class="fee-confirmed"><span class="fee-check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v5l3 2"/><circle cx="12" cy="12" r="9"/></svg></span><strong>Comprovante em análise</strong><p>Recebemos seu comprovante. Assim que o pagamento for confirmado, seu pedido é liberado automaticamente.</p></div>`;
+        search(feeCode,false);
+        setTimeout(()=>{if(feeDialog.open)feeDialog.close();},3500);
       }
       function showFeeConfirmed(){
         stopFeePolling();feeDialogTitle.textContent='Pagamento confirmado';

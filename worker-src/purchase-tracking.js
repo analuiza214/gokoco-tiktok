@@ -218,7 +218,7 @@ export async function deliverReshippingFee(env, db, orderId) {
   const rows = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(orderId)}&select=*&limit=1`);
   const order = rows?.[0];
   const fee = order?.tracking?.reshipping;
-  if (!fee || !['paid', 'receipt_sent'].includes(fee.status)) return { state: 'not_paid' };
+  if (!fee || fee.status !== 'paid') return { state: 'not_paid' };
   if (fee.utmify?.state === 'sent') return { state: 'already_sent' };
   const feeOrder = {
     ...order,
