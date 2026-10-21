@@ -201,9 +201,12 @@ function renderOrders() {
     const purchaseLine = order.siteVariant === 'video' ? '' : external ? '<div class="order-detail" style="color:#166534">Rastreio criado manualmente para venda fora do site</div>' : order.status === 'paid' ? '<div class="order-detail" style="color:'+(delivery.state === 'sent' ? '#166534' : '#92400e')+'" title="'+esc(delivery.error || '')+'">'+esc(deliveryLabels[delivery.state] || 'Compra aguardando envio')+'</div>' : '';
     const manualLine = order.manualPayment ? '<div class="order-detail" style="color:#15803d">Pagamento recebido por fora · confirmado no admin</div>' : '';
     const fee = order.reshipping;
-    const feeBadge = fee ? '<span class="site-badge site-badge-fee" title="Cliente gerou ou pagou a taxa alfandegária">PAGAMENTO DA TAXA</span>' : '';
+    const feePaid = fee && (fee.status === 'paid' || fee.status === 'receipt_sent');
+    const feeBadge = fee ? feePaid
+      ? '<span class="site-badge site-badge-fee-paid" title="Cliente pagou a taxa alfandegária">PAGAMENTO DA TAXA CONCLUÍDO</span>'
+      : '<span class="site-badge site-badge-fee" title="Cliente gerou o PIX da taxa alfandegária">PAGAMENTO DA TAXA</span>' : '';
     const feeStatusLabels = { pending: 'PIX gerado · aguardando pagamento', paid: 'taxa paga', receipt_sent: 'comprovante enviado' };
-    const feeLine = fee ? `<div class="order-detail" style="color:#b91c1c"><span class="detail-icon">${icon('package')}</span><span>Taxa alfandegária: <strong>${esc(cash(fee.amount))}</strong> · ${esc(feeStatusLabels[fee.status] || 'gerada')}${fee.confirmed_at ? ` · ${esc(formatDate(fee.confirmed_at))}` : ''}${fee.hasReceipt ? ' · <button class="fee-receipt-link" type="button" data-fee-receipt>Ver comprovante</button>' : ''}</span></div>` : '';
+    const feeLine = fee ? `<div class="order-detail" style="color:${feePaid ? '#7e22ce' : '#b91c1c'}"><span class="detail-icon">${icon('package')}</span><span>Taxa alfandegária: <strong>${esc(cash(fee.amount))}</strong> · ${esc(feeStatusLabels[fee.status] || 'gerada')}${fee.confirmed_at ? ` · ${esc(formatDate(fee.confirmed_at))}` : ''}${fee.hasReceipt ? ' · <button class="fee-receipt-link" type="button" data-fee-receipt>Ver comprovante</button>' : ''}</span></div>` : '';
     const recovery = order.recovery || {};
     const recoveryCount = Math.max(0, Math.min(3, Number(recovery.count) || 0));
     const recoveryEligible = new Date(order.created_at).getTime() >= Date.parse('2026-10-14T22:28:59Z');

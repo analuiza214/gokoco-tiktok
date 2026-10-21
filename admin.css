@@ -13,7 +13,8 @@
 .site-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:800;line-height:16px;letter-spacing:.03em;white-space:nowrap}.site-badge-gokoco{background:#dcfce7;color:#166534}.site-badge-tl{background:#fef3c7;color:#92400e}.site-badge-video{background:#f3e8ff;color:#7e22ce}
 .site-badge-legacy{background:#f3f4f6;color:#4b5563}
 .site-badge-fee{background:#fee2e2;color:#b91c1c}
-.fee-receipt-link{border:0;background:none;padding:0;color:#b91c1c;font-size:inherit;font-weight:700;text-decoration:underline;cursor:pointer}.fee-receipt-link:disabled{opacity:.6;cursor:wait}
+.site-badge-fee-paid{background:#dcfce7;color:#166534}
+.fee-receipt-link{border:0;background:none;padding:0;color:inherit;font-size:inherit;font-weight:700;text-decoration:underline;cursor:pointer}.fee-receipt-link:disabled{opacity:.6;cursor:wait}
 .order-card-data{margin-top:4px}
 .order-card-data>.button{gap:6px}
 .card-panel{margin-top:8px;max-width:340px}
