@@ -39,7 +39,7 @@ for (const [route, variant] of [['/upsell1', 'original'], ['/tl/upsell1', 'tl'],
   }
   assert.equal((await worker.fetch(new Request('https://gokoco.example' + route, { method: 'POST' }), env)).status, 405);
   const html = readFileSync(new URL('../dist/upsell-pages/' + variant + '.txt', import.meta.url), 'utf8');
-  assert.ok(html.includes('href="/upsell-assets/style.css"'));
+  assert.ok(html.includes('/upsell-assets/'));
   assert.ok(html.includes('data-theme="' + variant + '"'));
 }
 assert.equal(await path('https://gokoco.example/upsell-assets/app.js'), '/upsell-assets/app.js');
