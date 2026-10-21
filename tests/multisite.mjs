@@ -29,6 +29,24 @@ assert.equal(await path('https://gokoco.example/video/checkout/'), '/video/__ent
 assert.equal(await path('https://gokoco.example/video/images/logo.png'), '/video/images/logo.png');
 assert.equal(await path('https://gokoco.example/assets/store.js'), '/assets/store.js');
 
+
+for (const [route, variant] of [['/upsell1', 'original'], ['/tl/upsell1', 'tl'], ['/video/upsell1', 'bella']]) {
+  for (const suffix of ['', '/', '.html']) {
+    const response = await worker.fetch(new Request('https://gokoco.example' + route + suffix), env);
+    assert.equal(await response.text(), '/upsell-pages/' + variant + '.txt');
+    assert.equal(response.headers.get('Content-Type'), 'text/html; charset=utf-8');
+    assert.equal(response.headers.get('X-Robots-Tag'), 'noindex, nofollow');
+  }
+  assert.equal((await worker.fetch(new Request('https://gokoco.example' + route, { method: 'POST' }), env)).status, 405);
+  const html = readFileSync(new URL('../dist/upsell-pages/' + variant + '.txt', import.meta.url), 'utf8');
+  assert.ok(html.includes('href="/upsell-assets/style.css"'));
+  assert.ok(html.includes('data-theme="' + variant + '"'));
+}
+assert.equal(await path('https://gokoco.example/upsell-assets/app.js'), '/upsell-assets/app.js');
+const upsellScript = readFileSync(new URL('../dist/upsell-assets/app.js', import.meta.url), 'utf8');
+assert.ok(upsellScript.includes('/video/upsell1'));
+assert.doesNotMatch(upsellScript, /fetch\(|XMLHttpRequest|fbq\(/);
+
 const tlHtml = readFileSync(new URL('../dist/tl/index.html', import.meta.url), 'utf8');
 const videoHtml = readFileSync(new URL('../dist/video/index.html', import.meta.url), 'utf8');
 assert.match(tlHtml, /src="\/tl\/assets\//);
