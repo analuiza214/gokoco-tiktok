@@ -15,7 +15,7 @@ import { createPixMasterfy } from "../../_lib/pix-gateways/masterfy.js";
 import { createPixUmbrellapag } from "../../_lib/pix-gateways/umbrellapag.js";
 import { createPixVenuspay } from "../../_lib/pix-gateways/venuspay.js";
 import { createPixFlevopay } from "../../_lib/pix-gateways/flevopay.js";
-import { getLeadById, savePixLead } from "../../_lib/leads-store.js";
+import { getLeadById, savePixLead, nextLeadPixAmount } from "../../_lib/leads-store.js";
 import { sendUtmifyOrder } from "../../_lib/utmify.js";
 
 const corsHeaders = {
@@ -56,7 +56,7 @@ export async function onRequest(context) {
   }
   const safeBody = {
     ...body,
-    amount: Number(order.valor),
+    amount: await nextLeadPixAmount(env, order.valor),
     productName: order.produtos,
     reference: String(order.id),
   };

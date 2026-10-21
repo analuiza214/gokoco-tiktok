@@ -25,7 +25,7 @@ const STEPS = [
   {
     icon: CheckCircle2,
     title: "Confirme os dados antes de pagar",
-    desc: "Verifique o nome do recebedor, o valor de R$ 37,90 e a instituição. Só finalize quando os dados estiverem corretos.",
+    desc: "Verifique o nome do recebedor, o valor e a instituição. Só finalize quando os dados estiverem corretos.",
   },
   {
     icon: ShieldCheck,

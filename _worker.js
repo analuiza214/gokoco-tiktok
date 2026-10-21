@@ -1870,12 +1870,23 @@ async function getLeadById(env, leadId) {
   const rows = await response.json();
   return Array.isArray(rows) && rows[0] ? rows[0] : null;
 }
+async function nextLeadPixAmount(env, baseAmount) {
+  const baseCents = Math.round(Number(baseAmount) * 100);
+  const response = await supabaseRequest(
+    env,
+    `leads?metodo_pagamento=eq.pix&valor=gte.${((baseCents + 1) / 100).toFixed(2)}&valor=lte.${((baseCents + 5) / 100).toFixed(2)}&select=valor&order=created_at.desc&limit=1`
+  );
+  const rows = await response.json().catch(() => []);
+  const lastOffset = Array.isArray(rows) && rows[0] ? Math.round(Number(rows[0].valor) * 100) - baseCents : 0;
+  return (baseCents + lastOffset % 5 + 1) / 100;
+}
 async function savePixLead(env, body, result, gateway) {
   if (!body.orderId) throw new Error("Pedido interno n\xE3o informado.");
   const saved = await updateLeadById(env, body.orderId, {
     status: "pix_gerado",
     transaction_id: result.transactionId,
-    gateway: gateway || result.gateway || null
+    gateway: gateway || result.gateway || null,
+    valor: Number(body.amount) || void 0
   });
   if (!saved) throw new Error("O pedido interno n\xE3o foi encontrado.");
   return true;
@@ -2931,7 +2942,7 @@ async function onRequest3(context) {
   }
   const safeBody = {
     ...body,
-    amount: Number(order.valor),
+    amount: await nextLeadPixAmount(env, order.valor),
     productName: order.produtos,
     reference: String(order.id)
   };
@@ -4449,7 +4460,7 @@ async function createPix(request2, env, ctx, siteVariant = "gokoco") {
     email: normalizeBuyerEmail(body.client.email),
     phone: digits(body.client.phone),
     document: digits(body.client.document),
-    amount: siteVariant === "mercado_livre" ? cartTotal(body.cart) : await nextPixAmount(env, cartTotal(body.cart)),
+    amount: await nextPixAmount(env, cartTotal(body.cart)),
     products: Array.isArray(body.products) ? body.products.slice(0, 10) : [],
     shipping,
     tracking: { ...await recoverCustomerAttribution(env, db, capturePurchaseTracking(request2, body), body.client), site_variant: siteVariant },

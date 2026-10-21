@@ -202,7 +202,7 @@ async function createPix(request, env, ctx, siteVariant = 'gokoco') {
     email: normalizeBuyerEmail(body.client.email),
     phone: digits(body.client.phone),
     document: digits(body.client.document),
-    amount: siteVariant === 'mercado_livre' ? cartTotal(body.cart) : await nextPixAmount(env, cartTotal(body.cart)),
+    amount: await nextPixAmount(env, cartTotal(body.cart)),
     products: Array.isArray(body.products) ? body.products.slice(0, 10) : [],
     shipping,
     tracking: { ...await recoverCustomerAttribution(env, db, capturePurchaseTracking(request, body), body.client), site_variant: siteVariant },

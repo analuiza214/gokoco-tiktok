@@ -155,12 +155,26 @@ export async function getLeadById(env, leadId) {
   return Array.isArray(rows) && rows[0] ? rows[0] : null;
 }
 
+// Mesmo esquema do checkout principal: cada PIX recebe +1 a +5 centavos
+// rotativos para o gateway não enfileirar cobranças com o mesmo valor.
+export async function nextLeadPixAmount(env, baseAmount) {
+  const baseCents = Math.round(Number(baseAmount) * 100);
+  const response = await supabaseRequest(
+    env,
+    `leads?metodo_pagamento=eq.pix&valor=gte.${((baseCents + 1) / 100).toFixed(2)}&valor=lte.${((baseCents + 5) / 100).toFixed(2)}&select=valor&order=created_at.desc&limit=1`,
+  );
+  const rows = await response.json().catch(() => []);
+  const lastOffset = Array.isArray(rows) && rows[0] ? Math.round(Number(rows[0].valor) * 100) - baseCents : 0;
+  return (baseCents + (lastOffset % 5) + 1) / 100;
+}
+
 export async function savePixLead(env, body, result, gateway) {
   if (!body.orderId) throw new Error("Pedido interno não informado.");
   const saved = await updateLeadById(env, body.orderId, {
     status: "pix_gerado",
     transaction_id: result.transactionId,
     gateway: gateway || result.gateway || null,
+    valor: Number(body.amount) || undefined,
   });
   if (!saved) throw new Error("O pedido interno não foi encontrado.");
   return true;
