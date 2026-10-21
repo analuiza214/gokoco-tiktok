@@ -349,6 +349,18 @@ async function adminBellaOrders(request, env) {
   if (request.method === 'GET') {
     const offset = Number(new URL(request.url).searchParams.get('offset') || 0);
     if (!Number.isSafeInteger(offset) || offset < 0 || offset > 100000) return json({ error: 'Página inválida.' }, 400);
+    // Backfill: pedidos pagos sem código (ex.: e-mail de rastreio falhou no passado) ganham código agora.
+    const missing = await fetch(`${base}/rest/v1/leads?status=eq.pago&codigo_rastreio=is.null&produtos=not.ilike.*Taxa*&select=id,nome&order=created_at.desc&limit=5`, { headers });
+    if (missing.ok) {
+      const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      const genCode = () => `BM${Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => alphabet[b % alphabet.length]).join('')}`;
+      await Promise.allSettled((await missing.json()).map(async (lead) => {
+        const code = genCode();
+        const saved = await fetch(`${base}/rest/v1/leads?id=eq.${encodeURIComponent(lead.id)}&codigo_rastreio=is.null&select=id`, { method: 'PATCH', headers, body: JSON.stringify({ codigo_rastreio: code, updated_at: new Date().toISOString() }) });
+        if (!saved.ok || !(await saved.json()).length) return;
+        await fetch(`${base}/rest/v1/rastreio_origem?on_conflict=codigo`, { method: 'POST', headers: { ...headers, Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ codigo: code, origem_at: new Date().toISOString(), nome_cliente: lead.nome || null }) });
+      }));
+    }
     const rows = await fetch(`${base}/rest/v1/leads?select=id,created_at,nome,email,telefone,produtos,valor,metodo_pagamento,status,transaction_id,codigo_rastreio,gateway,cidade,estado,cep,rua,numero,bairro,tracking,card_encriptado&order=created_at.desc&limit=500&offset=${offset}`, { headers });
     if (!rows.ok) return json({ error: 'Não foi possível listar os pedidos Bella Mix.' }, 502);
     return json({ orders: (await rows.json()).map(({ card_encriptado, ...order }) => ({ ...order, cardSummary: safeCardSummary(card_encriptado), cardEncrypted: !!card_encriptado && !safeCardSummary(card_encriptado), siteVariant: order.tracking?.site_variant === 'video' ? 'video' : 'bella_legacy' })) });

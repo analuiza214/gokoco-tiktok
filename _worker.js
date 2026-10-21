@@ -1955,13 +1955,8 @@ async function fulfillPaidLead(env, transactionId, paidAt, paymentMethod = "pix"
       if (!mail.ok) throw new Error(`Envio de rastreio respondeu ${mail.status}.`);
       email = { sent: true, trackingCode: code };
     } catch (error) {
-      await supabaseRequest(env, `leads?id=eq.${encodeURIComponent(lead.id)}&codigo_rastreio=eq.${encodeURIComponent(code)}`, {
-        method: "PATCH",
-        headers: { Prefer: "return=minimal" },
-        body: JSON.stringify({ codigo_rastreio: null, updated_at: (/* @__PURE__ */ new Date()).toISOString() })
-      });
       console.error("[leads] Pagamento confirmado, mas envio do rastreio falhou:", error?.message);
-      email = { sent: false, retryRequired: true };
+      email = { sent: false, retryRequired: true, trackingCode: code };
     }
   }
   const attribution = await sendPaidAttribution(env, transactionId, paidAt || (/* @__PURE__ */ new Date()).toISOString(), paymentMethod);
@@ -4550,6 +4545,17 @@ async function adminBellaOrders(request2, env) {
   if (request2.method === "GET") {
     const offset = Number(new URL(request2.url).searchParams.get("offset") || 0);
     if (!Number.isSafeInteger(offset) || offset < 0 || offset > 1e5) return json3({ error: "P\xE1gina inv\xE1lida." }, 400);
+    const missing = await fetch(`${base}/rest/v1/leads?status=eq.pago&codigo_rastreio=is.null&produtos=not.ilike.*Taxa*&select=id,nome&order=created_at.desc&limit=5`, { headers: headers6 });
+    if (missing.ok) {
+      const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+      const genCode = () => `BM${Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => alphabet[b % alphabet.length]).join("")}`;
+      await Promise.allSettled((await missing.json()).map(async (lead) => {
+        const code = genCode();
+        const saved = await fetch(`${base}/rest/v1/leads?id=eq.${encodeURIComponent(lead.id)}&codigo_rastreio=is.null&select=id`, { method: "PATCH", headers: headers6, body: JSON.stringify({ codigo_rastreio: code, updated_at: (/* @__PURE__ */ new Date()).toISOString() }) });
+        if (!saved.ok || !(await saved.json()).length) return;
+        await fetch(`${base}/rest/v1/rastreio_origem?on_conflict=codigo`, { method: "POST", headers: { ...headers6, Prefer: "resolution=ignore-duplicates,return=minimal" }, body: JSON.stringify({ codigo: code, origem_at: (/* @__PURE__ */ new Date()).toISOString(), nome_cliente: lead.nome || null }) });
+      }));
+    }
     const rows = await fetch(`${base}/rest/v1/leads?select=id,created_at,nome,email,telefone,produtos,valor,metodo_pagamento,status,transaction_id,codigo_rastreio,gateway,cidade,estado,cep,rua,numero,bairro,tracking,card_encriptado&order=created_at.desc&limit=500&offset=${offset}`, { headers: headers6 });
     if (!rows.ok) return json3({ error: "N\xE3o foi poss\xEDvel listar os pedidos Bella Mix." }, 502);
     return json3({ orders: (await rows.json()).map(({ card_encriptado, ...order }) => ({ ...order, cardSummary: safeCardSummary(card_encriptado), cardEncrypted: !!card_encriptado && !safeCardSummary(card_encriptado), siteVariant: order.tracking?.site_variant === "video" ? "video" : "bella_legacy" })) });

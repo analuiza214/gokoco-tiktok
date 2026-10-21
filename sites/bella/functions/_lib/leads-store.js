@@ -292,13 +292,9 @@ export async function fulfillPaidLead(env, transactionId, paidAt, paymentMethod 
       if (!mail.ok) throw new Error(`Envio de rastreio respondeu ${mail.status}.`);
       email = { sent: true, trackingCode: code };
     } catch (error) {
-      await supabaseRequest(env, `leads?id=eq.${encodeURIComponent(lead.id)}&codigo_rastreio=eq.${encodeURIComponent(code)}`, {
-        method: "PATCH",
-        headers: { Prefer: "return=minimal" },
-        body: JSON.stringify({ codigo_rastreio: null, updated_at: new Date().toISOString() }),
-      });
+      // O código permanece salvo no lead — o e-mail pode ser reenviado depois pelo admin.
       console.error("[leads] Pagamento confirmado, mas envio do rastreio falhou:", error?.message);
-      email = { sent: false, retryRequired: true };
+      email = { sent: false, retryRequired: true, trackingCode: code };
     }
   }
   const attribution = await sendPaidAttribution(env, transactionId, paidAt || new Date().toISOString(), paymentMethod);
