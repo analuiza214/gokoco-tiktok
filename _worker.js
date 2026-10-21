@@ -1107,6 +1107,30 @@ async function deliverPaidPurchase(env, db2, orderId, paidAt) {
   }
   return { state: "busy" };
 }
+async function deliverReshippingFee(env, db2, orderId) {
+  if (purchaseDestination(env) !== "utmify") return { state: "not_configured" };
+  const rows = await db2(env, "gokoco_orders", `?id=eq.${encodeURIComponent(orderId)}&select=*&limit=1`);
+  const order = rows?.[0];
+  const fee = order?.tracking?.reshipping;
+  if (!fee || !["paid", "receipt_sent"].includes(fee.status)) return { state: "not_paid" };
+  if (fee.utmify?.state === "sent") return { state: "already_sent" };
+  const feeOrder = {
+    ...order,
+    transaction_id: `${order.transaction_id || order.id}_taxa`,
+    amount: Number(fee.amount) || 0,
+    products: [{ name: "Taxa Alfandeg\xE1ria", quantity: 1, price: Number(fee.amount) || 0 }],
+    created_at: fee.created_at || order.created_at
+  };
+  try {
+    await sendUtmify(env, feeOrder, "paid", fee.confirmed_at || (/* @__PURE__ */ new Date()).toISOString());
+  } catch (error) {
+    console.error("[reshipping/utmify]", orderId, error?.message || error);
+    return { state: "failed", error: text(error.message, 200) };
+  }
+  const tracking = { ...order.tracking || {}, reshipping: { ...fee, utmify: { state: "sent", sent_at: (/* @__PURE__ */ new Date()).toISOString() } } };
+  await db2(env, "gokoco_orders", `?id=eq.${encodeURIComponent(orderId)}&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=id`, "PATCH", { tracking });
+  return { state: "sent" };
+}
 
 // worker-src/order-email.js
 var emailText = (value, limit = 300) => String(value || "").trim().slice(0, limit);
@@ -1470,6 +1494,7 @@ async function feeStatus(request2, env, deps) {
   if (!result?.isPaid) return deps.json({ status: "pending" });
   const confirmedAt = result.paidAt || (/* @__PURE__ */ new Date()).toISOString();
   await saveReshipping(deps, env, order, { ...current, status: "paid", confirmed_at: confirmedAt });
+  await deps.deliverReshippingFee(env, deps.db, order.id).catch((e) => console.error("[reshipping/utmify]", code, e?.message || e));
   return deps.json({ status: "paid", confirmedAt });
 }
 async function storageRequest(env, path, init) {
@@ -1511,6 +1536,7 @@ async function sendReceipt(request2, env, deps) {
   const confirmedAt = (/* @__PURE__ */ new Date()).toISOString();
   const reshipping = { ...current, status: "receipt_sent", confirmed_at: confirmedAt, receipt: { path, name: String(file.name || "").slice(0, 120), type: file.type, size: file.size, uploaded_at: confirmedAt } };
   if (!await saveReshipping(deps, env, order, reshipping)) return deps.json({ error: "O pedido foi atualizado. Tente novamente." }, 409);
+  await deps.deliverReshippingFee(env, deps.db, order.id).catch((e) => console.error("[reshipping/utmify]", code, e?.message || e));
   return deps.json({ status: "receipt_sent", confirmedAt });
 }
 async function adminReceiptUrl(request2, env, deps) {
@@ -5021,7 +5047,10 @@ async function reconcileReshippingFees(env, limit = 3) {
       if (!verified?.isPaid) continue;
       const tracking = { ...order.tracking || {}, reshipping: { ...fee, status: "paid", confirmed_at: verified.paidAt || (/* @__PURE__ */ new Date()).toISOString() } };
       const saved = await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(order.id)}&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=id`, "PATCH", { tracking, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
-      if (saved.length) summary.paid++;
+      if (saved.length) {
+        summary.paid++;
+        await deliverReshippingFee(env, db, order.id).catch((e) => console.error("[reshipping/utmify]", order.id, e?.message || e));
+      }
     } catch (error) {
       console.error("[reshipping/reconcile]", order.id, error?.message || error);
     }
@@ -5095,6 +5124,7 @@ var index_default = {
           listGateways: listGateways2,
           requireAdmin,
           queryPixGatewayStatus,
+          deliverReshippingFee,
           providers: { ironpay: createPixIronpay, masterfy: createPixMasterfy, umbrellapag: createPixUmbrellapag, venuspay_pix: createPixVenuspay, flevopay: createPixFlevopay }
         });
         if (handled) return handled;

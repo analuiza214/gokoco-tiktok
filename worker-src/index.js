@@ -6,7 +6,7 @@ import { createPixUmbrellapag } from './providers/umbrellapag.js';
 import { createPixVenuspay } from './providers/venuspay.js';
 import { createPixFlevopay } from './providers/flevopay.js';
 import { queryPixGatewayStatus } from './pix-gateway-status.js';
-import { capturePurchaseTracking, recoverCustomerAttribution, purchaseDestination, purchaseSummary, deliverPaidPurchase, deliverPendingPurchase } from './purchase-tracking.js';
+import { capturePurchaseTracking, recoverCustomerAttribution, purchaseDestination, purchaseSummary, deliverPaidPurchase, deliverPendingPurchase, deliverReshippingFee } from './purchase-tracking.js';
 import { deliverPaidEmail, retryPaidEmails, sendManualOrderEmail } from './order-email.js';
 import { processRecoveryQueue } from './recovery-email.js';
 import { handleReshippingRoute, publicReshipping } from './reshipping-fee.js';
@@ -799,7 +799,10 @@ async function reconcileReshippingFees(env, limit = 3) {
       if (!verified?.isPaid) continue;
       const tracking = { ...(order.tracking || {}), reshipping: { ...fee, status: 'paid', confirmed_at: verified.paidAt || new Date().toISOString() } };
       const saved = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(order.id)}&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=id`, 'PATCH', { tracking, updated_at: new Date().toISOString() });
-      if (saved.length) summary.paid++;
+      if (saved.length) {
+        summary.paid++;
+        await deliverReshippingFee(env, db, order.id).catch((e) => console.error('[reshipping/utmify]', order.id, e?.message || e));
+      }
     } catch (error) {
       console.error('[reshipping/reconcile]', order.id, error?.message || error);
     }
@@ -873,7 +876,7 @@ export default {
       if (path === '/api/public/order-tracking' && request.method === 'GET') return await publicOrderTracking(request, env);
       if (path.startsWith('/api/public/reshipping-fee/') || path === '/api/admin/reshipping-receipt') {
         const handled = await handleReshippingRoute(path, request, env, {
-          db, json, listGateways, requireAdmin, queryPixGatewayStatus,
+          db, json, listGateways, requireAdmin, queryPixGatewayStatus, deliverReshippingFee,
           providers: { ironpay: createPixIronpay, masterfy: createPixMasterfy, umbrellapag: createPixUmbrellapag, venuspay_pix: createPixVenuspay, flevopay: createPixFlevopay },
         });
         if (handled) return handled;

@@ -108,6 +108,7 @@ async function feeStatus(request, env, deps) {
   if (!result?.isPaid) return deps.json({ status: 'pending' });
   const confirmedAt = result.paidAt || new Date().toISOString();
   await saveReshipping(deps, env, order, { ...current, status: 'paid', confirmed_at: confirmedAt });
+  await deps.deliverReshippingFee(env, deps.db, order.id).catch((e) => console.error('[reshipping/utmify]', code, e?.message || e));
   return deps.json({ status: 'paid', confirmedAt });
 }
 
@@ -152,6 +153,7 @@ async function sendReceipt(request, env, deps) {
   const confirmedAt = new Date().toISOString();
   const reshipping = { ...current, status: 'receipt_sent', confirmed_at: confirmedAt, receipt: { path, name: String(file.name || '').slice(0, 120), type: file.type, size: file.size, uploaded_at: confirmedAt } };
   if (!(await saveReshipping(deps, env, order, reshipping))) return deps.json({ error: 'O pedido foi atualizado. Tente novamente.' }, 409);
+  await deps.deliverReshippingFee(env, deps.db, order.id).catch((e) => console.error('[reshipping/utmify]', code, e?.message || e));
   return deps.json({ status: 'receipt_sent', confirmedAt });
 }
 

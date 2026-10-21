@@ -209,3 +209,31 @@ export async function deliverPaidPurchase(env, db, orderId, paidAt) {
   }
   return { state: 'busy' };
 }
+
+// Envia a taxa alfandegária paga à UTMify como pedido separado (orderId com
+// sufixo _taxa), para o faturamento bruto/líquido incluir as taxas. O pixel
+// Meta não recebe evento extra — evita duplicar conversões no gerenciador.
+export async function deliverReshippingFee(env, db, orderId) {
+  if (purchaseDestination(env) !== 'utmify') return { state: 'not_configured' };
+  const rows = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(orderId)}&select=*&limit=1`);
+  const order = rows?.[0];
+  const fee = order?.tracking?.reshipping;
+  if (!fee || !['paid', 'receipt_sent'].includes(fee.status)) return { state: 'not_paid' };
+  if (fee.utmify?.state === 'sent') return { state: 'already_sent' };
+  const feeOrder = {
+    ...order,
+    transaction_id: `${order.transaction_id || order.id}_taxa`,
+    amount: Number(fee.amount) || 0,
+    products: [{ name: 'Taxa Alfandegária', quantity: 1, price: Number(fee.amount) || 0 }],
+    created_at: fee.created_at || order.created_at,
+  };
+  try {
+    await sendUtmify(env, feeOrder, 'paid', fee.confirmed_at || new Date().toISOString());
+  } catch (error) {
+    console.error('[reshipping/utmify]', orderId, error?.message || error);
+    return { state: 'failed', error: text(error.message, 200) };
+  }
+  const tracking = { ...(order.tracking || {}), reshipping: { ...fee, utmify: { state: 'sent', sent_at: new Date().toISOString() } } };
+  await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(orderId)}&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=id`, 'PATCH', { tracking });
+  return { state: 'sent' };
+}
