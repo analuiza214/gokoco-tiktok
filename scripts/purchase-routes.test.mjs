@@ -342,7 +342,7 @@ test('lote administrativo consulta no máximo três pagamentos por atualização
   await using(f, async () => {
     const result = await (await f.call('/api/admin/reconcile-payments', { method: 'POST', headers: { 'x-cron-secret': 'cron-test' } })).json();
     assert.equal(result.paid, 3);
-    assert.equal(calls, 10);
+    assert.equal(calls, 11); // +1: consulta das taxas alfandegárias pendentes
     assert.equal(rows.filter(row => row.status === 'paid').length, 3);
   });
 });

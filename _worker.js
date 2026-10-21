@@ -1427,7 +1427,7 @@ async function createFeePix(request2, env, deps) {
   if (current?.status === "paid" || current?.status === "receipt_sent") return deps.json(pixResponse(current));
   const createdAt = Date.parse(current?.created_at || "");
   if (current?.pix_code && Date.now() - createdAt < 50 * MINUTE) return deps.json(pixResponse(current));
-  const active = (await deps.listGateways(env)).filter((gateway) => gateway.enabled);
+  const active = (await deps.listGateways(env)).filter((gateway) => gateway.enabled && gateway.method === "pix");
   if (active.length !== 1 || !active[0].configured) return deps.json({ error: "Pagamento PIX indispon\xEDvel no momento. Fale com o atendimento." }, 503);
   const shipping = order.shipping || {};
   const amount = feeAmount(env);
@@ -2048,21 +2048,12 @@ var DEFAULT_GATEWAYS = [
   { id: "venuspay_pix", name: "Venus Pay", method: "pix", enabled: false },
   { id: "flevopay", name: "FlevoPay", method: "pix", enabled: false }
 ];
-function supabaseHeaders(key) {
-  return {
-    apikey: key,
-    Authorization: `Bearer ${key}`,
-    "Content-Type": "application/json",
-    Prefer: "return=representation"
-  };
-}
-async function supabaseFetch(env, path, options = {}) {
+async function supabaseFetch(env, path) {
   const url = (env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
   const key = (env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
   if (!url || !key) throw new Error("Banco de gateways n\xE3o configurado.");
   const res = await fetch(`${url}${path}`, {
-    ...options,
-    headers: { ...supabaseHeaders(key), ...options.headers || {} }
+    headers: { apikey: key, Authorization: `Bearer ${key}` }
   });
   if (!res.ok) throw new Error("N\xE3o foi poss\xEDvel consultar a configura\xE7\xE3o dos gateways.");
   try {
@@ -2090,21 +2081,18 @@ function gatewayConfigured(env, id) {
   return false;
 }
 async function listGateways(env) {
-  const rows = await supabaseFetch(env, "/rest/v1/payment_gateways?select=id,name,method,enabled,updated_at&order=method,id");
+  const rows = await supabaseFetch(env, "/rest/v1/gokoco_gateways?select=id,enabled,updated_at");
   const saved = Array.isArray(rows) ? rows : [];
   const savedById = new Map(saved.map((gateway) => [gateway.id, gateway]));
-  const source = DEFAULT_GATEWAYS.map((gateway) => ({
-    ...gateway,
-    ...savedById.get(gateway.id) || {}
-  }));
-  return source.map((g) => ({
-    id: g.id,
-    name: g.name,
-    method: g.method,
-    enabled: !!g.enabled,
-    configured: gatewayConfigured(env, g.id),
-    updated_at: g.updated_at || null
-  }));
+  return DEFAULT_GATEWAYS.map((g) => {
+    const row = savedById.get(g.id);
+    return {
+      ...g,
+      enabled: row ? !!row.enabled : g.enabled,
+      configured: gatewayConfigured(env, g.id),
+      updated_at: row?.updated_at || null
+    };
+  });
 }
 async function getActivePixGateway(env) {
   const gateways2 = await listGateways(env);
@@ -2113,42 +2101,6 @@ async function getActivePixGateway(env) {
   if (!active.length) return null;
   if (!active[0].configured) throw new Error("O gateway PIX selecionado est\xE1 sem credenciais completas.");
   return active[0].id;
-}
-async function setGatewayEnabled(env, id, enabled) {
-  const url = (env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
-  const key = (env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
-  if (!url || !key) {
-    throw new Error("Supabase n\xE3o configurado. Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY.");
-  }
-  const all = await listGateways(env);
-  const target = all.find((g) => g.id === id);
-  if (!target) throw new Error("Gateway n\xE3o encontrado.");
-  const headers6 = supabaseHeaders(key);
-  if (enabled && target.method === "pix") {
-    const otherPix = all.filter((g) => g.method === "pix" && g.id !== id && g.enabled);
-    for (const g of otherPix) {
-      const disabled = await fetch(`${url}/rest/v1/payment_gateways?id=eq.${encodeURIComponent(g.id)}`, {
-        method: "PATCH",
-        headers: headers6,
-        body: JSON.stringify({ enabled: false, updated_at: (/* @__PURE__ */ new Date()).toISOString() })
-      });
-      if (!disabled.ok) throw new Error("N\xE3o foi poss\xEDvel desativar o gateway anterior.");
-    }
-  }
-  const res = await fetch(`${url}/rest/v1/payment_gateways?on_conflict=id`, {
-    method: "POST",
-    headers: { ...headers6, Prefer: "resolution=merge-duplicates,return=representation" },
-    body: JSON.stringify({ id, name: target.name, method: target.method, enabled: !!enabled, updated_at: (/* @__PURE__ */ new Date()).toISOString() })
-  });
-  if (!res.ok) {
-    const err = await res.text().catch(() => "");
-    throw new Error(err || "Erro ao atualizar gateway.");
-  }
-  const saved = await res.json();
-  if (!Array.isArray(saved) || !saved.some((g) => g.id === id && g.enabled === !!enabled)) {
-    throw new Error("A configura\xE7\xE3o do gateway n\xE3o foi salva.");
-  }
-  return listGateways(env);
 }
 
 // sites/bella/functions/_lib/pix-gateways/ironpay.js
@@ -4296,11 +4248,12 @@ async function onRequest16(context) {
 // worker-src/index.js
 var JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
 var gateways = [
-  { id: "ironpay", name: "IronPay" },
-  { id: "masterfy", name: "MasterFy" },
-  { id: "umbrellapag", name: "UmbrellaPag" },
-  { id: "venuspay_pix", name: "Venus Pay PIX" },
-  { id: "flevopay", name: "FlevoPay" }
+  { id: "ironpay", name: "IronPay", method: "pix" },
+  { id: "masterfy", name: "MasterFy", method: "pix" },
+  { id: "umbrellapag", name: "UmbrellaPag", method: "pix" },
+  { id: "venuspay_pix", name: "Venus Pay PIX", method: "pix" },
+  { id: "flevopay", name: "FlevoPay", method: "pix" },
+  { id: "venuspay", name: "Venus Pay Cart\xE3o", method: "card" }
 ];
 var json3 = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
 var digits = (value) => String(value || "").replace(/\D/g, "");
@@ -4360,7 +4313,7 @@ function configured(env, id) {
   if (id === "ironpay") return !!(env.IRONPAY_API_TOKEN && env.IRONPAY_OFFER_HASH && env.IRONPAY_PRODUCT_HASH);
   if (id === "masterfy") return !!env.MASTERFY_API_KEY;
   if (id === "umbrellapag") return !!env.UMBRELLAPAG_API_KEY;
-  if (id === "venuspay_pix") return !!env.VENUS_PAY_SECRET_KEY;
+  if (id === "venuspay_pix" || id === "venuspay") return !!env.VENUS_PAY_SECRET_KEY;
   if (id === "flevopay") return !!env.FLEVOPAY_API_KEY;
   return false;
 }
@@ -4368,7 +4321,7 @@ async function listGateways2(env) {
   const rows = await db(env, "gokoco_gateways", "?select=id,enabled,updated_at");
   return gateways.map((g) => {
     const saved = rows.find((row) => row.id === g.id);
-    return { ...g, enabled: !!saved?.enabled, configured: configured(env, g.id), updated_at: saved?.updated_at || null };
+    return { ...g, enabled: saved ? !!saved.enabled : g.method === "card", configured: configured(env, g.id), updated_at: saved?.updated_at || null };
   });
 }
 async function requireAdmin(request2, env) {
@@ -4434,7 +4387,7 @@ async function createPix(request2, env, ctx, siteVariant = "gokoco") {
     return json3({ copyPaste: old.pix_code, qrCode: old.qr_code, transactionId: old.transaction_id, gatewayTransactionId: old.transaction_id, orderId: old.id, amount: Number(old.amount) });
   }
   if (previous[0] && previous[0].status !== "failed") return json3({ message: "A cobran\xE7a anterior est\xE1 em processamento. Aguarde um momento." }, 409);
-  const active = (await listGateways2(env)).filter((g) => g.enabled);
+  const active = (await listGateways2(env)).filter((g) => g.enabled && g.method === "pix");
   if (active.length !== 1) return json3({ message: "Selecione um gateway PIX no painel admin." }, 503);
   if (!active[0].configured) return json3({ message: "O gateway PIX selecionado precisa de uma chave de API." }, 503);
   const ip = request2.headers.get("CF-Connecting-IP") || "unknown";
@@ -4646,16 +4599,6 @@ async function adminBellaCard(request2, env) {
   } catch {
     return json3({ error: "N\xE3o foi poss\xEDvel descriptografar o cart\xE3o. O dado pode estar corrompido." }, 422);
   }
-}
-async function adminBellaGateways(request2, env) {
-  const denied = await requireAdmin(request2, env);
-  if (denied) return denied;
-  const bella = bellaEnvironment(env);
-  if (request2.method === "GET") return json3({ gateways: await listGateways(bella) });
-  if (request2.method !== "PATCH") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
-  const body = await request2.json().catch(() => ({}));
-  if (typeof body.enabled !== "boolean" || !["ironpay", "masterfy", "umbrellapag", "venuspay", "venuspay_pix", "flevopay"].includes(body.id)) return json3({ error: "Gateway inv\xE1lido." }, 400);
-  return json3({ gateways: await setGatewayEnabled(bella, body.id, body.enabled) });
 }
 async function adminBellaTrackingEmail(request2, env) {
   const denied = await requireAdmin(request2, env);
@@ -4968,7 +4911,7 @@ async function adminGateways(request2, env) {
   const { id, enabled } = await request2.json().catch(() => ({}));
   if (!gateways.some((g) => g.id === id) || typeof enabled !== "boolean") return json3({ error: "Gateway inv\xE1lido." }, 400);
   if (enabled && !configured(env, id)) return json3({ error: "Configure a chave deste gateway no Cloudflare antes de ativ\xE1-lo." }, 400);
-  if (enabled) await db(env, "gokoco_gateways", "?enabled=eq.true", "PATCH", { enabled: false, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
+  if (enabled && gateways.find((g) => g.id === id)?.method === "pix") await db(env, "gokoco_gateways", "?enabled=eq.true&id=neq.venuspay", "PATCH", { enabled: false, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
   await db(env, "gokoco_gateways", "?on_conflict=id", "POST", { id, enabled, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
   return json3({ gateways: await listGateways2(env) });
 }
@@ -5131,7 +5074,6 @@ var index_default = {
       if (path === "/api/admin/orders") return await adminOrders(request2, env);
       if (path === "/api/admin/bella-orders") return await adminBellaOrders(request2, env);
       if (path === "/api/admin/bella-card") return await adminBellaCard(request2, env);
-      if (path === "/api/admin/bella-gateways") return await adminBellaGateways(request2, env);
       if (path === "/api/admin/bella-tracking-email") return await adminBellaTrackingEmail(request2, env);
       if (path === "/api/admin/reconcile-payments") return await reconcilePaymentsRoute(request2, env);
       if (path === "/api/admin/send-order-email") return await adminSendOrderEmail(request2, env);

@@ -92,7 +92,7 @@ try {
 }
 try {
   globalThis.fetch = async (request) => {
-    assert.match(String(request), /gokoco\.supabase\.co\/rest\/v1\/payment_gateways/);
+    assert.match(String(request), /gokoco\.supabase\.co\/rest\/v1\/gokoco_gateways/);
     return new Response(JSON.stringify([{ id: 'venuspay_pix', name: 'Venus Pay', method: 'pix', enabled: true }]), {
       headers: { 'Content-Type': 'application/json' },
     });

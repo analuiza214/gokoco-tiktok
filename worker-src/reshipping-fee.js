@@ -71,7 +71,7 @@ async function createFeePix(request, env, deps) {
   const createdAt = Date.parse(current?.created_at || '');
   if (current?.pix_code && Date.now() - createdAt < 50 * MINUTE) return deps.json(pixResponse(current));
 
-  const active = (await deps.listGateways(env)).filter((gateway) => gateway.enabled);
+  const active = (await deps.listGateways(env)).filter((gateway) => gateway.enabled && gateway.method === 'pix');
   if (active.length !== 1 || !active[0].configured) return deps.json({ error: 'Pagamento PIX indisponível no momento. Fale com o atendimento.' }, 503);
   const shipping = order.shipping || {};
   const amount = feeAmount(env);

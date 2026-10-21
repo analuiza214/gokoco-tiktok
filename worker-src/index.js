@@ -25,17 +25,17 @@ import { onRequest as bellaProcessRecoveryQueue } from '../sites/bella/functions
 import { onRequest as bellaReconcilePayments } from '../sites/bella/functions/api/reconcile-payments.js';
 import { onRequest as bellaFbPurchase } from '../sites/bella/functions/api/fb-purchase.js';
 import { onRequest as bellaUtmifyOrder } from '../sites/bella/functions/api/utmify-order.js';
-import { listGateways as listBellaGateways, setGatewayEnabled as setBellaGatewayEnabled } from '../sites/bella/functions/_lib/gateway-config.js';
 import { safeCardSummary } from '../sites/bella/functions/_lib/card-summary.js';
 import { cardSecret, decryptCardData } from '../sites/bella/functions/_lib/card-crypto.js';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
 const gateways = [
-  { id: 'ironpay', name: 'IronPay' },
-  { id: 'masterfy', name: 'MasterFy' },
-  { id: 'umbrellapag', name: 'UmbrellaPag' },
-  { id: 'venuspay_pix', name: 'Venus Pay PIX' },
-  { id: 'flevopay', name: 'FlevoPay' },
+  { id: 'ironpay', name: 'IronPay', method: 'pix' },
+  { id: 'masterfy', name: 'MasterFy', method: 'pix' },
+  { id: 'umbrellapag', name: 'UmbrellaPag', method: 'pix' },
+  { id: 'venuspay_pix', name: 'Venus Pay PIX', method: 'pix' },
+  { id: 'flevopay', name: 'FlevoPay', method: 'pix' },
+  { id: 'venuspay', name: 'Venus Pay Cartão', method: 'card' },
 ];
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
 const digits = (value) => String(value || '').replace(/\D/g, '');
@@ -99,7 +99,7 @@ function configured(env, id) {
   if (id === 'ironpay') return !!(env.IRONPAY_API_TOKEN && env.IRONPAY_OFFER_HASH && env.IRONPAY_PRODUCT_HASH);
   if (id === 'masterfy') return !!env.MASTERFY_API_KEY;
   if (id === 'umbrellapag') return !!env.UMBRELLAPAG_API_KEY;
-  if (id === 'venuspay_pix') return !!env.VENUS_PAY_SECRET_KEY;
+  if (id === 'venuspay_pix' || id === 'venuspay') return !!env.VENUS_PAY_SECRET_KEY;
   if (id === 'flevopay') return !!env.FLEVOPAY_API_KEY;
   return false;
 }
@@ -108,7 +108,8 @@ async function listGateways(env) {
   const rows = await db(env, 'gokoco_gateways', '?select=id,enabled,updated_at');
   return gateways.map((g) => {
     const saved = rows.find((row) => row.id === g.id);
-    return { ...g, enabled: !!saved?.enabled, configured: configured(env, g.id), updated_at: saved?.updated_at || null };
+    // O gateway de cartão fica ativo por padrão até ser desligado no painel; PIX só ativa pelo admin.
+    return { ...g, enabled: saved ? !!saved.enabled : g.method === 'card', configured: configured(env, g.id), updated_at: saved?.updated_at || null };
   });
 }
 
@@ -178,7 +179,7 @@ async function createPix(request, env, ctx, siteVariant = 'gokoco') {
     return json({ copyPaste: old.pix_code, qrCode: old.qr_code, transactionId: old.transaction_id, gatewayTransactionId: old.transaction_id, orderId: old.id, amount: Number(old.amount) });
   }
   if (previous[0] && previous[0].status !== 'failed') return json({ message: 'A cobrança anterior está em processamento. Aguarde um momento.' }, 409);
-  const active = (await listGateways(env)).filter((g) => g.enabled);
+  const active = (await listGateways(env)).filter((g) => g.enabled && g.method === 'pix');
   if (active.length !== 1) return json({ message: 'Selecione um gateway PIX no painel admin.' }, 503);
   if (!active[0].configured) return json({ message: 'O gateway PIX selecionado precisa de uma chave de API.' }, 503);
 
@@ -397,16 +398,6 @@ async function adminBellaCard(request, env) {
   } catch {
     return json({ error: 'Não foi possível descriptografar o cartão. O dado pode estar corrompido.' }, 422);
   }
-}
-
-async function adminBellaGateways(request, env) {
-  const denied = await requireAdmin(request, env); if (denied) return denied;
-  const bella = bellaEnvironment(env);
-  if (request.method === 'GET') return json({ gateways: await listBellaGateways(bella) });
-  if (request.method !== 'PATCH') return json({ error: 'Método inválido.' }, 405);
-  const body = await request.json().catch(() => ({}));
-  if (typeof body.enabled !== 'boolean' || !['ironpay', 'masterfy', 'umbrellapag', 'venuspay', 'venuspay_pix', 'flevopay'].includes(body.id)) return json({ error: 'Gateway inválido.' }, 400);
-  return json({ gateways: await setBellaGatewayEnabled(bella, body.id, body.enabled) });
 }
 
 async function adminBellaTrackingEmail(request, env) {
@@ -687,7 +678,8 @@ async function adminGateways(request, env) {
   const { id, enabled } = await request.json().catch(() => ({}));
   if (!gateways.some((g) => g.id === id) || typeof enabled !== 'boolean') return json({ error: 'Gateway inválido.' }, 400);
   if (enabled && !configured(env, id)) return json({ error: 'Configure a chave deste gateway no Cloudflare antes de ativá-lo.' }, 400);
-  if (enabled) await db(env, 'gokoco_gateways', '?enabled=eq.true', 'PATCH', { enabled: false, updated_at: new Date().toISOString() });
+  // Só um gateway PIX fica ativo por vez; o gateway de cartão é independente.
+  if (enabled && gateways.find((g) => g.id === id)?.method === 'pix') await db(env, 'gokoco_gateways', '?enabled=eq.true&id=neq.venuspay', 'PATCH', { enabled: false, updated_at: new Date().toISOString() });
   await db(env, 'gokoco_gateways', '?on_conflict=id', 'POST', { id, enabled, updated_at: new Date().toISOString() });
   return json({ gateways: await listGateways(env) });
 }
@@ -859,7 +851,6 @@ export default {
       if (path === '/api/admin/orders') return await adminOrders(request, env);
       if (path === '/api/admin/bella-orders') return await adminBellaOrders(request, env);
       if (path === '/api/admin/bella-card') return await adminBellaCard(request, env);
-      if (path === '/api/admin/bella-gateways') return await adminBellaGateways(request, env);
       if (path === '/api/admin/bella-tracking-email') return await adminBellaTrackingEmail(request, env);
       if (path === '/api/admin/reconcile-payments') return await reconcilePaymentsRoute(request, env);
       if (path === '/api/admin/send-order-email') return await adminSendOrderEmail(request, env);
