@@ -16,7 +16,7 @@ let selectedSort = 'recentes';
 let page = 1;
 let busy = false;
 const PAGE_SIZE = 50;
-const gatewayNames = { ironpay: 'IronPay', masterfy: 'MasterFy', umbrellapag: 'UmbrellaPag', venuspay_pix: 'Venus Pay', flevopay: 'FlevoPay' };
+const gatewayNames = { ironpay: 'IronPay', masterfy: 'MasterFy', umbrellapag: 'UmbrellaPag', venuspay: 'Venus Pay', venuspay_pix: 'Venus Pay', flevopay: 'FlevoPay' };
 const statusInfo = {
   creating: { label: 'Criando PIX', fg: '#92400e', bg: '#fef3c7' },
   pending: { label: 'PIX gerado', fg: '#1d4ed8', bg: '#dbeafe' },
@@ -52,7 +52,7 @@ const normalizeBellaOrder = (order) => ({
   cardEncrypted: !!order.cardEncrypted,
   siteVariant: 'video',
   shippingTracking: order.codigo_rastreio ? { code: order.codigo_rastreio } : null,
-  reshipping: /taxa\s*alfandeg/i.test(order.produtos || '') ? { status: order.status === 'pago' ? 'paid' : 'pending', amount: order.valor, created_at: order.created_at, confirmed_at: order.status === 'pago' ? order.updated_at : null, manual: !!order.tracking?.fee_manual } : null,
+  reshipping: /taxa\s*alfandeg/i.test(order.produtos || '') ? { status: order.status === 'pago' ? 'paid' : 'pending', amount: order.valor, transaction_id: order.transaction_id, gateway: order.gateway, created_at: order.created_at, confirmed_at: order.status === 'pago' ? order.updated_at : null, manual: !!order.tracking?.fee_manual } : null,
 });
 const mergeOrders = () => { orders = [...gokocoOrders, ...bellaOrders.map(normalizeBellaOrder)]; renderOrders(); };
 const cash = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -149,7 +149,7 @@ function matchingOrders(feeDates = selectedStatus === 'taxa') {
     else if (selectedPeriod === '30dias') periodMatch = days <= 30;
     if (!periodMatch) return false;
     if (siteVariant) return (order.siteVariant || 'gokoco') === siteVariant;
-    const haystack = [order.name, order.email, order.phone, order.transaction_id, ...(Array.isArray(order.products) ? order.products.map((p) => p.name) : [])].join(' ').toLocaleLowerCase('pt-BR');
+    const haystack = [order.name, order.email, order.phone, order.transaction_id, order.reshipping?.transaction_id, ...(Array.isArray(order.products) ? order.products.map((p) => p.name) : [])].join(' ').toLocaleLowerCase('pt-BR');
     return !term || haystack.includes(term);
   });
 }
@@ -224,12 +224,12 @@ function renderOrders() {
     const feeBadge = fee ? feePaid
       ? '<span class="site-badge site-badge-fee-paid" title="Cliente pagou a taxa alfandegária">PAGAMENTO DA TAXA CONCLUÍDO</span>'
       : '<span class="site-badge site-badge-fee" title="Cliente gerou o PIX da taxa alfandegária">PAGAMENTO DA TAXA</span>' : '';
-    const feeStatusLabels = { pending: 'PIX gerado · aguardando pagamento', paid: 'taxa paga', receipt_sent: 'comprovante enviado' };
-    const feeDateLabel = fee ? (feePaid && fee.confirmed_at ? `paga ${formatDate(fee.confirmed_at)}` : fee.created_at ? `gerada ${formatDate(fee.created_at)}` : '') : '';
-    const feeLine = fee ? `<div class="order-detail" style="color:${feePaid ? '#7e22ce' : '#b91c1c'}"><span class="detail-icon">${icon('package')}</span><span>Taxa alfandegária: <strong>${esc(cash(fee.amount))}</strong> · ${esc(feeStatusLabels[fee.status] || 'gerada')}${feeDateLabel ? ` · ${esc(feeDateLabel)}` : ''}${fee.hasReceipt ? ' · <button class="fee-receipt-link" type="button" data-fee-receipt>Ver comprovante</button>' : ''}</span></div>` : '';
+    const feeStatusLabels = { pending: 'pendente', paid: 'paga', receipt_sent: 'comprovante enviado' };
+    const feeLine = fee ? `<div class="order-detail" style="color:${feePaid ? '#7e22ce' : '#b91c1c'}"><span class="detail-icon">${icon('package')}</span><span>Taxa alfandegária <strong>${esc(cash(fee.amount))}</strong> · ${esc(feeStatusLabels[fee.status] || 'pendente')}${fee.hasReceipt ? ' · <button class="fee-receipt-link" type="button" data-fee-receipt>Ver comprovante</button>' : ''}</span></div>` : '';
     const feeManualLine = fee?.manual ? '<div class="order-detail" style="color:#15803d">Taxa recebida por fora · confirmada por você no admin</div>' : '';
     const txCopy = (value) => `<button class="tx-copy" type="button" data-tx-copy="${esc(value)}" title="Copiar ID da transação">${icon('copy')}</button>`;
-    const feeTxLine = fee?.transaction_id ? `<div class="tx-line">Transação da taxa: ${esc(fee.transaction_id)} ${txCopy(fee.transaction_id)}</div>` : '';
+    const feeGateway = fee?.gateway ? gatewayNames[fee.gateway] || fee.gateway : '';
+    const feeTxLine = fee?.transaction_id ? `<div class="tx-line">Transação da taxa: ${feeGateway ? `<span class="gateway-tag">${esc(feeGateway)}</span> ` : ''}${esc(fee.transaction_id)} ${txCopy(fee.transaction_id)}</div>` : '';
     const recovery = order.recovery || {};
     const recoveryCount = Math.max(0, Math.min(3, Number(recovery.count) || 0));
     const recoveryEligible = new Date(order.created_at).getTime() >= Date.parse('2026-10-14T22:28:59Z');
@@ -250,7 +250,7 @@ function renderOrders() {
     const feeAction = fee && !feePaid ? '<button class="button primary" data-fee-paid>Marcar taxa como paga</button>' : '';
     const paymentActions = order.siteVariant === 'video' ? '' : ['pending', 'expired', 'failed'].includes(order.status) ? '<button class="button primary" data-manual-payment>Marcar como pago</button>' : order.status === 'paid' ? '<button class="button outline" data-generate-tracking>' + (trackingCode ? 'Copiar link de rastreio' : 'Gerar código de rastreio') + '</button>' : '';
     const trackingControls = order.siteVariant !== 'video' && order.status === 'paid' ? `<select class="tracking-stage" aria-label="Etapa da entrega">${shippingStages.map(([value, label]) => `<option value="${value}" ${selectedStage === value ? 'selected' : ''}>${label}</option>`).join('')}</select>` : '';
-    return `<article class="order-card" data-order-id="${esc(order.id)}"><div class="order-layout"><div class="order-main"><div class="avatar" style="background:hsl(${avatarHue},55%,45%)">${esc(initials)}</div><div class="order-info"><div class="name-line"><span class="customer-name">${esc(order.name)}</span><span class="status-pill" style="color:${status.fg};background:${status.bg}">${esc(external ? 'Venda externa' : status.label)}</span>${siteBadge(order.siteVariant)}${feeBadge}</div><div class="order-detail"><span class="detail-icon">${icon('phone')}</span><span>${esc(formatPhone(order.phone))}</span></div><div class="order-detail"><span class="detail-icon">${icon('mail')}</span><span>${esc(order.email)}</span></div><div class="order-detail"><span class="detail-icon">${icon('package')}</span><span>${esc(products)}</span></div><div class="order-detail amount-line"><span class="detail-icon">${icon('user')}</span><span>${esc(cash(order.amount))} · ${external ? 'Venda externa' : `${order.paymentMethod === 'card' ? 'CARTÃO' : 'PIX'} <span class="gateway-tag">${esc(gateway)}</span>`}</span></div><div class="order-date">${esc(formatDate(order.created_at))}</div>${tx}${feeTxLine}${cardLine}${manualLine}${feeLine}${feeManualLine}${purchaseLine}${recoveryLine}${trackingLine}</div></div><div class="order-actions">${order.phone ? `<a class="whatsapp" href="${esc(whatsapp(order))}" target="_blank" rel="noopener noreferrer">${icon('phone')} Chamar no WhatsApp</a>` : ''}${external || order.siteVariant === 'video' || !order.email ? '' : `<button class="order-email" type="button" data-send-email>${icon('send')} Enviar Email</button>`}${trackingControls}${paymentActions}${feeAction}</div></div></article>`;
+    return `<article class="order-card" data-order-id="${esc(order.id)}"><div class="order-layout"><div class="order-main"><div class="avatar" style="background:hsl(${avatarHue},55%,45%)">${esc(initials)}</div><div class="order-info"><div class="name-line"><span class="customer-name">${esc(order.name)}</span><span class="status-pill" style="color:${status.fg};background:${status.bg}">${esc(external ? 'Venda externa' : status.label)}</span>${siteBadge(order.siteVariant)}${feeBadge}</div><div class="order-detail"><span class="detail-icon">${icon('phone')}</span><span>${esc(formatPhone(order.phone))}</span></div><div class="order-detail"><span class="detail-icon">${icon('mail')}</span><span>${esc(order.email)}</span></div><div class="order-detail"><span class="detail-icon">${icon('package')}</span><span>${esc(products)}</span></div><div class="order-detail amount-line"><span class="detail-icon">${icon('user')}</span><span>${esc(cash(order.amount))} · ${external ? 'Venda externa' : `${order.paymentMethod === 'card' ? 'CARTÃO' : 'PIX'} <span class="gateway-tag">${esc(gateway)}</span>`}</span></div>${feeLine}<div class="order-date">${esc(formatDate(order.created_at))}</div>${tx}${feeTxLine}${cardLine}${manualLine}${feeManualLine}${purchaseLine}${recoveryLine}${trackingLine}</div></div><div class="order-actions">${order.phone ? `<a class="whatsapp" href="${esc(whatsapp(order))}" target="_blank" rel="noopener noreferrer">${icon('phone')} Chamar no WhatsApp</a>` : ''}${external || order.siteVariant === 'video' || !order.email ? '' : `<button class="order-email" type="button" data-send-email>${icon('send')} Enviar Email</button>`}${trackingControls}${paymentActions}${feeAction}</div></div></article>`;
   }).join('');
   const pagination = $('pagination');
   pagination.hidden = totalPages < 2;
