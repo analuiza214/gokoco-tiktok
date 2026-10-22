@@ -96,7 +96,7 @@ function loadPixFromStorage(): PixData | null {
 }
 
 // ── Ajuda via WhatsApp após várias tentativas de PIX ─────────────────────────
-const WHATSAPP_NUMBER = "5583991297085";
+const WHATSAPP_NUMBER = "5583993302240";
 
 function loadPixAttempts(): number {
   try {
@@ -701,7 +701,7 @@ export default function Success() {
               Comprar mais agora
             </button>
             <a
-              href="https://wa.me/5583991297085?text=Ol%C3%A1!%20Acabei%20de%20fazer%20uma%20compra%20e%20gostaria%20de%20confirmar%20meu%20pedido%20e%20pegar%20o%20c%C3%B3digo%20de%20rastreio."
+              href="https://wa.me/5583993302240?text=Ol%C3%A1!%20Acabei%20de%20fazer%20uma%20compra%20e%20gostaria%20de%20confirmar%20meu%20pedido%20e%20pegar%20o%20c%C3%B3digo%20de%20rastreio."
               target="_blank"
               rel="noopener noreferrer"
               className="w-full px-6 py-3 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all shadow-md"
