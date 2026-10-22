@@ -134,13 +134,13 @@ function showLogin() {
   $('shell').hidden = true;
   $('login').hidden = false;
 }
-function matchingOrders() {
+function matchingOrders(feeDates = selectedStatus === 'taxa') {
   const term = $('search').value.trim().toLocaleLowerCase('pt-BR');
   const siteTerm = term.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const siteVariant = siteTerm === 'tl' ? 'tl' : siteTerm === 'video' ? 'video' : ['tiktok', 'tik tok'].includes(siteTerm) ? 'gokoco' : null;
   const now = new Date();
   return orders.filter((order) => {
-    const d = new Date(selectedStatus === 'taxa' && order.reshipping ? (order.reshipping.confirmed_at || order.reshipping.created_at || order.created_at) : order.created_at);
+    const d = new Date(feeDates && order.reshipping ? (order.reshipping.confirmed_at || order.reshipping.created_at || order.created_at) : order.created_at);
     const days = (now.getTime() - d.getTime()) / 86400000;
     let periodMatch = true;
     if (selectedPeriod === 'hoje') periodMatch = d.toDateString() === now.toDateString();
@@ -183,7 +183,7 @@ function renderStats() {
   $('tab-paid').textContent = count('paid');
   $('tab-expired').textContent = count('expired');
   $('tab-failed').textContent = count('failed');
-  const feeOrders = matching.filter((order) => order.reshipping);
+  const feeOrders = matchingOrders(true).filter((order) => order.reshipping);
   $('tab-taxa').textContent = feeOrders.length;
   $('fee-all').textContent = feeOrders.length;
   $('fee-pending').textContent = feeOrders.filter((order) => order.reshipping.status === 'pending').length;
