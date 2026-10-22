@@ -23,7 +23,6 @@ jobs:
           VITE_GTM_ID: ${{ secrets.VITE_GTM_ID }}
           VITE_GA_ID: ${{ secrets.VITE_GA_ID }}
           VITE_UTMIFY_PIXEL_ID: ${{ secrets.VITE_UTMIFY_PIXEL_ID }}
-          VITE_SUPPORT_WHATSAPP: ${{ secrets.VITE_SUPPORT_WHATSAPP }}
           VITE_SUPPORT_EMAIL: ${{ secrets.VITE_SUPPORT_EMAIL }}
       - name: Publicar no Cloudflare Pages
         uses: cloudflare/wrangler-action@v4

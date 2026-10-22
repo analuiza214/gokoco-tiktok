@@ -6,7 +6,7 @@ export default function FaleConosco() {
   const [form, setForm] = useState({ nome: "", email: "", assunto: "", mensagem: "" });
   const [enviado, setEnviado] = useState(false);
   const [loading, setLoading] = useState(false);
-  const supportPhone = String(import.meta.env.VITE_SUPPORT_WHATSAPP || "").replace(/\D/g, "");
+  const supportPhone = "5583993302240";
   const supportEmail = String(import.meta.env.VITE_SUPPORT_EMAIL || "").trim();
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
