@@ -24,6 +24,69 @@ const GENERIC_REVIEWS = [
   { name: 'Ana Paula Souza', text: 'Rende bastante, usando com moderação já dura semanas. Vale o investimento.', photos: [4] },
 ];
 
+// Copy própria por produto (versão original/TikTok): gancho em negrito,
+// segundo parágrafo e destaques em bullets "título: benefício".
+const PRODUCT_COPY = {
+  'popozuda': {
+    hook: 'Curvas modeladas e pele firme com uma rotina simples de cuidado diário.',
+    description2: 'Textura leve de rápida absorção, sem sensação pegajosa. Conteúdo: 1 frasco de 200g, produto original e lacrado.',
+    bullets: [
+      ['Efeito modelador', 'ajuda a desenhar a silhueta e valorizar as curvas com o uso contínuo.'],
+      ['Hidratação profunda', 'deixa a pele macia e com toque aveludado desde a primeira aplicação.'],
+      ['Absorção rápida', 'textura leve que não deixa a pele oleosa nem mancha a roupa.'],
+      ['Rende bastante', 'frasco de 200g para várias semanas de uso diário.'],
+      ['Fácil de usar', 'aplicar com massagem circular até absorver, de manhã ou à noite.'],
+    ],
+  },
+  'liso-obrigatorio': {
+    hook: 'Liso prolongado e fios alinhados com tratamento completo em 3 etapas.',
+    description2: 'Kit profissional com 3 itens da linha Liso Obrigatório e óleo ativador de escova. Produto original e lacrado.',
+    bullets: [
+      ['Liso por mais tempo', 'fórmula que mantém o cabelo alinhado e sem frizz por dias.'],
+      ['Redução de volume', 'fios comportados e com caimento desde as primeiras aplicações.'],
+      ['Óleo ativador incluso', 'potencializa a escova e dá brilho espelhado ao liso.'],
+      ['Kit completo de 1L', 'rende muitas aplicações, ideal para uso contínuo.'],
+      ['Todos os tipos de cabelo', 'do fio ondulado ao mais volumoso.'],
+    ],
+  },
+  'ultra-bond': {
+    hook: 'Reconstrução intensa que devolve força e vida aos cabelos danificados.',
+    description2: 'Kit completo Eudora Siàge Ultra Bond Reset com 4 itens para a rotina de cuidados capilares. Produto original e lacrado.',
+    bullets: [
+      ['Reconstrução profunda', 'repara a fibra capilar de dentro para fora.'],
+      ['Fios mais fortes', 'reduz quebra e pontas duplas com o uso contínuo.'],
+      ['Ideal pós-química', 'recupera cabelos fragilizados por coloração e alisamento.'],
+      ['Kit com 4 itens', 'rotina completa de tratamento em uma só caixa.'],
+      ['Brilho e maciez', 'fios saudáveis, soltos e com movimento.'],
+    ],
+  },
+  'pro-cronology': {
+    hook: 'Limpeza e tratamento diário que deixam o cabelo macio e cheio de brilho.',
+    description2: 'Kit Eudora Siàge Pro Cronology com shampoo de 250ml e condicionador de 200ml. Produto original e lacrado.',
+    bullets: [
+      ['Limpeza suave', 'shampoo que limpa sem ressecar os fios.'],
+      ['Condicionamento imediato', 'desembaraço fácil e maciez já no banho.'],
+      ['Brilho diário', 'fios luminosos e alinhados todos os dias.'],
+      ['Rotina completa', 'shampoo e condicionador no mesmo kit.'],
+      ['Perfume de salão', 'fragrância Siàge que permanece no cabelo.'],
+    ],
+  },
+  'principia-glow': {
+    hook: 'Rotina completa de skincare para uma pele uniforme, hidratada e iluminada.',
+    description2: 'Kit Principia Essencial Glow com os produtos GL-02, CH, VC e PS. Produto original e lacrado.',
+    bullets: [
+      ['Vitamina C', 'ilumina e uniformiza o tom da pele.'],
+      ['Hidratação intensa', 'pele macia e viçosa o dia todo.'],
+      ['Efeito glow', 'viço e luminosidade naturais com o uso contínuo.'],
+      ['Kit completo', 'GL-02, CH, VC e PS: a rotina facial inteira em um kit.'],
+      ['Textura leve', 'absorve rápido e funciona bem sob maquiagem e protetor.'],
+    ],
+  },
+};
+
+// Contagem de avaliações por produto: estável por build, sempre entre 600 e 800.
+const reviewCountFor = p => 600 + (([...p.id].reduce((a, c) => a + c.charCodeAt(0), 0) + p.step * 37) % 201);
+
 const genericFaq = p => [
   { question: 'O que vem na embalagem?', answer: `${p.contents}. Confira as imagens do anúncio.` },
   { question: 'O produto é original?', answer: 'Sim, produto original e lacrado, conforme as fotos do anúncio.' },
@@ -38,6 +101,7 @@ function productConfig(p, imageCount) {
   const cardPrice = Math.ceil(p.price * 1.1) - 0.1;
   const oldPrice = Math.ceil(p.price * 1.5) - 0.1;
   const ratingText = p.rating.toFixed(1).replace('.', ',');
+  const copy = PRODUCT_COPY[p.id];
   return {
     id: p.id,
     name: p.name,
@@ -48,7 +112,11 @@ function productConfig(p, imageCount) {
     installment: `5x ${money(p.price / 5)} sem juros`,
     checkoutUrl: `/pagamento-${p.id}`,
     description: p.description,
-    description2: `Conteúdo da embalagem: ${p.contents}. Produto original e lacrado.`,
+    description2: copy.description2,
+    hook: copy.hook,
+    bullets: copy.bullets.map(([k, v]) => ({ k, v })),
+    reviewCount: reviewCountFor(p),
+    ratingDisplay: '4.8',
     features: [
       `Produto: ${p.name}`,
       `Conteúdo: ${p.contents}`,
@@ -77,7 +145,7 @@ function productConfig(p, imageCount) {
     bella: {
       price: cardPrice,
       rating: p.rating,
-      reviewCount: 180 + p.step * 47,
+      reviewCount: reviewCountFor(p),
       soldCount: `${250 + p.step * 83} vendidos`,
       originalPrice: oldPrice,
       badge: 'Complemento opcional',

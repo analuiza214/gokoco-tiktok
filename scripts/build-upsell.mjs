@@ -117,8 +117,9 @@ function marketTemplate(source, product = PRODUCT, photos = PHOTOS, videos = [])
   if (videos.length) {
     source = source.replace(/const testimonialVideos = [^\n]*;/,
       `const testimonialVideos = ${JSON.stringify(videos.slice(0, 4))};`);
-    source = source.replace(/poster=\{img\(`[^`]*`\)\}/,
-      `poster={${JSON.stringify(photos)}[i % ${photos.length}]}`);
+    // Thumb real: o primeiro frame do próprio vídeo (sem poster), formato UGC.
+    source = source.replace(/ poster=\{img\(`[^`]*`\)\}/, '')
+      .replaceAll('preload="none"', 'preload="metadata"');
   }
   // Mesma quantidade de avaliações do template original — só muda o conteúdo.
   const reviews = product.reviews.map((r) => ({ name: r.name, initials: initials(r.name), text: r.text, photos: r.photos }));
@@ -235,11 +236,21 @@ function buildOriginal(product = PRODUCT, photos = PHOTOS, videos = [], key = 'o
   original = original.replace(/src="\/images\/f2\/[^" ]+"/g, () => `src="${photos[photoIndex++ % photos.length]}"`)
     .replace(/href="\/images\/f2\/[^" ]+"/g, () => `href="${photos[preloadIndex++ % photos.length]}"`);
   if (videos.length) {
-    // Vídeos reais do produto nos cards de criadores; thumbs viram fotos do produto.
+    // Vídeos reais do produto nos cards de criadores; a thumb é o primeiro
+    // frame do próprio vídeo (preload=metadata + #t), formato UGC do original.
     let videoIndex = 0;
-    original = original.replace(/data-vid="[^"]*"/g, () => `data-vid="${videos[videoIndex++ % videos.length]}"`);
-    original = original.replace(/src="\/images\/criadores\/[^" ]+"/g, () => `src="${photos[photoIndex++ % photos.length]}"`)
+    original = original.replace(/data-vid="[^"]*"><img src="\/images\/criadores\/[^" ]+"[^>]*>/g,
+      () => {
+        const v = videos[videoIndex++ % videos.length];
+        return `data-vid="${v}"><video src="${v}#t=0.6" muted playsinline preload="metadata" class="w-full aspect-[9/16] object-cover opacity-95" style="pointer-events:none" tabindex="-1" aria-hidden="true"></video>`;
+      })
       .replace('Rotina com a escova', 'Rotina com o produto');
+  }
+  if (product.reviewCount) {
+    // Contagem/nota de avaliações próprias por produto.
+    original = original.replaceAll('722 avaliações', `${product.reviewCount} avaliações`)
+      .replaceAll('(722)', `(${product.reviewCount})`)
+      .replaceAll('>4.6<', `>${product.ratingDisplay ?? '4.8'}<`);
   }
   original = original.replaceAll('gokoco_escova', `gokoco_${product.id}`);
   // Modal de opção: mesma estrutura, uma opção só.
@@ -262,7 +273,7 @@ function buildOriginal(product = PRODUCT, photos = PHOTOS, videos = [], key = 'o
         .replace(/(<div class="mt-2 grid[^>]*>)[\s\S]*?(<\/div><div class="my-3)/,
           `$1${product.specRows.map(([k, v]) => `<div>${k}</div><div>${v}</div>`).join('')}$2`)
         .replace(/(<div class="mt-2 text-\[13px\][^>]*>)[\s\S]*?(<\/section>)/,
-          `$1<h3 class="text-[14px] font-bold mt-2">${product.name}</h3><p class="mt-2">${product.description}</p><h3 class="text-[13px] font-bold mt-3">Destaques do Produto:</h3>${product.features.map((f) => '<p class="mt-2">' + f + '</p>').join('')}</div>$2`);
+          `$1<h3 class="text-[14px] font-bold mt-2">${product.name}</h3>${product.hook ? `<p class="mt-2"><strong>${product.hook}</strong></p>` : ''}<p class="mt-2">${product.description}</p>${product.bullets ? `<p class="mt-2">${product.description2}</p>` : ''}<h3 class="text-[13px] font-bold mt-3">Destaques do Produto:</h3>${product.bullets ? product.bullets.map((b) => `<div class="flex gap-1.5"><span class="text-[color:var(--pann-primary)] mt-0.5">•</span><span><strong>${b.k}:</strong> ${b.v}</span></div>`).join('') : product.features.map((f) => '<p class="mt-2">' + f + '</p>').join('')}</div>$2`);
     }
     return section;
   });
