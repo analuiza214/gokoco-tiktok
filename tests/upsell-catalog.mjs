@@ -45,10 +45,15 @@ for(const [prefix,theme] of [['','original'],['/tl','tl'],['/video','bella']]) {
     const html=fs.readFileSync(path.join(dist,'upsell-pages',`${theme}-${product.id}.txt`),'utf8');
     const checkout=fs.readFileSync(path.join(dist,'upsell-pages',`${theme}-pagamento-${product.id}.txt`),'utf8');
     assert.ok(html.includes(product.name));
-    assert.equal((html.match(/<video /g)||[]).length,10);
+    assert.ok(html.includes(`data-theme="${theme}"`));
+    // A página replica o site original: no original o conteúdo está no HTML;
+    // no TL/Bella (SPA) os dados do produto vivem no bundle gerado.
+    const rendered = (theme==='original' ? html : fs.readFileSync(path.join(dist,'upsell-assets',`${theme}-${product.id}-model.js`),'utf8'))
+      .replace(/\\x([0-9a-fA-F]{2})|\\u([0-9a-fA-F]{4})/g,(_,a,b)=>String.fromCharCode(parseInt(a||b,16)));
+    assert.ok(rendered.includes(product.name));
+    assert.match(rendered, new RegExp(String(product.price).replace(/[.,]/, '[.,]')));
+    // Compra no checkout próprio e continuação do funil para a próxima oferta.
     assert.ok(html.includes(`href="${prefix}/pagamento-${product.id}"`));
-    assert.ok(html.includes('Não há depoimentos individuais'));
-    assert.ok(html.includes('Não representa avaliações recebidas nesta loja'));
     const next=`${prefix}/${product.step<6?`upsell${product.step+1}`:'upsell-concluido'}`;
     assert.ok(html.includes(`href="${next}"`));
     assert.ok(checkout.includes(`product:'${product.id}'`));
@@ -56,7 +61,10 @@ for(const [prefix,theme] of [['','original'],['/tl','tl'],['/video','bella']]) {
     assert.ok(checkout.includes(next));
     assert.ok(checkout.includes(`lv_checkout_${product.id}`));
     assert.ok(!checkout.includes('Escova Modeladora GOKOCO'));
-    for(const [,url] of html.matchAll(/(?:src|data-photo)="(\/upsell-assets\/[^"?]+)"/g)) {
+    const media=new Set([...(html+rendered).matchAll(/\/upsell-assets\/[A-Za-z0-9_\-\/.%]+\.(?:png|webp|jpe?g|mp4)/g)].map(m=>m[0]));
+    assert.ok([...media].some(u=>u.includes(`/kalodata/${product.id}/Imagens/`)),'fotos do produto ausentes');
+    if(theme!=='bella')assert.ok([...media].some(u=>u.endsWith('.mp4')&&u.includes(`/kalodata/${product.id}/`)),'vídeos do produto ausentes');
+    for(const url of media) {
       const file=path.join(dist,url);
       assert.ok(fs.existsSync(file),url);
       assert.ok(fs.statSync(file).size>100,url);

@@ -41,6 +41,18 @@ const PRODUCT = {
     ['Garantia', 'Conforme política do site'],
   ],
   variant: { name: 'Kit completo', file: 'hero.svg', swatch: '#eadbca' },
+  // Rótulos usados nas substituições dos templates originais.
+  optLabel: 'KIT COMPLETO',
+  optionLabel: 'Opção do kit',
+  optionPhrase: 'a opção do kit',
+  optionShort: 'Opção',
+  askAbout: 'o kit',
+  exampleQuestion: 'Ex.: Quantos pincéis vêm no kit?',
+  rankBadge: '1º em Pincéis e Acessórios',
+  matchLabel: 'Pincéis',
+  slug: 'kit-pinceis-profissional',
+  // Dados exibidos só na versão Bella Mix (produto injetado em lib/data.ts).
+  bella: { price: 32.90, rating: 4.9, reviewCount: 582, soldCount: '693 vendidos' },
   faq: [
     { question: 'Quantos pincéis vêm no kit?', answer: 'O kit completo acompanha os pincéis essenciais para rosto, olhos e acabamento.' },
     { question: 'As cerdas são sintéticas?', answer: 'Sim, cerdas sintéticas macias e densas, fáceis de limpar.' },
@@ -69,7 +81,7 @@ const photoNames = ['hero', 'hand', 'counter', 'routine'];
 for (const name of photoNames) {
   fs.writeFileSync(path.join(assets, `${name}.svg`), '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600"></svg>');
 }
-const photos = photoNames.map((name) => `/upsell-assets/${name}.svg`);
+const PHOTOS = photoNames.map((name) => `/upsell-assets/${name}.svg`);
 const spriteCss = `
 img[src*="/upsell-assets/"][src$=".svg"]{background-image:url('/upsell-assets/kit-editorial.png');background-size:200% 200%;background-repeat:no-repeat;background-position:0 0;background-color:#fff}
 img[src$="/hand.svg"]{background-position:100% 0!important}img[src$="/counter.svg"]{background-position:0 100%!important}img[src$="/routine.svg"]{background-position:100% 100%!important}
@@ -88,49 +100,57 @@ function replaceBetween(source, start, end, replacement) {
 const initials = (name) => name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
 
 /* ---------------------------------------------------------------- TL (Mercado) */
-function marketTemplate(source) {
+function marketTemplate(source, product = PRODUCT, photos = PHOTOS, videos = []) {
   source = replaceBetween(source, 'const BRUSH_COLORS = [', '] as const;',
-    `const BRUSH_COLORS = [{name:'${PRODUCT.variant.name}',file:'${PRODUCT.variant.file}',swatch:'${PRODUCT.variant.swatch}'}`);
+    `const BRUSH_COLORS = [${JSON.stringify(product.variant)}`);
   source = replaceBetween(source, 'function answerProductQuestion(', '\nexport default function',
-    `function answerProductQuestion(question: string): string { return ${JSON.stringify(PRODUCT.description)} }\n`);
-  // Compra sai da SPA e vai pro checkout PIX compartilhado do pincel.
+    `function answerProductQuestion(question: string): string { return ${JSON.stringify(product.description)} }\n`);
+  // Compra sai da SPA e vai pro checkout PIX do produto.
   source = replaceFunction(source, 'handleFinalizarCompra',
-    `setShowCart(false); window.location.assign(${JSON.stringify(PRODUCT.checkoutUrl)});`);
+    `setShowCart(false); window.location.assign(${JSON.stringify(product.checkoutUrl)});`);
+  const slideItems = photos.map((src) => ({ type: 'image', src }));
+  if (videos.length) slideItems.push({ type: 'video', src: videos[0] });
   source = replaceBetween(source, '  const slides: SlideItem[] = [', '\n  function goToSlide',
-    `  const slides: SlideItem[] = ${JSON.stringify(photos.map((src) => ({ type: 'image', src })))};\n`);
+    `  const slides: SlideItem[] = ${JSON.stringify(slideItems)};\n`);
   source = source.replace(/const reviewPhotos = .*?;/,
     `const reviewPhotos = ${JSON.stringify(photos)};`);
+  if (videos.length) {
+    source = source.replace(/const testimonialVideos = [^\n]*;/,
+      `const testimonialVideos = ${JSON.stringify(videos.slice(0, 4))};`);
+    source = source.replace(/poster=\{img\(`[^`]*`\)\}/,
+      `poster={${JSON.stringify(photos)}[i % ${photos.length}]}`);
+  }
   // Mesma quantidade de avaliações do template original — só muda o conteúdo.
-  const reviews = PRODUCT.reviews.map((r) => ({ name: r.name, initials: initials(r.name), text: r.text, photos: r.photos }));
+  const reviews = product.reviews.map((r) => ({ name: r.name, initials: initials(r.name), text: r.text, photos: r.photos }));
   source = replaceBetween(source, '  const brushReviews = [', '\n  const reviewHelpfulCounts',
     `  const brushReviews = ${JSON.stringify(reviews)};\n`);
   const faqCount = (source.match(/question:/g) || []).length;
-  const faqs = Array.from({ length: faqCount }, (_, i) => PRODUCT.faq[i % PRODUCT.faq.length]);
+  const faqs = Array.from({ length: faqCount }, (_, i) => product.faq[i % product.faq.length]);
   source = replaceBetween(source, '  const commonQuestions = [', '\n  return (',
     `  const commonQuestions = ${JSON.stringify(faqs)};`);
   source = replaceBetween(source, "            ['Produto',", '          ].map(([k, v]',
-    `            ${PRODUCT.specRows.map((x) => JSON.stringify(x)).join(',\n')},\n`);
-  source = replaceBetween(source, '          A Escova Modeladora GOKOCO 3 em 1 alisa', '\n        </p>', '          ' + PRODUCT.description);
-  source = replaceBetween(source, '          O kit inclui escova modeladora', '\n        </p>', '          ' + PRODUCT.description2);
+    `            ${product.specRows.map((x) => JSON.stringify(x)).join(',\n')},\n`);
+  source = replaceBetween(source, '          A Escova Modeladora GOKOCO 3 em 1 alisa', '\n        </p>', '          ' + product.description);
+  source = replaceBetween(source, '          O kit inclui escova modeladora', '\n        </p>', '          ' + product.description2);
   source = replaceBetween(source, "            'Produto: 1 Escova Modeladora", '          ].map((item)',
-    `            ${PRODUCT.features.map((x) => JSON.stringify(x)).join(',\n')},\n`);
+    `            ${product.features.map((x) => JSON.stringify(x)).join(',\n')},\n`);
   source = source.replace(/img\(`\/images\/escova\/cores\/\$\{[^}]+\}[^`]*`\)/g, JSON.stringify(photos[0]));
-  source = source.replace(/alt=\{i === 0 \?[\s\S]*?: 'Detalhe da Escova GOKOCO'\}/, `alt="${PRODUCT.name}"`);
-  source = source.replaceAll('Kit 3 em 1 - Escova Modeladora GOKOCO Bivolt', PRODUCT.name)
-    .replaceAll('Escova Modeladora GOKOCO 3 em 1', PRODUCT.name)
-    .replaceAll('R$ 37,90', PRODUCT.priceText).replaceAll('37.90', String(PRODUCT.price))
-    .replaceAll('>37<', '>29<').replaceAll('5x R$ 7,58 sem juros', PRODUCT.installment)
-    .replaceAll('1º em Álbuns Copa do Mundo', '1º em Pincéis e Acessórios')
-    .replaceAll('Pergunte sobre a escova', 'Pergunte sobre o kit')
-    .replaceAll('Ex.: A escova é bivolt?', 'Ex.: Quantos pincéis vêm no kit?')
-    .replaceAll('Escolha a cor da escova', 'Escolha a opção do kit')
-    .replaceAll('Cor da escova', 'Opção do kit').replaceAll('>Cor:', '>Opção:')
-    .replaceAll('gokoco_escova', 'gokoco_pincel');
+  source = source.replace(/alt=\{i === 0 \?[\s\S]*?: 'Detalhe da Escova GOKOCO'\}/, `alt="${product.name}"`);
+  source = source.replaceAll('Kit 3 em 1 - Escova Modeladora GOKOCO Bivolt', product.name)
+    .replaceAll('Escova Modeladora GOKOCO 3 em 1', product.name)
+    .replaceAll('R$ 37,90', product.priceText).replaceAll('37.90', String(product.price))
+    .replaceAll('>37<', `>${Math.trunc(product.price)}<`).replaceAll('5x R$ 7,58 sem juros', product.installment)
+    .replaceAll('1º em Álbuns Copa do Mundo', product.rankBadge)
+    .replaceAll('Pergunte sobre a escova', `Pergunte sobre ${product.askAbout}`)
+    .replaceAll('Ex.: A escova é bivolt?', product.exampleQuestion)
+    .replaceAll('Escolha a cor da escova', `Escolha ${product.optionPhrase}`)
+    .replaceAll('Cor da escova', product.optionLabel).replaceAll('>Cor:', `>${product.optionShort}:`)
+    .replaceAll('gokoco_escova', `gokoco_${product.id}`);
   return source;
 }
 
 /* ----------------------------------------------- Bundles TL + Bella (React) --- */
-async function bundleVariant(variant) {
+async function bundleVariant(variant, { product = PRODUCT, photos = PHOTOS, videos = [], key = variant, sprite = spriteCss } = {}) {
   const market = variant === 'tl';
   const site = path.join(root, 'sites', market ? 'mercado' : 'bella');
   const siteBase = market ? '/tl/' : '/video/';
@@ -142,7 +162,7 @@ async function bundleVariant(variant) {
     stdin: { contents: entry, loader: 'tsx', resolveDir: site },
     absWorkingDir: site, bundle: true, format: 'esm', platform: 'browser',
     jsx: 'automatic', target: 'es2022', minify: true,
-    outfile: path.join(assets, `${variant}-model.js`),
+    outfile: path.join(assets, `${key}-model.js`),
     define: { 'import.meta.env.BASE_URL': JSON.stringify(siteBase), 'process.env.NODE_ENV': '"production"' },
     plugins: [{
       name: 'upsell-template-sandbox', setup(b) {
@@ -155,29 +175,30 @@ async function bundleVariant(variant) {
           // O carrinho da SPA não é usado: a compra vai pro checkout externo do pincel.
           if (rel.endsWith('hooks/use-cart.tsx')) code = 'export function useCart(){return {items:[],itemCount:0,total:0,addItem(){},removeItem(){},updateQuantity(){},clearCart(){}}}';
           else if (rel.endsWith('lib/data.ts') && !market) {
-            const pincel = {
-              id: 'bella-pincel', slug: 'kit-pinceis-profissional', name: PRODUCT.name,
-              price: 32.90, pixPrice: PRODUCT.price, installment: PRODUCT.installment,
-              rating: 4.9, reviewCount: 582, soldCount: '693 vendidos',
-              description: PRODUCT.description, mainImage: photos[0], gallery: photos,
-              features: PRODUCT.features,
-              productReviews: PRODUCT.reviews.map((r, i) => ({
+            const item = {
+              id: `bella-${product.id}`, slug: product.slug, name: product.name,
+              price: product.bella.price, pixPrice: product.price, installment: product.bella.installment ?? product.installment,
+              rating: product.bella.rating, reviewCount: product.bella.reviewCount, soldCount: product.bella.soldCount,
+              originalPrice: product.bella.originalPrice, badge: product.bella.badge,
+              description: product.description, mainImage: photos[0], gallery: photos,
+              features: product.features,
+              productReviews: product.reviews.map((r, i) => ({
                 id: i + 1, author: r.name, name: r.name, initials: initials(r.name),
                 rating: 5, text: r.text, photo: photos[(r.photos[0] - 1) % photos.length],
                 photos: r.photos.map((n) => photos[(n - 1) % photos.length]),
               })),
             };
-            code = code.replace('export const products: Product[] = [', 'export const products: Product[] = [' + JSON.stringify(pincel) + ',');
+            code = code.replace('export const products: Product[] = [', 'export const products: Product[] = [' + JSON.stringify(item) + ',');
           }
           else if (rel.endsWith('lib/utils.ts')) code = code.replace('`${import.meta.env.BASE_URL}${path.startsWith', 'path.startsWith("/upsell-assets/") ? path : `${import.meta.env.BASE_URL}${path.startsWith');
           else if (rel.endsWith('lib/img.ts')) code = code.replace('return `${', 'if(path.startsWith("/upsell-assets/"))return path;return `${');
-          else if (rel.endsWith('pages/product-page.tsx') && market) code = marketTemplate(code);
+          else if (rel.endsWith('pages/product-page.tsx') && market) code = marketTemplate(code, product, photos, videos);
           else if (rel.endsWith('pages/product.tsx') && !market) {
             code = code.replace('const product = products.find(p => p.slug === slug);', 'const product = products[0];');
             code = code.replace(/  const handleBuyNow = \(\) => \{[\s\S]*?\n  \};/,
-              `  const handleBuyNow = () => { fireAddToCart(quantity); window.location.assign(${JSON.stringify(PRODUCT.checkoutUrl)}); };`);
+              `  const handleBuyNow = () => { fireAddToCart(quantity); window.location.assign(${JSON.stringify(product.checkoutUrl)}); };`);
             code = code.replace(/  const handleAddToCart = \(e: React.MouseEvent<HTMLButtonElement>\) => \{[\s\S]*?\n  \};/,
-              `  const handleAddToCart = () => { fireAddToCart(quantity); window.location.assign(${JSON.stringify(PRODUCT.checkoutUrl)}); };`);
+              `  const handleAddToCart = () => { fireAddToCart(quantity); window.location.assign(${JSON.stringify(product.checkoutUrl)}); };`);
           }
           return { contents: code, loader: file.endsWith('tsx') ? 'tsx' : 'ts', resolveDir: path.dirname(file) };
         });
@@ -187,83 +208,92 @@ async function bundleVariant(variant) {
   // Head e body 100% iguais ao site original (fontes, pixels, meta): só troca
   // o entry point, o título e marca como noindex.
   let html = distHtml
-    .replace(/<script type="module" crossorigin src="[^"]*assets\/index-[^"]*\.js"><\/script>/, `<script type="module" crossorigin src="/upsell-assets/${variant}-model.js"></script>`)
-    .replace(/<title>[^<]*<\/title>/, `<title>${PRODUCT.name}${market ? '' : ' | Bella Mix'}</title>`)
+    .replace(/<script type="module" crossorigin src="[^"]*assets\/index-[^"]*\.js"><\/script>/, `<script type="module" crossorigin src="/upsell-assets/${key}-model.js"></script>`)
+    .replace(/<title>[^<]*<\/title>/, `<title>${product.name}${market ? '' : ' | Bella Mix'}</title>`)
     .replace(/<meta name="robots" content="[^"]*"\s*\/?>/, '<meta name="robots" content="noindex, nofollow" />')
-    .replace(/<meta name="description" content="[^"]*"\s*\/?>/, `<meta name="description" content="${PRODUCT.name} por ${PRODUCT.priceText}." />`)
-    .replace(/<meta property="og:title" content="[^"]*"\s*\/?>/, `<meta property="og:title" content="${PRODUCT.name}" />`)
-    .replace(/<meta property="og:description" content="[^"]*"\s*\/?>/, `<meta property="og:description" content="${PRODUCT.name} por ${PRODUCT.priceText}." />`)
-    .replace(/<meta name="twitter:title" content="[^"]*"\s*\/?>/, `<meta name="twitter:title" content="${PRODUCT.name}" />`)
-    .replace(/<meta name="twitter:description" content="[^"]*"\s*\/?>/, `<meta name="twitter:description" content="${PRODUCT.name} por ${PRODUCT.priceText}." />`)
-    .replace('<body>', `<body data-theme="${variant}">`)
-    .replace('</head>', `<style>${spriteCss}</style></head>`);
-  fs.writeFileSync(path.join(pages, `${market ? 'tl' : 'bella'}.txt`), html);
+    .replace(/<meta name="description" content="[^"]*"\s*\/?>/, `<meta name="description" content="${product.name} por ${product.priceText}." />`)
+    .replace(/<meta property="og:title" content="[^"]*"\s*\/?>/, `<meta property="og:title" content="${product.name}" />`)
+    .replace(/<meta property="og:description" content="[^"]*"\s*\/?>/, `<meta property="og:description" content="${product.name} por ${product.priceText}." />`)
+    .replace(/<meta name="twitter:title" content="[^"]*"\s*\/?>/, `<meta name="twitter:title" content="${product.name}" />`)
+    .replace(/<meta name="twitter:description" content="[^"]*"\s*\/?>/, `<meta name="twitter:description" content="${product.name} por ${product.priceText}." />`)
+    .replace('<body>', `<body data-theme="${variant}">`);
+  if (sprite) html = html.replace('</head>', `<style>${sprite}</style></head>`);
+  fs.writeFileSync(path.join(pages, `${key}.txt`), html);
 }
 
 /* --------------------------------------------------------- Original (TikTok) */
-function buildOriginal() {
+function buildOriginal(product = PRODUCT, photos = PHOTOS, videos = [], key = 'original', sprite = spriteCss) {
   let original = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   original = original
-    .replace(/<title>[\s\S]*?<\/title>/, `<title>${PRODUCT.name} | Oferta</title>`)
-    .replace(/<h1\b([^>]*)>[\s\S]*?<\/h1>/, `<h1$1>${PRODUCT.name}</h1>`)
+    .replace(/<title>[\s\S]*?<\/title>/, `<title>${product.name} | Oferta</title>`)
+    .replace(/<h1\b([^>]*)>[\s\S]*?<\/h1>/, `<h1$1>${product.name}</h1>`)
     .replace(/<meta name="robots"[^>]*>/, '<meta name="robots" content="noindex,nofollow">');
   if (!original.includes('name="robots"')) original = original.replace('<head>', '<head><meta name="robots" content="noindex,nofollow">');
   original = original.replace('<body>', '<body data-theme="original">');
-  // Imagens do produto → assets do pincel (sprites já inseridos pelo Codex).
-  // Avatares de perfil e thumbs dos vídeos continuam os mesmos do site original.
-  let photoIndex = 0;
-  original = original.replace(/src="\/images\/f2\/[^" ]+"/g, () => `src="${photos[photoIndex++ % photos.length]}"`);
-  // Modal de opção: mesma estrutura, uma opção só (variantes reais vêm depois).
+  // Imagens do produto → assets próprios. Avatares de perfil continuam os mesmos.
+  let photoIndex = 0, preloadIndex = 0;
+  original = original.replace(/src="\/images\/f2\/[^" ]+"/g, () => `src="${photos[photoIndex++ % photos.length]}"`)
+    .replace(/href="\/images\/f2\/[^" ]+"/g, () => `href="${photos[preloadIndex++ % photos.length]}"`);
+  if (videos.length) {
+    // Vídeos reais do produto nos cards de criadores; thumbs viram fotos do produto.
+    let videoIndex = 0;
+    original = original.replace(/data-vid="[^"]*"/g, () => `data-vid="${videos[videoIndex++ % videos.length]}"`);
+    original = original.replace(/src="\/images\/criadores\/[^" ]+"/g, () => `src="${photos[photoIndex++ % photos.length]}"`)
+      .replace('Rotina com a escova', 'Rotina com o produto');
+  }
+  original = original.replaceAll('gokoco_escova', `gokoco_${product.id}`);
+  // Modal de opção: mesma estrutura, uma opção só.
   original = original.replace(/var OPTS=\[[\s\S]*?\];/,
-    `var OPTS=[{n:${JSON.stringify(PRODUCT.name)},l:'KIT COMPLETO',i:'${photos[0]}',out:false,p:${PRODUCT.price}}];`);
+    `var OPTS=[{n:${JSON.stringify(product.name)},l:${JSON.stringify(product.optLabel)},i:'${photos[0]}',out:false,p:${product.price}}];`);
   original = original.replace('id="lv-voltage-section" style="margin-top:18px', 'id="lv-voltage-section" style="display:none;margin-top:18px')
     .replace(`(voltage?' · '+voltage:'')`, `''`)
-    .replace(/Cor da escova/g, 'Opção do kit').replace(/uma ou mais cores/g, 'uma opção')
+    .replace(/Cor da escova/g, product.optionLabel).replace(/uma ou mais cores/g, 'uma opção')
     .replace(/uma cor/g, 'uma opção').replace(/Selecione uma cor/g, 'Selecione uma opção')
     .replace(/Selecione a voltagem/g, 'Comprar agora')
-    .replace(/'Escova Modeladora GOKOCO \('/g, `'${PRODUCT.name} ('`)
-    .replace(/alt="Escova[^"]*"/g, `alt="${PRODUCT.name}"`);
-  // Checkout real do pincel.
-  original = original.replace(`lvUrl?window.lvUrl('/pagamento'):'/pagamento'`, `lvUrl?window.lvUrl('${PRODUCT.checkoutUrl}'):'${PRODUCT.checkoutUrl}'`)
-    .replace(/href="(?:\/pagamento|\/pagamento.html)(?:\?[^" ]*)?"/g, `href="${PRODUCT.checkoutUrl}"`);
-  // Seção "Sobre este produto": mesma estrutura, conteúdo do pincel.
+    .replace(/'Escova Modeladora GOKOCO \('/g, `'${product.name} ('`)
+    .replace(/alt="Escova[^"]*"/g, `alt="${product.name}"`);
+  // Checkout real do produto.
+  original = original.replace(`lvUrl?window.lvUrl('/pagamento'):'/pagamento'`, `lvUrl?window.lvUrl('${product.checkoutUrl}'):'${product.checkoutUrl}'`)
+    .replace(/href="(?:\/pagamento|\/pagamento.html)(?:\?[^" ]*)?"/g, `href="${product.checkoutUrl}"`);
+  // Seção "Sobre este produto": mesma estrutura, conteúdo do produto.
   original = original.replace(/<section\b[^>]*>[\s\S]*?<\/section>/g, (section) => {
     if (section.includes('Sobre este produto')) {
       return section
         .replace(/(<div class="mt-2 grid[^>]*>)[\s\S]*?(<\/div><div class="my-3)/,
-          `$1${PRODUCT.specRows.map(([k, v]) => `<div>${k}</div><div>${v}</div>`).join('')}$2`)
+          `$1${product.specRows.map(([k, v]) => `<div>${k}</div><div>${v}</div>`).join('')}$2`)
         .replace(/(<div class="mt-2 text-\[13px\][^>]*>)[\s\S]*?(<\/section>)/,
-          `$1<h3 class="text-[14px] font-bold mt-2">${PRODUCT.name}</h3><p class="mt-2">${PRODUCT.description}</p><h3 class="text-[13px] font-bold mt-3">Destaques do Produto:</h3>${PRODUCT.features.map((f) => '<p class="mt-2">' + f + '</p>').join('')}</div>$2`);
+          `$1<h3 class="text-[14px] font-bold mt-2">${product.name}</h3><p class="mt-2">${product.description}</p><h3 class="text-[13px] font-bold mt-3">Destaques do Produto:</h3>${product.features.map((f) => '<p class="mt-2">' + f + '</p>').join('')}</div>$2`);
     }
     return section;
   });
-  // Avaliações: mesma quantidade/estrutura do original, conteúdo do pincel.
+  // Avaliações: mesma quantidade/estrutura do original, conteúdo do produto.
   let reviewIndex = 0;
   original = original.replace(/<article\b[^>]*>[\s\S]*?<\/article>/g, (article) => {
-    const r = PRODUCT.reviews[reviewIndex++ % PRODUCT.reviews.length];
+    const r = product.reviews[reviewIndex++ % product.reviews.length];
     return article
       .replace(/<p\b([^>]*)>[\s\S]*?<\/p>/, `<p$1>${r.text}</p>`)
       .replace(/(<div class="text-sm font-medium">)[\s\S]*?(<\/div>)/, `$1${r.name}$2`);
   });
   // Textos de produto/preço — o resto (contagens, badges, timers) fica igual.
+  const priceNum = product.price.toFixed(2).replace('.', ',');
   for (const [from, to] of [
-    ['Escova Modeladora GOKOCO Alisa e Modela 3 em 1 Íons Negativos 9 Níveis de Temperatura', PRODUCT.name],
-    ['Escova Modeladora GOKOCO 3 em 1', PRODUCT.name],
-    ['Escova Modeladora GOKOCO', PRODUCT.name],
-    ['R$ 37,90', PRODUCT.priceText], ['37,90', '29,90'], ['37.90', '29.90'], ['>37<', '>29<'],
+    ['Escova Modeladora GOKOCO Alisa e Modela 3 em 1 Íons Negativos 9 Níveis de Temperatura', product.name],
+    ['Escova Modeladora GOKOCO 3 em 1', product.name],
+    ['Escova Modeladora GOKOCO', product.name],
+    ['R$ 37,90', product.priceText], ['37,90', priceNum], ['37.90', product.price.toFixed(2)], ['>37<', `>${Math.trunc(product.price)}<`],
   ]) original = original.split(from).join(to);
   original = original.replace(/(<p\b[^>]*>)(?:(?!<\/p>)[\s\S])*Escolha a cor[\s\S]*?<\/p>/g,
     '$1Escolha a opção e a quantidade ao clicar em Comprar Agora.</p>');
-  original = original.replace('</head>', `<style>${spriteCss}</style></head>`);
-  fs.writeFileSync(path.join(pages, 'original.txt'), original);
+  if (sprite) original = original.replace('</head>', `<style>${sprite}</style></head>`);
+  fs.writeFileSync(path.join(pages, `${key}.txt`), original);
 }
 
 /* ------------------------------------------------------- Checkout do pincel */
-function buildPagamento(product = PRODUCT, gallery = photos, filename = 'pagamento', next = '/upsell1') {
+function buildPagamento(product = PRODUCT, gallery = PHOTOS, filename = 'pagamento', next = '/upsell1') {
   const PRODUCT = product;
   const photos = gallery;
   let pag = fs.readFileSync(path.join(root, 'pagamento.html'), 'utf8');
-  pag = pag.replace(/Escova Modeladora\)\/i/, 'Pincéis)/i');
+  pag = pag.replace(/Escova Modeladora\)\/i/, `${PRODUCT.matchLabel})/i`);
   for (const [from, to] of [
     ['var UNIT = 37.90', `var UNIT = ${PRODUCT.price}`],
     [`localStorage.setItem('precoUnit','37.90')`, `localStorage.setItem('precoUnit','${PRODUCT.price}')`],
@@ -301,5 +331,5 @@ buildOriginal();
 buildPagamento();
 await bundleVariant('tl');
 await bundleVariant('bella');
-await buildKalodataUpsells({ root, output, buildCheckout: buildPagamento });
+await buildKalodataUpsells({ root, output, buildCheckout: buildPagamento, buildOriginal, bundleVariant });
 console.log('Upsells gerados idênticos aos sites originais, com checkout PIX real do pincel.');
