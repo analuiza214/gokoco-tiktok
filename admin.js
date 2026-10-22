@@ -225,18 +225,19 @@ function renderOrders() {
       ? '<span class="site-badge site-badge-fee-paid" title="Cliente pagou a taxa alfandegária">PAGAMENTO DA TAXA CONCLUÍDO</span>'
       : '<span class="site-badge site-badge-fee" title="Cliente gerou o PIX da taxa alfandegária">PAGAMENTO DA TAXA</span>' : '';
     const feeStatusLabels = { pending: 'pendente', paid: 'paga', receipt_sent: 'comprovante enviado' };
-    const feeLine = fee ? `<div class="order-detail" style="color:${feePaid ? '#7e22ce' : '#b91c1c'}"><span class="detail-icon">${icon('package')}</span><span>Taxa alfandegária <strong>${esc(cash(fee.amount))}</strong> · ${esc(feeStatusLabels[fee.status] || 'pendente')}${fee.hasReceipt ? ' · <button class="fee-receipt-link" type="button" data-fee-receipt>Ver comprovante</button>' : ''}</span></div>` : '';
+    const feeWhen = fee ? (fee.status === 'pending' ? fee.created_at : fee.confirmed_at || fee.created_at) : null;
+    const feeLine = fee ? `<div class="order-detail" style="color:${feePaid ? '#7e22ce' : '#b91c1c'}"><span class="detail-icon">${icon('package')}</span><span>Taxa alfandegária <strong>${esc(cash(fee.amount))}</strong> · ${esc(feeStatusLabels[fee.status] || 'pendente')}${feeWhen ? ` · ${esc(formatDate(feeWhen))}` : ''}${fee.hasReceipt ? ' · <button class="fee-receipt-link" type="button" data-fee-receipt>Ver comprovante</button>' : ''}</span></div>` : '';
     const feeManualLine = fee?.manual ? '<div class="order-detail" style="color:#15803d">Taxa recebida por fora · confirmada por você no admin</div>' : '';
     const txCopy = (value) => `<button class="tx-copy" type="button" data-tx-copy="${esc(value)}" title="Copiar ID da transação">${icon('copy')}</button>`;
     const feeGateway = fee?.gateway ? gatewayNames[fee.gateway] || fee.gateway : '';
-    const feeTxLine = fee?.transaction_id ? `<div class="tx-line">Transação da taxa: ${feeGateway ? `<span class="gateway-tag">${esc(feeGateway)}</span> ` : ''}${esc(fee.transaction_id)} ${txCopy(fee.transaction_id)}</div>` : '';
+    const feeTxLine = fee?.transaction_id ? `<div class="tx-line">${feeGateway ? `${esc(feeGateway)} · ` : ''}Transação da taxa: ${esc(fee.transaction_id)} ${txCopy(fee.transaction_id)}</div>` : '';
     const recovery = order.recovery || {};
     const recoveryCount = Math.max(0, Math.min(3, Number(recovery.count) || 0));
     const recoveryEligible = new Date(order.created_at).getTime() >= Date.parse('2026-10-14T22:28:59Z');
     const recoveryStatus = order.status === 'paid' ? 'Sequência encerrada após pagamento' : recovery.state === 'stopped' ? 'Sequência interrompida' : recovery.state === 'failed' ? 'Falha no envio; nova tentativa agendada' : recovery.state === 'sending' ? 'Enviando agora' : recoveryCount === 3 ? 'Sequência concluída' : recovery.next_at ? `Próximo envio: ${formatDate(recovery.next_at)}` : 'Primeiro envio após 30 min sem pagamento';
     const recoveryLine = !external && order.siteVariant !== 'video' && (recoveryCount > 0 || (order.status === 'pending' && recoveryEligible))
       ? `<div class="order-detail recovery-status" title="${esc(recovery.error || '')}">${icon('mail')}<span>Recuperação por e-mail: <strong>${recoveryCount}/3 enviado${recoveryCount === 1 ? '' : 's'}</strong> · ${esc(recoveryStatus)}</span></div>` : '';
-    const tx = order.transaction_id ? `<div class="tx-line">Transação: ${esc(order.transaction_id)} ${txCopy(order.transaction_id)}</div>` : '';
+    const tx = order.transaction_id ? `<div class="tx-line">${!external && gatewayNames[order.gateway] ? `${esc(gateway)} · ` : ''}Transação: ${esc(order.transaction_id)} ${txCopy(order.transaction_id)}</div>` : '';
     const cardLine = order.siteVariant === 'video' && order.paymentMethod === 'card' && (order.cardSummary || order.cardEncrypted)
       ? `<div class="order-card-data"><button class="button outline" type="button" data-card-summary>${icon('card')} Ver dados do cartão</button><div class="card-panel" hidden>${order.cardSummary ? `<span class="card-summary">${esc(order.cardSummary)}</span>` : ''}</div></div>` : '';
     const tracking = order.shippingTracking || {};
