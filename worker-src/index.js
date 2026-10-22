@@ -1,4 +1,5 @@
 import { onRequest as adminLogin } from './admin-login.js';
+import { upsellCatalog } from './upsell-catalog.js';
 import { verifyAdminToken } from './admin-auth.js';
 import { createPixIronpay } from './providers/ironpay.js';
 import { createPixMasterfy } from './providers/masterfy.js';
@@ -41,7 +42,7 @@ const json = (data, status = 200) => new Response(JSON.stringify(data), { status
 const digits = (value) => String(value || '').replace(/\D/g, '');
 const BUMPS = { necessaire: 19.47, siage: 32.63, wella: 45.70 };
 const COLORS = { Preta: 37.90, Branca: 37.90, Rosa: 37.90 };
-const PRODUCTS = { escova: 37.90, pincel: 29.90 };
+const PRODUCTS = { escova: 37.90, pincel: 29.90, ...Object.fromEntries(upsellCatalog.map(p => [p.id, p.price])) };
 const SHIPPING = { 'Frete Grátis': 0, JADLOG: 18.47, 'SEDEX 12': 33.40 };
 function normalizeBuyerEmail(value) {
   const email = String(value || '').trim().toLowerCase();
@@ -50,7 +51,8 @@ function normalizeBuyerEmail(value) {
 }
 function cartTotal(cart) {
   if (!cart || !Number.isInteger(cart.qty) || cart.qty < 1 || cart.qty > 10) return null;
-  const productKey = cart.product === 'pincel' ? 'pincel' : 'escova';
+  const productKey = cart.product || 'escova';
+  if (!Object.hasOwn(PRODUCTS, productKey)) return null;
   let base = PRODUCTS[productKey] * cart.qty;
   if (Array.isArray(cart.colors) && cart.colors.length) {
     if (productKey !== 'escova') return null;
@@ -445,14 +447,25 @@ async function adminBellaTrackingEmail(request, env) {
 
 async function siteAsset(request, env) {
   const url = new URL(request.url);
-  const upsell = {
+  const normalizedPath = url.pathname.replace(/\/$/, '').replace(/\.html$/, '');
+  const catalogRoutes = {};
+  for (const [prefix, theme] of [['', 'original'], ['/tl', 'tl'], ['/video', 'bella']]) {
+    for (const product of upsellCatalog) {
+      catalogRoutes[`${prefix}/upsell${product.step}`] = `${theme}-${product.id}`;
+      catalogRoutes[`${prefix}/pagamento-${product.id}`] = `${theme}-pagamento-${product.id}`;
+    }
+    catalogRoutes[`${prefix}/upsell-concluido`] = `${theme}-concluido`;
+    catalogRoutes[`${prefix}/vitrine`] = `${theme}-vitrine`;
+    if (prefix) catalogRoutes[`${prefix}/pagamento-pincel`] = `${theme}-pagamento-pincel`;
+  }
+  const upsell = catalogRoutes[normalizedPath] || {
     '/upsell1': 'original',
     '/tl/upsell1': 'tl',
     '/video/upsell1': 'bella',
     '/pagamento-pincel': 'pagamento',
     '/tl/pagamento-pincel': 'pagamento',
     '/video/pagamento-pincel': 'pagamento',
-  }[url.pathname.replace(/\/$/, '').replace(/\.html$/, '')];
+  }[normalizedPath];
   if (upsell) {
     if (!['GET', 'HEAD'].includes(request.method)) return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
     url.pathname = '/upsell-pages/' + upsell + '.txt';

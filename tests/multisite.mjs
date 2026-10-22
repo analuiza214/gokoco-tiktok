@@ -42,7 +42,8 @@ for (const [route, variant] of [['/upsell1', 'original'], ['/tl/upsell1', 'tl'],
 }
 for (const route of ['/pagamento-pincel', '/tl/pagamento-pincel', '/video/pagamento-pincel']) {
   const response = await worker.fetch(new Request(`https://gokoco.example${route}`), env);
-  assert.equal(await response.text(), '/upsell-pages/pagamento.txt');
+  const theme = route.startsWith('/tl/') ? 'tl-' : route.startsWith('/video/') ? 'bella-' : '';
+  assert.equal(await response.text(), `/upsell-pages/${theme ? theme + 'pagamento-pincel' : 'pagamento'}.txt`);
   assert.equal(response.headers.get('Content-Type'), 'text/html; charset=utf-8');
 }
 const pincelCheckout = readFileSync(new URL('../dist/upsell-pages/pagamento.txt', import.meta.url), 'utf8');

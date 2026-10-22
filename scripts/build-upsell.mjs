@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
+import { buildKalodataUpsells } from './build-kalodata-upsells.mjs';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const output = path.join(root, 'dist');
@@ -258,7 +259,9 @@ function buildOriginal() {
 }
 
 /* ------------------------------------------------------- Checkout do pincel */
-function buildPagamento() {
+function buildPagamento(product = PRODUCT, gallery = photos, filename = 'pagamento', next = '/upsell1') {
+  const PRODUCT = product;
+  const photos = gallery;
   let pag = fs.readFileSync(path.join(root, 'pagamento.html'), 'utf8');
   pag = pag.replace(/Escova Modeladora\)\/i/, 'Pincéis)/i');
   for (const [from, to] of [
@@ -281,11 +284,22 @@ function buildPagamento() {
   // Semeia a seleção do produto caso o cliente caia direto no checkout.
   pag = pag.replace('</head>', `<meta name="robots" content="noindex,nofollow"><style>${spriteCss}</style></head>`)
     .replace('<body>', `<body data-theme="checkout"><script>try{localStorage.setItem('corSelecionada',${JSON.stringify(PRODUCT.name)});localStorage.setItem('corImagem',${JSON.stringify(photos[0])});localStorage.setItem('coresSelecionadas','[]');}catch(e){}<\/script>`);
-  fs.writeFileSync(path.join(pages, 'pagamento.txt'), pag);
+  if (filename !== 'pagamento') {
+    // The original template has legacy fixed-price substitutions above.
+    pag = pag.replaceAll('29.90', PRODUCT.price.toFixed(2)).replaceAll('29,90', PRODUCT.price.toFixed(2).replace('.', ','))
+      .replaceAll('/upsell1', next).replaceAll('lv_checkout_id', `lv_checkout_${PRODUCT.id}`)
+      .replaceAll('Escova Modeladora GOKOCO', PRODUCT.name)
+      .replaceAll('Garantia 12 meses', 'Confira as condições da loja')
+      .replaceAll('Cor: ', 'Opção: ');
+    // A direct checkout visit must not inherit the quantity of the main order.
+    pag = pag.replace('<body data-theme="checkout">', `<body data-theme="checkout"><script>try{localStorage.setItem('qtdSelecionada','1');sessionStorage.removeItem('lv_disc');}catch(e){}<\/script>`);
+  }
+  fs.writeFileSync(path.join(pages, `${filename}.txt`), pag);
 }
 
 buildOriginal();
 buildPagamento();
 await bundleVariant('tl');
 await bundleVariant('bella');
+await buildKalodataUpsells({ root, output, buildCheckout: buildPagamento });
 console.log('Upsells gerados idênticos aos sites originais, com checkout PIX real do pincel.');

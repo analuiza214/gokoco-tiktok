@@ -77,6 +77,15 @@ async function onRequest(context) {
   return new Response(JSON.stringify({ token }), { status: 200, headers: CORS });
 }
 
+// worker-src/upsell-catalog.js
+var upsellCatalog = [
+  { id: "popozuda", step: 2, name: "Popozuda Creme Modelador Corporal 200g", price: 79.9, rating: 4.6, sourceId: "1731410956394792439", folder: "01 - Popozuda Creme Modelador Corporal", category: "Cuidados com o corpo", description: "Creme modelador corporal Popozuda, embalagem de 200g.", contents: "1 frasco de 200g" },
+  { id: "liso-obrigatorio", step: 3, name: "Kit Profissional Liso Obrigat\xF3rio 1L + \xD3leo Ativador de Escova", price: 95.9, rating: 4.8, sourceId: "1737439077064541825", folder: "02 - Kit Liso Obrigatorio", category: "Cuidados com os cabelos", description: "Kit capilar profissional com 3 itens da linha Liso Obrigat\xF3rio e \xF3leo ativador de escova.", contents: "Kit com 3 itens" },
+  { id: "ultra-bond", step: 4, name: "Eudora Si\xE0ge Ultra Bond Reset \u2014 Kit Completo", price: 259.9, rating: 4.9, sourceId: "1737119339326637650", folder: "03 - Eudora Siage Ultra Bond Reset", category: "Cuidados com os cabelos", description: "Kit completo Eudora Si\xE0ge Ultra Bond Reset com 4 itens para a rotina de cuidados capilares.", contents: "Kit com 4 itens" },
+  { id: "pro-cronology", step: 5, name: "Eudora Si\xE0ge Pro Cronology \u2014 Shampoo + Condicionador", price: 67.99, rating: 4.7, sourceId: "1737278707688638076", folder: "04 - Eudora Siage Pro Cronology", category: "Cuidados com os cabelos", description: "Kit Eudora Si\xE0ge Pro Cronology com shampoo de 250ml e condicionador de 200ml.", contents: "Shampoo 250ml + condicionador 200ml" },
+  { id: "principia-glow", step: 6, name: "Principia Kit Essencial Glow GL-02 + CH + VC + PS", price: 158.1, rating: 4.9, sourceId: "1736972891285063316", folder: "05 - Principia Kit Essencial Glow", category: "Cuidados com a pele", description: "Kit de cuidados com a pele Principia Essencial Glow com os produtos GL-02, CH, VC e PS.", contents: "Kit GL-02 + CH + VC + PS" }
+];
+
 // worker-src/admin-auth.js
 async function hmacSign2(payload, secret) {
   const enc = new TextEncoder();
@@ -4310,7 +4319,7 @@ var json3 = (data, status = 200) => new Response(JSON.stringify(data), { status,
 var digits = (value) => String(value || "").replace(/\D/g, "");
 var BUMPS = { necessaire: 19.47, siage: 32.63, wella: 45.7 };
 var COLORS = { Preta: 37.9, Branca: 37.9, Rosa: 37.9 };
-var PRODUCTS2 = { escova: 37.9, pincel: 29.9 };
+var PRODUCTS2 = { escova: 37.9, pincel: 29.9, ...Object.fromEntries(upsellCatalog.map((p) => [p.id, p.price])) };
 var SHIPPING = { "Frete Gr\xE1tis": 0, JADLOG: 18.47, "SEDEX 12": 33.4 };
 function normalizeBuyerEmail(value) {
   const email = String(value || "").trim().toLowerCase();
@@ -4319,7 +4328,8 @@ function normalizeBuyerEmail(value) {
 }
 function cartTotal(cart) {
   if (!cart || !Number.isInteger(cart.qty) || cart.qty < 1 || cart.qty > 10) return null;
-  const productKey = cart.product === "pincel" ? "pincel" : "escova";
+  const productKey = cart.product || "escova";
+  if (!Object.hasOwn(PRODUCTS2, productKey)) return null;
   let base = PRODUCTS2[productKey] * cart.qty;
   if (Array.isArray(cart.colors) && cart.colors.length) {
     if (productKey !== "escova") return null;
@@ -4695,14 +4705,25 @@ async function adminBellaTrackingEmail(request2, env) {
 }
 async function siteAsset(request2, env) {
   const url = new URL(request2.url);
-  const upsell = {
+  const normalizedPath = url.pathname.replace(/\/$/, "").replace(/\.html$/, "");
+  const catalogRoutes = {};
+  for (const [prefix, theme] of [["", "original"], ["/tl", "tl"], ["/video", "bella"]]) {
+    for (const product of upsellCatalog) {
+      catalogRoutes[`${prefix}/upsell${product.step}`] = `${theme}-${product.id}`;
+      catalogRoutes[`${prefix}/pagamento-${product.id}`] = `${theme}-pagamento-${product.id}`;
+    }
+    catalogRoutes[`${prefix}/upsell-concluido`] = `${theme}-concluido`;
+    catalogRoutes[`${prefix}/vitrine`] = `${theme}-vitrine`;
+    if (prefix) catalogRoutes[`${prefix}/pagamento-pincel`] = `${theme}-pagamento-pincel`;
+  }
+  const upsell = catalogRoutes[normalizedPath] || {
     "/upsell1": "original",
     "/tl/upsell1": "tl",
     "/video/upsell1": "bella",
     "/pagamento-pincel": "pagamento",
     "/tl/pagamento-pincel": "pagamento",
     "/video/pagamento-pincel": "pagamento"
-  }[url.pathname.replace(/\/$/, "").replace(/\.html$/, "")];
+  }[normalizedPath];
   if (upsell) {
     if (!["GET", "HEAD"].includes(request2.method)) return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD" } });
     url.pathname = "/upsell-pages/" + upsell + ".txt";
