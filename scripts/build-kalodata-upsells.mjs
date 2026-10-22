@@ -179,7 +179,7 @@ export async function buildKalodataUpsells({ root, output, buildCheckout, buildO
     const nextPath = p.step < 6 ? `upsell${p.step + 1}` : 'upsell-concluido';
     for (const theme of themes) {
       const key = `${theme.id}-${p.id}`;
-      const cfg = { ...product, checkoutUrl: `${theme.prefix}/pagamento-${p.id}` };
+      const cfg = { ...product, checkoutUrl: `${theme.prefix}/pagamento-${p.id}`, detailImages: images.slice(-4) };
       // Mesma cara do site original: TikTok (index.html), Mercado Livre (React)
       // ou Bella Mix (React) — fotos, vídeos, avaliações e checkout do produto.
       if (theme.id === 'original') buildOriginal(cfg, images, videos, key, '');
