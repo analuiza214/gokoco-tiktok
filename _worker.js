@@ -1535,7 +1535,7 @@ async function createFeePix(request2, env, deps) {
   const payment = await result.json().catch(() => ({}));
   if (!result.ok || !payment.pixCode || !payment.transactionId) {
     console.error("[reshipping/pix]", code, active[0].id, result.status, payment?.error || payment?.message);
-    return deps.json({ error: "N\xE3o foi poss\xEDvel gerar o PIX da taxa. Tente novamente em instantes.", detail: String(payment?.error || payment?.message || `HTTP ${result.status}`).slice(0, 300) }, 502);
+    return deps.json({ error: "N\xE3o foi poss\xEDvel gerar o PIX da taxa. Tente novamente em instantes." }, 502);
   }
   const reshipping = {
     status: "pending",

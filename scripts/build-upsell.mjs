@@ -151,14 +151,20 @@ function marketTemplate(source, product = PRODUCT, photos = PHOTOS, videos = [])
 }
 
 /* ----------------------------------------------- Bundles TL + Bella (React) --- */
-async function bundleVariant(variant, { product = PRODUCT, photos = PHOTOS, videos = [], key = variant, sprite = spriteCss } = {}) {
+async function bundleVariant(variant, { product = PRODUCT, photos = PHOTOS, videos = [], key = variant, sprite = spriteCss, page = 'product', storefront = null, title = null, description = null } = {}) {
   const market = variant === 'tl';
   const site = path.join(root, 'sites', market ? 'mercado' : 'bella');
   const siteBase = market ? '/tl/' : '/video/';
   const distHtml = fs.readFileSync(path.join(site, 'dist', market ? 'index.html' : 'public/index.html'), 'utf8');
+  // page='product' monta a página de produto; page='vitrine' monta a listagem
+  // no visual do site (resultados ML no TL, home com grade na Bella Mix).
   const entry = market
-    ? `import React from 'react';import{createRoot}from'react-dom/client';import{Router}from'wouter';import Product from'@/pages/product-page';createRoot(document.getElementById('root')).render(<Router base="/tl"><Product/></Router>);`
-    : `import React from 'react';import{createRoot}from'react-dom/client';import{Router}from'wouter';import Product from'@/pages/product';import{Header}from'@/components/layout/header';import{Footer}from'@/components/layout/footer';import{FreteGratisBar}from'@/components/frete-gratis-bar';createRoot(document.getElementById('root')).render(<Router base="/video"><div className="flex flex-col min-h-screen" style={{overflowX:'hidden',maxWidth:'100%',width:'100%'}}><FreteGratisBar/><div className="h-[38px] shrink-0" aria-hidden="true"/><Header/><main className="flex-1"><Product/></main><Footer/></div></Router>);`;
+    ? page === 'vitrine'
+      ? `import React from 'react';import{createRoot}from'react-dom/client';import VitrinePage from'@/pages/vitrine-page';createRoot(document.getElementById('root')).render(<VitrinePage/>);`
+      : `import React from 'react';import{createRoot}from'react-dom/client';import{Router}from'wouter';import Product from'@/pages/product-page';createRoot(document.getElementById('root')).render(<Router base="/tl"><Product/></Router>);`
+    : page === 'vitrine'
+      ? `import React from 'react';import{createRoot}from'react-dom/client';import{Router}from'wouter';import Home from'@/pages/home';import{Header}from'@/components/layout/header';import{Footer}from'@/components/layout/footer';import{FreteGratisBar}from'@/components/frete-gratis-bar';createRoot(document.getElementById('root')).render(<Router base="/video"><div className="flex flex-col min-h-screen" style={{overflowX:'hidden',maxWidth:'100%',width:'100%'}}><FreteGratisBar/><div className="h-[38px] shrink-0" aria-hidden="true"/><Header/><main className="flex-1"><Home/></main><Footer/></div></Router>);`
+      : `import React from 'react';import{createRoot}from'react-dom/client';import{Router}from'wouter';import Product from'@/pages/product';import{Header}from'@/components/layout/header';import{Footer}from'@/components/layout/footer';import{FreteGratisBar}from'@/components/frete-gratis-bar';createRoot(document.getElementById('root')).render(<Router base="/video"><div className="flex flex-col min-h-screen" style={{overflowX:'hidden',maxWidth:'100%',width:'100%'}}><FreteGratisBar/><div className="h-[38px] shrink-0" aria-hidden="true"/><Header/><main className="flex-1"><Product/></main><Footer/></div></Router>);`;
   await build({
     stdin: { contents: entry, loader: 'tsx', resolveDir: site },
     absWorkingDir: site, bundle: true, format: 'esm', platform: 'browser',
@@ -176,21 +182,28 @@ async function bundleVariant(variant, { product = PRODUCT, photos = PHOTOS, vide
           // O carrinho da SPA não é usado: a compra vai pro checkout externo do pincel.
           if (rel.endsWith('hooks/use-cart.tsx')) code = 'export function useCart(){return {items:[],itemCount:0,total:0,addItem(){},removeItem(){},updateQuantity(){},clearCart(){}}}';
           else if (rel.endsWith('lib/data.ts') && !market) {
-            const item = {
-              id: `bella-${product.id}`, slug: product.slug, name: product.name,
-              price: product.bella.price, pixPrice: product.price, installment: product.bella.installment ?? product.installment,
-              rating: product.bella.rating, reviewCount: product.bella.reviewCount, soldCount: product.bella.soldCount,
-              originalPrice: product.bella.originalPrice, badge: product.bella.badge,
-              description: product.description, mainImage: photos[0], gallery: photos,
-              features: product.features,
-              productReviews: product.reviews.map((r, i) => ({
-                id: i + 1, author: r.name, name: r.name, initials: initials(r.name),
-                rating: 5, text: r.text, photo: photos[(r.photos[0] - 1) % photos.length],
-                photos: r.photos.map((n) => photos[(n - 1) % photos.length]),
-              })),
-            };
-            code = code.replace('export const products: Product[] = [', 'export const products: Product[] = [' + JSON.stringify(item) + ',');
+            if (storefront) {
+              // Vitrine Bella: a grade "Escolha Seu Kit" da home passa a listar
+              // os complementos do funil (catálogo inteiro substituído).
+              code = code.replace(/export const products: Product\[\] = \[[\s\S]*?\n\];/, () => `export const products: Product[] = ${JSON.stringify(storefront)};\n`);
+            } else {
+              const item = {
+                id: `bella-${product.id}`, slug: product.slug, name: product.name,
+                price: product.bella.price, pixPrice: product.price, installment: product.bella.installment ?? product.installment,
+                rating: product.bella.rating, reviewCount: product.bella.reviewCount, soldCount: product.bella.soldCount,
+                originalPrice: product.bella.originalPrice, badge: product.bella.badge,
+                description: product.description, mainImage: photos[0], gallery: photos,
+                features: product.features,
+                productReviews: product.reviews.map((r, i) => ({
+                  id: i + 1, author: r.name, name: r.name, initials: initials(r.name),
+                  rating: 5, text: r.text, photo: photos[(r.photos[0] - 1) % photos.length],
+                  photos: r.photos.map((n) => photos[(n - 1) % photos.length]),
+                })),
+              };
+              code = code.replace('export const products: Product[] = [', 'export const products: Product[] = [' + JSON.stringify(item) + ',');
+            }
           }
+          else if (rel.endsWith('pages/vitrine-page.tsx') && storefront) code = code.replace('"__VITRINE_PRODUCTS__"', () => JSON.stringify(storefront));
           else if (rel.endsWith('lib/utils.ts')) code = code.replace('`${import.meta.env.BASE_URL}${path.startsWith', 'path.startsWith("/upsell-assets/") ? path : `${import.meta.env.BASE_URL}${path.startsWith');
           else if (rel.endsWith('lib/img.ts')) code = code.replace('return `${', 'if(path.startsWith("/upsell-assets/"))return path;return `${');
           else if (rel.endsWith('pages/product-page.tsx') && market) code = marketTemplate(code, product, photos, videos);
