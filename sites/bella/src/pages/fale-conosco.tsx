@@ -30,7 +30,7 @@ export default function FaleConosco() {
       descricao: "Atendimento rápido de seg. a sáb.",
       detalhe: supportPhone ? "Falar com a equipe" : "Use o formulário abaixo",
       cor: "#25D366",
-      href: supportPhone ? `https://wa.me/${supportPhone}` : null,
+      href: supportPhone ? `https://api.whatsapp.com/send?phone=${supportPhone}` : null,
     },
     {
       icone: Mail,

@@ -214,7 +214,7 @@ fbq('track','PageView');
 
           <p style="margin:12px 0 0;text-align:center;font-size:11.5px;color:#8a8b91">Abra o app do seu banco e cole o código. A confirmação pode levar alguns minutos.</p>
           <div id="lv-pix-help" style="display:none;margin-top:18px">
-            <a id="lv-pix-help-whatsapp" href="https://wa.me/5583993302240" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;justify-content:center;min-height:46px;padding:10px 14px;border-radius:9px;background:#16a34a;color:#fff;font-size:14px;font-weight:800;text-decoration:none">Enviar comprovante no WhatsApp</a>
+            <a id="lv-pix-help-whatsapp" href="https://api.whatsapp.com/send?phone=5583993302240" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;justify-content:center;min-height:46px;padding:10px 14px;border-radius:9px;background:#16a34a;color:#fff;font-size:14px;font-weight:800;text-decoration:none">Enviar comprovante no WhatsApp</a>
           </div>
         </div>
       </section>
@@ -685,7 +685,7 @@ fbq('track','PageView');
             var ov=document.createElement('div');
             ov.style.cssText='position:fixed;inset:0;z-index:99999;background:#f8fafc;display:flex;align-items:center;justify-content:center;font-family:Inter,system-ui,sans-serif;padding:20px;text-align:center';
             var _waText='Olá! Realizei o pagamento da minha compra da escova GOKOCO e vou te enviar o comprovante, por favor.';
-            var _waUrl='https://wa.me/5583993302240?text='+encodeURIComponent(_waText);
+            var _waUrl='https://api.whatsapp.com/send?phone=5583993302240&text='+encodeURIComponent(_waText);
             // Oferta exibida na confirmação — substituída por produto nos checkouts gerados.
             var LV_OFFER={name:'Kit Profissional Liso Obrigatório 1L + Óleo Ativador de Escova',img:'/upsell-assets/kalodata/liso-obrigatorio/Imagens/01-principal.png',de:'R$ 57,90',por:'R$ 38,36',deV:57.9,porV:38.36,href:'/upsell3'};
             var _o=LV_OFFER, _qs=location.search||'';
@@ -762,7 +762,7 @@ fbq('track','PageView');
     var message='Olá! Paguei meu pedido via PIX na Bella Mix, mas a confirmação ainda não apareceu no site. Podem verificar, por favor?';
     if(ref) message+=' Referência: '+ref+'.';
     message+=' Posso enviar o comprovante por aqui.';
-    link.href='https://wa.me/5583993302240?text='+encodeURIComponent(message);
+    link.href='https://api.whatsapp.com/send?phone=5583993302240&text='+encodeURIComponent(message);
     box.style.display='block';
   }
   function showPixCode(cp, qr){

@@ -114,7 +114,7 @@ function whatsappHelpLink(): string {
     nome = saved?.name || "";
   } catch { /* ignora */ }
   const msg = `Olá! ${nome ? `Meu nome é ${nome}. ` : ""}Gerei o Pix mais de uma vez no site e não estou conseguindo finalizar o pagamento. Pode me ajudar?`;
-  return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`;
+  return `https://api.whatsapp.com/send?phone=${WHATSAPP_NUMBER}&text=${encodeURIComponent(msg)}`;
 }
 
 function loadCardAttempts(): number {
@@ -133,7 +133,7 @@ function whatsappCardHelpLink(last4: string): string {
     nome = buyer?.nome || "";
   } catch { /* ignora */ }
   const msg = `Olá! ${nome ? `Meu nome é ${nome}. ` : ""}Tentei pagar com meu cartão (final ${last4}) mais de uma vez no site e não foi autorizado. Pode me ajudar?`;
-  return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`;
+  return `https://api.whatsapp.com/send?phone=${WHATSAPP_NUMBER}&text=${encodeURIComponent(msg)}`;
 }
 
 const WhatsAppSvg = ({ size = 20 }: { size?: number }) => (
@@ -701,7 +701,7 @@ export default function Success() {
               Comprar mais agora
             </button>
             <a
-              href="https://wa.me/5583993302240?text=Ol%C3%A1!%20Acabei%20de%20fazer%20uma%20compra%20e%20gostaria%20de%20confirmar%20meu%20pedido%20e%20pegar%20o%20c%C3%B3digo%20de%20rastreio."
+              href="https://api.whatsapp.com/send?phone=5583993302240&text=Ol%C3%A1!%20Acabei%20de%20fazer%20uma%20compra%20e%20gostaria%20de%20confirmar%20meu%20pedido%20e%20pegar%20o%20c%C3%B3digo%20de%20rastreio."
               target="_blank"
               rel="noopener noreferrer"
               className="w-full px-6 py-3 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all shadow-md"

@@ -76,7 +76,7 @@ const whatsapp = (order) => {
   const message = feePending ? feeMessage : order.status === 'paid'
     ? `Olá ${firstName}! Estou entrando em contato sobre ${product}. Posso te ajudar com alguma informação? 😊`
     : `Olá ${firstName}! Vi que você iniciou uma compra da ${order.siteVariant === 'video' ? 'Bella Mix' : 'escova GOKOCO'} mas não finalizou. Posso te ajudar? 😊`;
-  return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
+  return `https://api.whatsapp.com/send?phone=${number}&text=${encodeURIComponent(message)}`;
 };
 
 const formatCardNumber = (value) => String(value || '').replace(/\D/g, '').replace(/(.{4})/g, '$1 ').trim();
