@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { upsellCatalog } from '../worker-src/upsell-catalog.js';
-import { renderStorefront } from './storefront.mjs';
+import { renderOriginalStorefront } from './storefront.mjs';
 
 const money = value => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const regexEscape = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -185,7 +185,7 @@ export async function buildKalodataUpsells({ root, output, buildCheckout, buildO
     const images = url('Imagens'), videos = url('Videos');
     if (!images.length || !videos.length) throw new Error(`Mídias ausentes: ${p.id}`);
     const product = productConfig(p, images.length);
-    storefrontProducts.push({ ...p, images, videos });
+    storefrontProducts.push({ ...p, images, videos, cfg: product });
     const nextPath = p.step < 6 ? `upsell${p.step + 1}` : 'upsell-concluido';
     for (const theme of themes) {
       const key = `${theme.id}-${p.id}`;
@@ -203,8 +203,44 @@ export async function buildKalodataUpsells({ root, output, buildCheckout, buildO
       buildCheckout(product, images, `${theme.id}-pagamento-${p.id}`, next, offerFor((upsellCatalog.find(q => q.step === p.step + 1) || {}).id));
     }
   }
+  // Cada vitrine usa o visual do próprio site: a original clona o loja.html
+  // (perfil de loja do TikTok Shop), a TL gera uma página de resultados no
+  // bundle do Mercado Livre e a Bella monta a home real do catálogo.
+  const lojaHtml = fs.readFileSync(path.join(root, 'loja.html'), 'utf8');
   for (const theme of themes) {
-    fs.writeFileSync(path.join(pages, `${theme.id}-vitrine.txt`), renderStorefront(storefrontProducts, theme));
+    if (theme.id === 'original') {
+      fs.writeFileSync(path.join(pages, `${theme.id}-vitrine.txt`), renderOriginalStorefront(storefrontProducts, lojaHtml));
+    } else {
+      const key = `${theme.id}-vitrine`;
+      const items = storefrontProducts.map((p) => {
+        const [priceInt, priceDec] = p.price.toFixed(2).split('.');
+        return theme.id === 'tl' ? {
+          name: p.name, href: `/tl/upsell${p.step}`, img: p.images[0],
+          priceInt, priceDec, oldPriceText: p.cfg.oldPriceText, installment: p.cfg.installment,
+          rating: p.rating, reviewCount: p.cfg.reviewCount, contents: p.contents,
+        } : {
+          id: `bella-${p.id}`, slug: p.id, name: p.name,
+          price: p.cfg.bella.price, pixPrice: p.price, installment: p.cfg.bella.installment,
+          rating: p.rating, reviewCount: p.cfg.reviewCount, soldCount: p.cfg.bella.soldCount,
+          originalPrice: p.cfg.bella.originalPrice, badge: p.cfg.bella.badge,
+          description: p.cfg.description, mainImage: p.images[0], gallery: p.images,
+          features: p.cfg.features, productReviews: [],
+        };
+      });
+      await bundleVariant(theme.id, {
+        key, page: 'vitrine', sprite: '', storefront: items,
+        title: `Vitrine | ${theme.name}`,
+        description: 'Conheça nossa seleção de produtos para cabelos, pele e corpo.',
+      });
+      if (theme.id === 'bella') {
+        // Os cards da home linkam para /produto/{slug} (rota da SPA). Na vitrine
+        // eles abrem o upsell da mesma porta, com navegação real e UTM mantido.
+        const file = path.join(pages, `${key}.txt`);
+        const map = Object.fromEntries(storefrontProducts.map((p) => [p.id, `/video/upsell${p.step}`]));
+        const script = `<script>document.addEventListener('click',function(e){var a=e.target&&e.target.closest?e.target.closest('a[href]'):null;if(!a)return;var u;try{u=new URL(a.href);}catch(_){return;}if(u.origin!==location.origin)return;e.preventDefault();e.stopPropagation();var m=u.pathname.match(/\\/produto\\/([^/]+)/);var MAP=${JSON.stringify(map)};if(m)u.pathname=MAP[m[1]]||'/video/upsell2';u.search=location.search||u.search;location.href=u.href;},true);</script>`;
+        fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace('</body>', script + '</body>'));
+      }
+    }
     fs.writeFileSync(path.join(pages, `${theme.id}-concluido.txt`), `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Suas escolhas | ${theme.name}</title><link rel="stylesheet" href="/upsell-assets/kalodata.css"><body style="--accent:${theme.accent};--background:${theme.background};--header:${theme.header};--ink:${theme.ink}"><header class="store-header"><span class="brand">${theme.name}</span></header><main><section class="last-call"><h1>Você chegou ao fim dos complementos</h1><p>Você pode acompanhar os pedidos com pagamento confirmado na página de rastreio.</p><a class="buy" href="/rastreio.html">Acompanhar meu pedido</a><a class="skip" href="${theme.prefix}/upsell2">Rever os complementos</a></section></main></body></html>`);
   }
   const pincelCheckout = path.join(pages, 'pagamento.txt');
@@ -228,6 +264,5 @@ export async function buildKalodataUpsells({ root, output, buildCheckout, buildO
     fs.writeFileSync(file, html);
   }
   fs.copyFileSync(path.join(root, 'rascunhos-upsell', 'assets', 'kalodata.css'), path.join(assets, 'kalodata.css'));
-  fs.copyFileSync(path.join(root, 'rascunhos-upsell', 'assets', 'storefront.css'), path.join(assets, 'storefront.css'));
-  console.log('Kalodata: 15 páginas no layout dos sites originais, 15 checkouts e 3 finais gerados.');
+  console.log('Kalodata: 15 páginas, 15 checkouts, 3 vitrines e 3 finais gerados.');
 }

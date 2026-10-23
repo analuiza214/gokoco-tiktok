@@ -221,15 +221,17 @@ async function bundleVariant(variant, { product = PRODUCT, photos = PHOTOS, vide
   });
   // Head e body 100% iguais ao site original (fontes, pixels, meta): só troca
   // o entry point, o título e marca como noindex.
+  const titleText = title || `${product.name}${market ? '' : ' | Bella Mix'}`;
+  const descText = description || `${product.name} por ${product.priceText}.`;
   let html = distHtml
     .replace(/<script type="module" crossorigin src="[^"]*assets\/index-[^"]*\.js"><\/script>/, `<script type="module" crossorigin src="/upsell-assets/${key}-model.js"></script>`)
-    .replace(/<title>[^<]*<\/title>/, `<title>${product.name}${market ? '' : ' | Bella Mix'}</title>`)
+    .replace(/<title>[^<]*<\/title>/, `<title>${titleText}</title>`)
     .replace(/<meta name="robots" content="[^"]*"\s*\/?>/, '<meta name="robots" content="noindex, nofollow" />')
-    .replace(/<meta name="description" content="[^"]*"\s*\/?>/, `<meta name="description" content="${product.name} por ${product.priceText}." />`)
-    .replace(/<meta property="og:title" content="[^"]*"\s*\/?>/, `<meta property="og:title" content="${product.name}" />`)
-    .replace(/<meta property="og:description" content="[^"]*"\s*\/?>/, `<meta property="og:description" content="${product.name} por ${product.priceText}." />`)
-    .replace(/<meta name="twitter:title" content="[^"]*"\s*\/?>/, `<meta name="twitter:title" content="${product.name}" />`)
-    .replace(/<meta name="twitter:description" content="[^"]*"\s*\/?>/, `<meta name="twitter:description" content="${product.name} por ${product.priceText}." />`)
+    .replace(/<meta name="description" content="[^"]*"\s*\/?>/, `<meta name="description" content="${descText}" />`)
+    .replace(/<meta property="og:title" content="[^"]*"\s*\/?>/, `<meta property="og:title" content="${titleText}" />`)
+    .replace(/<meta property="og:description" content="[^"]*"\s*\/?>/, `<meta property="og:description" content="${descText}" />`)
+    .replace(/<meta name="twitter:title" content="[^"]*"\s*\/?>/, `<meta name="twitter:title" content="${titleText}" />`)
+    .replace(/<meta name="twitter:description" content="[^"]*"\s*\/?>/, `<meta name="twitter:description" content="${descText}" />`)
     .replace('<body>', `<body data-theme="${variant}">`);
   if (sprite) html = html.replace('</head>', `<style>${sprite}</style></head>`);
   fs.writeFileSync(path.join(pages, `${key}.txt`), html);

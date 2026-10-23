@@ -51,11 +51,24 @@ paga e a recusa seguem para a próxima oferta; a última leva a
 
 ## Vitrine
 
-`/vitrine`, `/tl/vitrine` e `/video/vitrine` mostram os cinco produtos com
-imagem principal, preço, busca por nome e filtros por categoria. É uma página
-funcional sem equivalente nos sites originais — layout próprio
-(`kalodata.css`/`storefront.css`). Cards levam ao upsell correspondente da
-mesma versão da loja.
+`/vitrine`, `/tl/vitrine` e `/video/vitrine` mostram os cinco produtos
+**no visual idêntico ao site correspondente** — mesmo mecanismo dos upsells:
+
+- `/vitrine` → clone do `loja.html` (perfil de loja estilo TikTok Shop):
+  banner, perfil Bella Mix, abas "Página inicial"/"Produtos" e grade de
+  cards levando a `/upsell{2..6}` (`renderOriginalStorefront` em
+  `scripts/storefront.mjs`).
+- `/tl/vitrine` → página de resultados no visual Mercado Livre
+  (`sites/mercado/src/pages/vitrine-page.tsx`, bundle `tl-vitrine-model.js`):
+  header amarelo com busca funcional por nome, faixa "Enviar para",
+  contagem de resultados e cards levando a `/tl/upsell{2..6}`.
+- `/video/vitrine` → home real da Bella Mix (`sites/bella/src/pages/home.tsx`,
+  bundle `bella-vitrine-model.js`) com o catálogo `products` substituído
+  pelos cinco complementos. Um interceptor de clique converte os links
+  `/produto/{slug}` da SPA nos upsells `/video/upsell{2..6}` com navegação
+  real (o mapa slug→rota fica no script final da página).
+
+Em todas as portas os parâmetros da URL (UTMs) são preservados nos links.
 
 ## Geração e validação
 

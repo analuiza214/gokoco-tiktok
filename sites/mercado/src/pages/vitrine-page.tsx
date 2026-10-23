@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { ArrowLeft, Search, ShoppingCart, MapPin, ChevronRight, Star, Truck } from "lucide-react";
 
 // A lista de produtos é injetada pelo build (scripts/build-kalodata-upsells.mjs)
-// no marcador "__VITRINE_PRODUCTS__".
+// no marcador __VITRINE_PRODUCTS__ abaixo.
 interface VitrineProduct {
   name: string;
   href: string;

@@ -16,23 +16,17 @@ for(const [prefix,theme] of [['','original'],['/tl','tl'],['/video','bella']]) {
     assert.equal(response.headers.get('Content-Type'),'text/html; charset=utf-8');
   }
   const storefront=fs.readFileSync(path.join(dist,'upsell-pages',`${theme}-vitrine.txt`),'utf8');
-  assert.equal((storefront.match(/data-product-link href=/g)||[]).length,5);
-  for(const product of upsellCatalog)assert.ok(storefront.includes(`href="${prefix}/upsell${product.step}"`));
+  // A vitrine usa o visual do próprio site: a original clona o loja.html e a
+  // TL/Bella levam o catálogo dentro do bundle gerado do site.
+  const vbundle=theme==='original'?'':fs.readFileSync(path.join(dist,'upsell-assets',`${theme}-vitrine-model.js`),'utf8')
+    .replace(/\\x([0-9a-fA-F]{2})|\\u([0-9a-fA-F]{4})/g,(_,a,b)=>String.fromCharCode(parseInt(a||b,16)));
+  const vall=storefront+vbundle;
+  for(const product of upsellCatalog) {
+    assert.ok(vall.includes(`upsell${product.step}`),`${theme}: link do ${product.id} ausente`);
+    assert.ok(vall.includes(product.name),`${theme}: nome do ${product.id} ausente`);
+    assert.ok(vall.includes(`/kalodata/${product.id}/Imagens/`),`${theme}: foto do ${product.id} ausente`);
+  }
   for(const [,script] of storefront.matchAll(/<script>([\s\S]*?)<\/script>/g))new vm.Script(script);
-  // Run the real storefront controller with a minimal DOM to test combined
-  // category/search filters, reset and attribution on every product link.
-  const element = dataset => ({dataset,hidden:false,value:'',events:{},attributes:{},addEventListener(event,fn){this.events[event]=fn;},setAttribute(k,v){this.attributes[k]=v;},focus(){this.focused=true;}});
-  const cards=upsellCatalog.map(p=>element({name:p.name,category:p.category.includes('cabelos')?'Cabelos':p.category.includes('pele')?'Pele':'Corpo'}));
-  const filters=['Todos','Cabelos','Pele','Corpo'].map(filter=>element({filter}));
-  const ids=Object.fromEntries(['product-search','result-count','empty-results','reset-search'].map(id=>[id,element({})]));
-  const links=upsellCatalog.map(p=>({href:`https://example.test${prefix}/upsell${p.step}`}));
-  const document={getElementById:id=>ids[id],querySelectorAll:selector=>({'.shop-card':cards,'[data-filter]':filters,'[data-product-link]':links})[selector]};
-  vm.runInNewContext([...storefront.matchAll(/<script>([\s\S]*?)<\/script>/g)][0][1],{document,URL,location:{search:'?utm_source=test'}});
-  filters[1].events.click();assert.equal(cards.filter(c=>!c.hidden).length,3);
-  ids['product-search'].value='obrigatorio';ids['product-search'].events.input();assert.equal(cards.filter(c=>!c.hidden).length,1);
-  filters[2].events.click();assert.equal(cards.filter(c=>!c.hidden).length,0);assert.equal(ids['empty-results'].hidden,false);
-  ids['reset-search'].events.click();assert.equal(cards.filter(c=>!c.hidden).length,5);assert.equal(ids['empty-results'].hidden,true);
-  assert.ok(links.every(link=>link.href.endsWith('?utm_source=test')));
   for(const product of upsellCatalog) {
     for(const [route,file] of [[`upsell${product.step}`,`${theme}-${product.id}`],[`pagamento-${product.id}`,`${theme}-pagamento-${product.id}`]]) {
       for(const suffix of ['','/','.html']) {
