@@ -712,9 +712,11 @@ fbq('track','PageView');
               window.__gokocoWaContactClicked=true;
               window.location.assign(_waUrl);
             });
+            var _offerNav=false;
             var _cta=ov.querySelector('#gokoco-offer-cta');
             if(_cta) _cta.addEventListener('click',function(e){
               e.preventDefault();
+              _offerNav=true;
               var h=_cta.getAttribute('href');
               if(window.lvGo){window.lvGo(h);}else{window.top.location.href=h;}
             });
@@ -729,6 +731,38 @@ fbq('track','PageView');
                 if(window.lvGo){window.lvGo(_next);}else{window.top.location.href=_next;}
               }
             },1000);
+            // Popup "Oferta do dia" — se a pessoa não entrar na oferta em ~10s,
+            // reforça o desconto com um cupom chamativo antes dela fechar a página.
+            if(_o){
+              setTimeout(function(){
+                if(_offerNav||!ov.parentNode) return;
+                var _pct=Math.max(1,Math.round((1-(_o.porV/_o.deV))*100));
+                var pop=document.createElement('div');
+                pop.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:20px;font-family:Inter,system-ui,sans-serif';
+                pop.innerHTML='<div style="width:100%;max-width:340px;text-align:center">'
+                  +'<div style="display:inline-block;background:#ffe4ee;color:#e01e5a;font-size:11px;font-weight:800;letter-spacing:.12em;padding:6px 14px;border-radius:999px;margin-bottom:14px">OFERTA DO DIA</div>'
+                  +'<div style="position:relative;background:linear-gradient(135deg,#ff2e63,#ff5e62);border-radius:20px;padding:26px 20px 18px;color:#fff;box-shadow:0 18px 40px rgba(224,30,90,.35)">'
+                  +'<i style="position:absolute;left:-11px;top:50%;width:22px;height:22px;margin-top:-11px;border-radius:50%;background:#3a3040"></i>'
+                  +'<i style="position:absolute;right:-11px;top:50%;width:22px;height:22px;margin-top:-11px;border-radius:50%;background:#3a3040"></i>'
+                  +'<div style="font-size:56px;font-weight:900;line-height:1">'+_pct+'%</div>'
+                  +'<div style="font-size:18px;font-weight:800;letter-spacing:.2em;margin-top:2px">OFF</div>'
+                  +'<div style="border-top:2px dashed rgba(255,255,255,.55);margin:16px -20px 0"></div>'
+                  +'<div style="font-size:12px;opacity:.95;padding-top:12px">Oferta do dia neste pedido</div>'
+                  +'</div>'
+                  +'<div style="font-size:17px;font-weight:800;color:#fff;margin:16px 0 4px">Oferta do dia: '+_pct+'% OFF</div>'
+                  +'<div style="font-size:13px;color:rgba(255,255,255,.75);margin-bottom:16px">O desconto de hoje pra este produto.</div>'
+                  +'<button type="button" id="gokoco-offer-pop-cta" style="width:100%;min-height:50px;border:0;border-radius:12px;background:linear-gradient(135deg,#ff2e63,#ff5e62);color:#fff;font-family:inherit;font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 8px 20px rgba(224,30,90,.4)">Resgatar agora</button>'
+                  +'<button type="button" id="gokoco-offer-pop-close" style="margin-top:10px;background:none;border:0;color:rgba(255,255,255,.6);font-family:inherit;font-size:12px;cursor:pointer;text-decoration:underline">Agora não</button>'
+                  +'</div>';
+                document.body.appendChild(pop);
+                pop.querySelector('#gokoco-offer-pop-cta').addEventListener('click',function(){
+                  _offerNav=true;
+                  if(window.lvGo){window.lvGo(_next);}else{window.top.location.href=_next;}
+                });
+                pop.querySelector('#gokoco-offer-pop-close').addEventListener('click',function(){pop.remove();});
+                pop.addEventListener('click',function(ev){if(ev.target===pop)pop.remove();});
+              },10000);
+            }
           }catch(e){}
         })
         .catch(function(){});
