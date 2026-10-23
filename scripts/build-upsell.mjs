@@ -19,10 +19,10 @@ fs.mkdirSync(pages, { recursive: true });
 const PRODUCT = {
   id: 'pincel',
   name: 'Kit de Pincéis Profissional',
-  price: 29.90,
-  priceText: 'R$ 29,90',
+  price: 11.96,
+  priceText: 'R$ 11,96',
   oldPriceText: 'R$ 89,90',
-  installment: '5x R$ 5,98 sem juros',
+  installment: '5x R$ 2,39 sem juros',
   checkoutUrl: '/pagamento-pincel',
   description: 'O Kit de Pincéis Profissional reúne os pincéis essenciais para uma maquiagem completa: base, corretivo, pó, blush, contorno, sombra, delineado e acabamento. Cerdas sintéticas macias e densas, que não soltam e espalham o produto sem desperdício.',
   description2: 'Cabos firmes e confortáveis, virolas reforçadas e kit pensado para uso diário ou profissional. Fácil de limpar com sabão neutro.',
@@ -52,7 +52,7 @@ const PRODUCT = {
   matchLabel: 'Pincéis',
   slug: 'kit-pinceis-profissional',
   // Dados exibidos só na versão Bella Mix (produto injetado em lib/data.ts).
-  bella: { price: 32.90, rating: 4.9, reviewCount: 582, soldCount: '693 vendidos' },
+  bella: { price: 13.16, rating: 4.9, reviewCount: 582, soldCount: '693 vendidos' },
   faq: [
     { question: 'Quantos pincéis vêm no kit?', answer: 'O kit completo acompanha os pincéis essenciais para rosto, olhos e acabamento.' },
     { question: 'As cerdas são sintéticas?', answer: 'Sim, cerdas sintéticas macias e densas, fáceis de limpar.' },
@@ -310,9 +310,9 @@ function buildPagamento(product = PRODUCT, gallery = PHOTOS, filename = 'pagamen
     [`localStorage.setItem('precoUnit','37.90')`, `localStorage.setItem('precoUnit','${PRODUCT.price}')`],
     ['v=37.90', `v=${PRODUCT.price}`],
     ['getAmount()||37.90', `getAmount()||${PRODUCT.price}`],
-    ['R$&nbsp;37,90', `R$&nbsp;29,90`],
+    ['R$&nbsp;37,90', `R$&nbsp;${PRODUCT.price.toFixed(2).replace('.', ',')}`],
     ['R$ 37,90', PRODUCT.priceText],
-    ['37,90', '29,90'], ['37.90', '29.90'], ['>37<', '>29<'],
+    ['37,90', PRODUCT.price.toFixed(2).replace('.', ',')], ['37.90', PRODUCT.price.toFixed(2)], ['>37<', `>${Math.trunc(PRODUCT.price)}<`],
     ['Escova Modeladora GOKOCO 3 em 1', PRODUCT.name],
     ['Escova Modeladora GOKOCO', PRODUCT.name],
     ['/images/f2/potes-1.webp', photos[0]],
@@ -331,7 +331,7 @@ function buildPagamento(product = PRODUCT, gallery = PHOTOS, filename = 'pagamen
   }
   if (filename !== 'pagamento') {
     // The original template has legacy fixed-price substitutions above.
-    pag = pag.replaceAll('29.90', PRODUCT.price.toFixed(2)).replaceAll('29,90', PRODUCT.price.toFixed(2).replace('.', ','))
+    pag = pag.replaceAll('11.96', PRODUCT.price.toFixed(2)).replaceAll('11,96', PRODUCT.price.toFixed(2).replace('.', ','))
       .replaceAll('/upsell3', next).replaceAll('lv_checkout_id', `lv_checkout_${PRODUCT.id}`)
       .replaceAll('Escova Modeladora GOKOCO', PRODUCT.name)
       .replaceAll('Garantia 12 meses', 'Confira as condições da loja')

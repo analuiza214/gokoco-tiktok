@@ -48,7 +48,7 @@ for (const route of ['/pagamento-pincel', '/tl/pagamento-pincel', '/video/pagame
 }
 const pincelCheckout = readFileSync(new URL('../dist/upsell-pages/pagamento.txt', import.meta.url), 'utf8');
 assert.match(pincelCheckout, /product:'pincel'/);
-assert.match(pincelCheckout, /29[.,]9/);
+assert.match(pincelCheckout, /11[.,]96/);
 assert.equal(await path('https://gokoco.example/upsell-assets/app.js'), '/upsell-assets/app.js');
 const upsellScript = readFileSync(new URL('../dist/upsell-assets/app.js', import.meta.url), 'utf8');
 assert.match(upsellScript, /\/video\/upsell1/);
