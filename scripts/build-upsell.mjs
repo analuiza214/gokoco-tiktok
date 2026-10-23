@@ -319,6 +319,7 @@ function buildPagamento(product = PRODUCT, gallery = PHOTOS, filename = 'pagamen
     [`de:'R$ 129,90'`, `de:'${PRODUCT.oldPriceText}'`],
     ['Realizei o pagamento da minha compra da escova GOKOCO', `Realizei o pagamento da minha compra do ${PRODUCT.name}`],
     [`localStorage.setItem('voltagemSelecionada','Bivolt')`, `localStorage.setItem('voltagemSelecionada','')`],
+    ['Sua escova está paga e confirmada', 'Sua compra está paga e confirmada'],
   ]) pag = pag.split(from).join(to);
   // Carrinho do pincel: sem cores, marcado como produto próprio pro cartTotal.
   pag = pag.replace('return {qty:order.qty||1,colors:colors,', `return {product:'${PRODUCT.id}',qty:order.qty||1,colors:[],`);

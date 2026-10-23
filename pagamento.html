@@ -687,27 +687,26 @@ fbq('track','PageView');
             var _waText='Olá! Realizei o pagamento da minha compra da escova GOKOCO e gostaria de pegar o código de rastreio, por favor.';
             var _waUrl='https://wa.me/5583993302240?text='+encodeURIComponent(_waText);
             // Oferta exibida na confirmação — substituída por produto nos checkouts gerados.
-            var LV_OFFER={name:'Kit Profissional Liso Obrigatório 1L + Óleo Ativador de Escova',img:'/upsell-assets/kalodata/liso-obrigatorio/Imagens/01-principal.png',de:'R$ 57,90',por:'R$ 38,36',href:'/upsell3'};
+            var LV_OFFER={name:'Kit Profissional Liso Obrigatório 1L + Óleo Ativador de Escova',img:'/upsell-assets/kalodata/liso-obrigatorio/Imagens/01-principal.png',de:'R$ 57,90',por:'R$ 38,36',deV:57.9,porV:38.36,href:'/upsell3'};
             var _o=LV_OFFER, _qs=location.search||'';
             var _next=(_o?_o.href:'/upsell3')+_qs;
-            ov.innerHTML='<section style="width:100%;max-width:380px;background:#fff;border:1px solid #e5e7eb;border-radius:24px;padding:30px 24px;box-shadow:0 12px 36px rgba(15,23,42,.08)">'
-              +'<div style="width:72px;height:72px;margin:0 auto 18px;border-radius:50%;background:#10b981;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(16,185,129,.25)"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>'
-              +'<div style="font-size:11px;letter-spacing:1.4px;font-weight:800;color:#059669;margin-bottom:8px">PAGAMENTO CONFIRMADO</div>'
-              +'<div style="font-size:24px;line-height:1.2;font-weight:800;color:#111827;margin-bottom:10px">Pagamento aprovado!</div>'
-              +(_trackingCode?'<div style="font-size:13px;line-height:1.5;color:#64748b;margin-bottom:8px">Seu código de rastreio já está pronto:</div><div style="font-family:monospace;font-size:19px;font-weight:900;letter-spacing:2px;color:#111827;background:#f3f4f6;border-radius:12px;padding:10px;margin:0 auto 14px">'+_trackingCode+'</div>':'<div style="font-size:14px;line-height:1.55;color:#64748b;max-width:310px;margin:0 auto 14px">Seu pedido foi confirmado.</div>')
-              +(_o?'<div style="border-top:1px dashed #e5e7eb;padding-top:14px;margin-top:2px">'
-                +'<div style="font-size:11px;letter-spacing:1.1px;font-weight:800;color:#be123c;margin-bottom:10px">OFERTA DESBLOQUEADA POR SER CLIENTE</div>'
-                +'<div style="display:flex;gap:10px;align-items:center;text-align:left"><img src="'+_o.img+'" alt="" style="width:56px;height:56px;object-fit:contain;border-radius:10px;background:#f5f5f5;flex:0 0 auto"><div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:700;color:#111827;line-height:1.3">'+_o.name+'</div><div style="margin-top:2px"><span style="font-size:11.5px;color:#9ca3af;text-decoration:line-through">'+_o.de+'</span> <span style="font-size:16px;font-weight:900;color:#16a34a">'+_o.por+'</span></div></div></div>'
-                +'<a id="gokoco-offer-cta" href="'+_o.href+_qs+'" style="display:flex;align-items:center;justify-content:center;min-height:50px;margin-top:12px;border-radius:12px;background:#16a34a;color:#fff;font-size:15px;font-weight:800;text-decoration:none;box-shadow:0 5px 14px rgba(22,163,74,.25)">Adicionar ao meu pedido →</a>'
-                +'<div style="font-size:11px;color:#6b7280;margin-top:7px">Chega junto com o seu pedido · pagamento rápido via PIX</div>'
-                +'</div>':'')
-              +'<div id="gokoco-offer-cd" style="font-size:11.5px;color:#9ca3af;margin-top:10px">'+
-                (_o?'Abrindo sua oferta em 10s…':'Abrindo o resumo do seu pedido em 10s…')+'</div>'
-              +'<div style="display:flex;gap:18px;justify-content:center;margin-top:14px;font-size:12.5px">'
+            var _save=_o?('R$ '+Math.max(0,_o.deV-_o.porV).toFixed(2).replace('.',',')):'';
+            ov.innerHTML='<section style="width:100%;max-width:400px;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 12px 36px rgba(15,23,42,.10)">'
+              +'<div style="background:#dcfce7;color:#15803d;font-size:13px;font-weight:700;padding:11px 16px;display:flex;align-items:center;justify-content:center;gap:7px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Sua escova está paga e confirmada</div>'
+              +'<div style="padding:20px 22px 20px;text-align:center">'
+              +(_trackingCode?'<div style="font-size:11.5px;color:#64748b;margin-bottom:13px">Código de rastreio: <span style="font-family:monospace;font-weight:800;color:#111827">'+_trackingCode+'</span></div>':'')
+              +(_o?'<div style="font-size:22px;line-height:1.25;font-weight:800;color:#111827;margin-bottom:14px">Oferta única por ser cliente</div>'
+                +'<img src="'+_o.img+'" alt="" style="width:150px;height:150px;object-fit:contain;margin:0 auto 10px;display:block">'
+                +'<div style="font-size:14px;font-weight:700;color:#111827;margin-bottom:12px">'+_o.name+'</div>'
+                +'<div style="background:#fdf2f8;border:1px solid #fbcfe8;border-radius:14px;padding:13px;margin-bottom:11px"><div style="font-size:12px;color:#9ca3af;text-decoration:line-through">De '+_o.de+'</div><div style="font-size:30px;font-weight:900;color:#be185d;line-height:1.1">'+_o.por+'</div><div style="font-size:13px;font-weight:700;color:#be185d;margin-top:2px">Você economiza '+_save+'</div></div>'
+                +'<div style="font-size:12px;font-weight:700;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:8px;margin-bottom:12px">A oferta expira em <span id="gokoco-offer-cd" style="font-family:monospace;font-size:13px">05:00</span></div>'
+                +'<a id="gokoco-offer-cta" href="'+_o.href+_qs+'" style="display:flex;align-items:center;justify-content:center;min-height:52px;border-radius:12px;background:#be185d;color:#fff;font-size:15px;font-weight:800;text-decoration:none;box-shadow:0 5px 14px rgba(190,24,93,.25)">QUERO COM DESCONTO →</a>'
+                +'<div style="font-size:11.5px;color:#6b7280;margin-top:8px">Novo pagamento rápido via PIX</div>'
+                :'<div style="font-size:22px;font-weight:800;color:#111827;margin-bottom:8px">Pedido confirmado!</div><div id="gokoco-offer-cd" style="font-size:12px;color:#9ca3af">Abrindo o resumo do seu pedido em 10s…</div>')
+              +'<div style="display:flex;gap:18px;justify-content:center;margin-top:15px;font-size:12.5px">'
               +(_trackingCode?'<a href="'+_trackingUrl+'" onclick="window.__gokocoWaContactClicked=true" style="color:#6b7280;text-decoration:underline">Acompanhar pedido</a>':'')
               +'<a href="#" id="gokoco-tracking-whatsapp" style="color:#16a34a;text-decoration:underline">Código no WhatsApp</a>'
-              +'</div>'
-              +'</section>';
+              +'</div></div></section>';
             window.__gokocoWaContactClicked=false;
             document.body.appendChild(ov);
             var _waButton=ov.querySelector('#gokoco-tracking-whatsapp');
@@ -723,11 +722,11 @@ fbq('track','PageView');
               if(window.lvGo){window.lvGo(h);}else{window.top.location.href=h;}
             });
             var _cdEl=ov.querySelector('#gokoco-offer-cd');
-            var _secs=10;
+            var _secs=_o?300:10;
             var _cdTimer=setInterval(function(){
-              if(window.__gokocoWaContactClicked){ clearInterval(_cdTimer); if(_cdEl&&_o)_cdEl.textContent='Sua oferta continua disponível nesta tela.'; return; }
+              if(window.__gokocoWaContactClicked){ clearInterval(_cdTimer); return; }
               _secs--;
-              if(_cdEl)_cdEl.textContent=(_o?'Abrindo sua oferta em ':'Abrindo o resumo do seu pedido em ')+_secs+'s…';
+              if(_cdEl)_cdEl.textContent=_o?(('0'+Math.floor(_secs/60)).slice(-2)+':'+('0'+(_secs%60)).slice(-2)):('Abrindo o resumo do seu pedido em '+_secs+'s…');
               if(_secs<=0){
                 clearInterval(_cdTimer);
                 if(window.lvGo){window.lvGo(_next);}else{window.top.location.href=_next;}

@@ -102,7 +102,8 @@ export function offerFor(productId) {
   const p = upsellCatalog.find(q => q.id === productId);
   if (!p) return null;
   const cfg = productConfig(p, 1);
-  return { name: p.name, img: `/upsell-assets/kalodata/${p.id}/Imagens/01-principal.png`, de: cfg.oldPriceText, por: cfg.priceText, href: '/upsell3' };
+  const deV = Math.ceil(p.price * 1.5) - 0.1;
+  return { name: p.name, img: `/upsell-assets/kalodata/${p.id}/Imagens/01-principal.png`, de: cfg.oldPriceText, por: cfg.priceText, deV, porV: p.price, href: '/upsell3' };
 }
 
 // Mesma forma do PRODUCT do build-upsell.mjs, preenchida a partir do catálogo.
