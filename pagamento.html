@@ -367,6 +367,21 @@ fbq('track','PageView');
     // (copiar PIX é tratado por um único handler no fim da página)
 
   }
+  // Cliente voltando do funil (dados salvos no checkout anterior) cai direto
+  // na etapa do PIX — basta clicar em "EFETUAR PAGAMENTO" para gerar o código.
+  try{
+    var _d=loadDados(), _e=loadEndereco();
+    var _okPessoais=_d.nome&&_d.email&&(_d.cpf||'').replace(/\D/g,'').length>=11&&(_d.telefone||'').replace(/\D/g,'').length>=10;
+    var _okEnd=_e.cep&&_e.cep.replace(/\D/g,'').length===8&&_e.logradouro&&_e.numero&&_e.bairro&&_e.cidade&&_e.uf;
+    if(_okPessoais&&_okEnd){
+      var _map={'Nome e Sobrenome':_d.nome,'email@email.com':_d.email,'123.456.789-12':fmtDoc(_d.cpf),'(99) 99999-9999':fmtPhone(_d.telefone)};
+      document.querySelectorAll('input').forEach(function(inp){ var v=_map[inp.getAttribute('placeholder')]; if(v&&!inp.value) inp.value=v; });
+      var _ids={'lv-cep':_e.cep,'lv-endereco':_e.logradouro,'lv-numero':_e.numero,'lv-complemento':_e.complemento||'','lv-bairro':_e.bairro,'lv-cidade':_e.cidade,'lv-uf':_e.uf};
+      Object.keys(_ids).forEach(function(id){ var el=document.getElementById(id); if(el&&!el.value) el.value=_ids[id]; });
+      renderResumo();
+      show(3);
+    }
+  }catch(_e){}
   bind();
   // Rebind on any DOM changes
   new MutationObserver(bind).observe(document.body,{childList:true,subtree:true});
@@ -619,7 +634,7 @@ fbq('track','PageView');
   var pollTimer=null;
   function startPolling(txId){
     if(pollTimer) clearInterval(pollTimer);
-    try{ localStorage.setItem('lastPixTx', txId||''); localStorage.setItem('lastPixTxAt', String(Date.now())); localStorage.setItem('lvPixNext','/upsell1'); }catch(e){}
+    try{ localStorage.setItem('lastPixTx', txId||''); localStorage.setItem('lastPixTxAt', String(Date.now())); localStorage.setItem('lvPixNext','/upsell3'); }catch(e){}
     var redirected=false;
     function checkOnce(){
       if(redirected) return;
@@ -652,9 +667,9 @@ fbq('track','PageView');
           try{ localStorage.setItem('pixPaid_'+txId,'1'); localStorage.removeItem('lv_pix_cache'); }catch(e){}
           // Analytics: funnel step — confirm redirect to upsell2
           try{
-            var _payload={txId:txId,status:'paid',amount:_amt,to:'/upsell1',ts:Date.now()};
+            var _payload={txId:txId,status:'paid',amount:_amt,to:'/upsell3',ts:Date.now()};
             if(typeof fbq==='function') fbq('trackCustom','UpsellRedirect',_payload);
-            if(window.dataLayer) window.dataLayer.push({event:'upsell_redirect',pix_tx_id:txId,pix_status:'paid',pix_amount:_amt,destination:'/upsell1'});
+            if(window.dataLayer) window.dataLayer.push({event:'upsell_redirect',pix_tx_id:txId,pix_status:'paid',pix_amount:_amt,destination:'/upsell3'});
             navigator.sendBeacon && navigator.sendBeacon('/api/public/analytics/upsell-redirect', new Blob([JSON.stringify(_payload)],{type:'application/json'}));
             try{ localStorage.setItem('upsellRedirect_'+txId, JSON.stringify(_payload)); }catch(e){}
             console.log('[funnel] upsell_redirect', _payload);
@@ -671,25 +686,54 @@ fbq('track','PageView');
             ov.style.cssText='position:fixed;inset:0;z-index:99999;background:#f8fafc;display:flex;align-items:center;justify-content:center;font-family:inherit;padding:20px;text-align:center';
             var _waText='Olá! Realizei o pagamento da minha compra da escova GOKOCO e gostaria de pegar o código de rastreio, por favor.';
             var _waUrl='https://wa.me/5583993302240?text='+encodeURIComponent(_waText);
-            ov.innerHTML='<section style="width:100%;max-width:380px;background:#fff;border:1px solid #e5e7eb;border-radius:24px;padding:32px 24px;box-shadow:0 12px 36px rgba(15,23,42,.08)">'
-              +'<div style="width:76px;height:76px;margin:0 auto 20px;border-radius:50%;background:#10b981;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(16,185,129,.25)"><svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>'
+            // Oferta exibida na confirmação — substituída por produto nos checkouts gerados.
+            var LV_OFFER={name:'Kit Profissional Liso Obrigatório 1L + Óleo Ativador de Escova',img:'/upsell-assets/kalodata/liso-obrigatorio/Imagens/01-principal.png',de:'R$ 143,90',por:'R$ 95,90',href:'/upsell3'};
+            var _o=LV_OFFER, _qs=location.search||'';
+            var _next=(_o?_o.href:'/upsell3')+_qs;
+            ov.innerHTML='<section style="width:100%;max-width:380px;background:#fff;border:1px solid #e5e7eb;border-radius:24px;padding:30px 24px;box-shadow:0 12px 36px rgba(15,23,42,.08)">'
+              +'<div style="width:72px;height:72px;margin:0 auto 18px;border-radius:50%;background:#10b981;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(16,185,129,.25)"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>'
               +'<div style="font-size:11px;letter-spacing:1.4px;font-weight:800;color:#059669;margin-bottom:8px">PAGAMENTO CONFIRMADO</div>'
-              +'<div style="font-size:26px;line-height:1.2;font-weight:800;color:#111827;margin-bottom:10px">Pagamento aprovado!</div>'
-              +(_trackingCode?'<div style="font-size:14px;line-height:1.5;color:#64748b;max-width:310px;margin:0 auto 12px">Seu código de rastreio já está pronto:</div><div style="font-family:monospace;font-size:20px;font-weight:900;letter-spacing:2px;color:#111827;background:#f3f4f6;border-radius:12px;padding:12px;margin:0 auto 18px">'+_trackingCode+'</div><a href="'+_trackingUrl+'" onclick="window.__gokocoWaContactClicked=true" style="min-height:52px;width:100%;display:flex;align-items:center;justify-content:center;padding:14px 18px;border-radius:14px;background:#111827;color:#fff;font-size:15px;font-weight:800;text-decoration:none;margin-bottom:10px">Acompanhar meu pedido</a>':'<div style="font-size:15px;line-height:1.55;color:#64748b;max-width:310px;margin:0 auto 24px">Seu pedido foi confirmado. Consulte o código de rastreio nesta tela ou fale com a nossa equipe.</div>')
-              +'<button type="button" id="gokoco-tracking-whatsapp" style="min-height:54px;width:100%;display:flex;align-items:center;justify-content:center;gap:10px;padding:14px 18px;border:0;border-radius:14px;background:#25d366;color:#fff;font-family:inherit;font-size:16px;font-weight:800;cursor:pointer;box-shadow:0 5px 14px rgba(37,211,102,.22)"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M11.999 0C5.373 0 0 5.373 0 12c0 2.126.555 4.122 1.524 5.854L0 24l6.336-1.494A11.949 11.949 0 0012 24c6.627 0 12-5.373 12-12S18.626 0 11.999 0zm0 21.818a9.808 9.808 0 01-5.006-1.37l-.36-.213-3.76.886.936-3.66-.234-.376A9.818 9.818 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182 17.43 2.182 21.818 6.57 21.818 12c0 5.43-4.389 9.818-9.819 9.818z"/></svg>Pegar código de rastreio</button>'
+              +'<div style="font-size:24px;line-height:1.2;font-weight:800;color:#111827;margin-bottom:10px">Pagamento aprovado!</div>'
+              +(_trackingCode?'<div style="font-size:13px;line-height:1.5;color:#64748b;margin-bottom:8px">Seu código de rastreio já está pronto:</div><div style="font-family:monospace;font-size:19px;font-weight:900;letter-spacing:2px;color:#111827;background:#f3f4f6;border-radius:12px;padding:10px;margin:0 auto 14px">'+_trackingCode+'</div>':'<div style="font-size:14px;line-height:1.55;color:#64748b;max-width:310px;margin:0 auto 14px">Seu pedido foi confirmado.</div>')
+              +(_o?'<div style="border-top:1px dashed #e5e7eb;padding-top:14px;margin-top:2px">'
+                +'<div style="font-size:11px;letter-spacing:1.1px;font-weight:800;color:#be123c;margin-bottom:10px">OFERTA DESBLOQUEADA POR SER CLIENTE</div>'
+                +'<div style="display:flex;gap:10px;align-items:center;text-align:left"><img src="'+_o.img+'" alt="" style="width:56px;height:56px;object-fit:contain;border-radius:10px;background:#f5f5f5;flex:0 0 auto"><div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:700;color:#111827;line-height:1.3">'+_o.name+'</div><div style="margin-top:2px"><span style="font-size:11.5px;color:#9ca3af;text-decoration:line-through">'+_o.de+'</span> <span style="font-size:16px;font-weight:900;color:#16a34a">'+_o.por+'</span></div></div></div>'
+                +'<a id="gokoco-offer-cta" href="'+_o.href+_qs+'" style="display:flex;align-items:center;justify-content:center;min-height:50px;margin-top:12px;border-radius:12px;background:#16a34a;color:#fff;font-size:15px;font-weight:800;text-decoration:none;box-shadow:0 5px 14px rgba(22,163,74,.25)">Adicionar ao meu pedido →</a>'
+                +'<div style="font-size:11px;color:#6b7280;margin-top:7px">Chega junto com o seu pedido · pagamento rápido via PIX</div>'
+                +'</div>':'')
+              +'<div id="gokoco-offer-cd" style="font-size:11.5px;color:#9ca3af;margin-top:10px">'+
+                (_o?'Abrindo sua oferta em 10s…':'Abrindo o resumo do seu pedido em 10s…')+'</div>'
+              +'<div style="display:flex;gap:18px;justify-content:center;margin-top:14px;font-size:12.5px">'
+              +(_trackingCode?'<a href="'+_trackingUrl+'" onclick="window.__gokocoWaContactClicked=true" style="color:#6b7280;text-decoration:underline">Acompanhar pedido</a>':'')
+              +'<a href="#" id="gokoco-tracking-whatsapp" style="color:#16a34a;text-decoration:underline">Código no WhatsApp</a>'
+              +'</div>'
               +'</section>';
             window.__gokocoWaContactClicked=false;
             document.body.appendChild(ov);
             var _waButton=ov.querySelector('#gokoco-tracking-whatsapp');
-            if(_waButton) _waButton.addEventListener('click',function(){
+            if(_waButton) _waButton.addEventListener('click',function(e){
+              e.preventDefault();
               window.__gokocoWaContactClicked=true;
               window.location.assign(_waUrl);
             });
+            var _cta=ov.querySelector('#gokoco-offer-cta');
+            if(_cta) _cta.addEventListener('click',function(e){
+              e.preventDefault();
+              var h=_cta.getAttribute('href');
+              if(window.lvGo){window.lvGo(h);}else{window.top.location.href=h;}
+            });
+            var _cdEl=ov.querySelector('#gokoco-offer-cd');
+            var _secs=10;
+            var _cdTimer=setInterval(function(){
+              if(window.__gokocoWaContactClicked){ clearInterval(_cdTimer); if(_cdEl&&_o)_cdEl.textContent='Sua oferta continua disponível nesta tela.'; return; }
+              _secs--;
+              if(_cdEl)_cdEl.textContent=(_o?'Abrindo sua oferta em ':'Abrindo o resumo do seu pedido em ')+_secs+'s…';
+              if(_secs<=0){
+                clearInterval(_cdTimer);
+                if(window.lvGo){window.lvGo(_next);}else{window.top.location.href=_next;}
+              }
+            },1000);
           }catch(e){}
-          setTimeout(function(){
-            if(window.__gokocoWaContactClicked) return;
-            if(window.lvGo){window.lvGo('/upsell1');}else{window.top.location.href='/upsell1';}
-          }, 10000);
         })
         .catch(function(){});
     }
@@ -853,7 +897,7 @@ fbq('track','PageView');
         revealQr();
 
         var ids=[res.j.transactionId,res.j.gatewayTransactionId].filter(Boolean).filter(function(v,i,a){return a.indexOf(v)===i;}).join(',');
-        try{ localStorage.setItem('lastPixTx', ids||''); localStorage.setItem('lastPixTxAt', String(Date.now())); localStorage.setItem('lvPixNext','/upsell1'); localStorage.setItem('lastPixOrder', res.j.orderId||res.j.gatewayTransactionId||''); }catch(e){}
+        try{ localStorage.setItem('lastPixTx', ids||''); localStorage.setItem('lastPixTxAt', String(Date.now())); localStorage.setItem('lvPixNext','/upsell3'); localStorage.setItem('lastPixOrder', res.j.orderId||res.j.gatewayTransactionId||''); }catch(e){}
         try{ localStorage.setItem('lv_pix_cache', JSON.stringify({ids:ids||'',cp:cp,qr:res.j.qrCode||'',amount:res.j.amount,ts:Date.now()})); }catch(e){}
         showPixHelp();
         if(ids) startPolling(ids);

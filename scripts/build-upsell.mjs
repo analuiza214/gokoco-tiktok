@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
-import { buildKalodataUpsells } from './build-kalodata-upsells.mjs';
+import { buildKalodataUpsells, offerFor } from './build-kalodata-upsells.mjs';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const output = path.join(root, 'dist');
@@ -300,7 +300,7 @@ function buildOriginal(product = PRODUCT, photos = PHOTOS, videos = [], key = 'o
 }
 
 /* ------------------------------------------------------- Checkout do pincel */
-function buildPagamento(product = PRODUCT, gallery = PHOTOS, filename = 'pagamento', next = '/upsell1') {
+function buildPagamento(product = PRODUCT, gallery = PHOTOS, filename = 'pagamento', next = '/upsell3', offer = undefined) {
   const PRODUCT = product;
   const photos = gallery;
   let pag = fs.readFileSync(path.join(root, 'pagamento.html'), 'utf8');
@@ -325,10 +325,14 @@ function buildPagamento(product = PRODUCT, gallery = PHOTOS, filename = 'pagamen
   // Semeia a seleção do produto caso o cliente caia direto no checkout.
   pag = pag.replace('</head>', `<meta name="robots" content="noindex,nofollow"><style>${spriteCss}</style></head>`)
     .replace('<body>', `<body data-theme="checkout"><script>try{localStorage.setItem('corSelecionada',${JSON.stringify(PRODUCT.name)});localStorage.setItem('corImagem',${JSON.stringify(photos[0])});localStorage.setItem('coresSelecionadas','[]');}catch(e){}<\/script>`);
+  if (offer !== undefined) {
+    // Card de oferta pós-pagamento: produto seguinte do funil (ou nenhum).
+    pag = pag.replace(/var LV_OFFER=\{[^;]*\};?/, `var LV_OFFER=${offer ? JSON.stringify(offer) : 'null'};`);
+  }
   if (filename !== 'pagamento') {
     // The original template has legacy fixed-price substitutions above.
     pag = pag.replaceAll('29.90', PRODUCT.price.toFixed(2)).replaceAll('29,90', PRODUCT.price.toFixed(2).replace('.', ','))
-      .replaceAll('/upsell1', next).replaceAll('lv_checkout_id', `lv_checkout_${PRODUCT.id}`)
+      .replaceAll('/upsell3', next).replaceAll('lv_checkout_id', `lv_checkout_${PRODUCT.id}`)
       .replaceAll('Escova Modeladora GOKOCO', PRODUCT.name)
       .replaceAll('Garantia 12 meses', 'Confira as condições da loja')
       .replaceAll('Cor: ', 'Opção: ');
@@ -339,7 +343,7 @@ function buildPagamento(product = PRODUCT, gallery = PHOTOS, filename = 'pagamen
 }
 
 buildOriginal();
-buildPagamento();
+buildPagamento(PRODUCT, PHOTOS, 'pagamento', '/upsell2', offerFor('popozuda'));
 await bundleVariant('tl');
 await bundleVariant('bella');
 await buildKalodataUpsells({ root, output, buildCheckout: buildPagamento, buildOriginal, bundleVariant });

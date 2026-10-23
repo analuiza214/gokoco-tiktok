@@ -96,6 +96,15 @@ const genericFaq = p => [
   { question: 'E se chegar com defeito?', answer: 'Você pode trocar seguindo a política de devolução do site.' },
 ];
 
+// Card exibido na confirmação do checkout anterior: o próximo produto do funil.
+// href usa o literal do template ('/upsell3') — a cadeia de replaces ajusta por tema.
+export function offerFor(productId) {
+  const p = upsellCatalog.find(q => q.id === productId);
+  if (!p) return null;
+  const cfg = productConfig(p, 1);
+  return { name: p.name, img: `/upsell-assets/kalodata/${p.id}/Imagens/01-principal.png`, de: cfg.oldPriceText, por: cfg.priceText, href: '/upsell3' };
+}
+
 // Mesma forma do PRODUCT do build-upsell.mjs, preenchida a partir do catálogo.
 function productConfig(p, imageCount) {
   const cardPrice = Math.ceil(p.price * 1.1) - 0.1;
@@ -190,7 +199,7 @@ export async function buildKalodataUpsells({ root, output, buildCheckout, buildO
       const tail = `<div data-upsell-tail style="text-align:center;padding:24px 16px 110px"><a href="${cfg.checkoutUrl}" style="display:inline-block;background:${theme.accent};color:#fff;font-weight:700;padding:12px 22px;border-radius:8px;text-decoration:none;margin-bottom:10px">Adicionar por ${money(p.price)}</a><p style="font-size:12px;color:#888;margin:4px 0 10px">Complemento opcional — possui pagamento próprio.</p><a href="${next}" style="color:#666;text-decoration:underline;font-size:13px">Continuar sem este produto</a></div><script>document.querySelectorAll('[data-upsell-tail] a').forEach(function(a){var u=new URL(a.href);u.search=location.search;a.href=u.href;});</script>`;
       const file = path.join(pages, `${key}.txt`);
       fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace('</body>', tail + '</body>'));
-      buildCheckout(product, images, `${theme.id}-pagamento-${p.id}`, next);
+      buildCheckout(product, images, `${theme.id}-pagamento-${p.id}`, next, offerFor((upsellCatalog.find(q => q.step === p.step + 1) || {}).id));
     }
   }
   for (const theme of themes) {
@@ -198,7 +207,7 @@ export async function buildKalodataUpsells({ root, output, buildCheckout, buildO
     fs.writeFileSync(path.join(pages, `${theme.id}-concluido.txt`), `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Suas escolhas | ${theme.name}</title><link rel="stylesheet" href="/upsell-assets/kalodata.css"><body style="--accent:${theme.accent};--background:${theme.background};--header:${theme.header};--ink:${theme.ink}"><header class="store-header"><span class="brand">${theme.name}</span></header><main><section class="last-call"><h1>Você chegou ao fim dos complementos</h1><p>Você pode acompanhar os pedidos com pagamento confirmado na página de rastreio.</p><a class="buy" href="/rastreio.html">Acompanhar meu pedido</a><a class="skip" href="${theme.prefix}/upsell2">Rever os complementos</a></section></main></body></html>`);
   }
   const pincelCheckout = path.join(pages, 'pagamento.txt');
-  fs.writeFileSync(pincelCheckout, fs.readFileSync(pincelCheckout, 'utf8').replaceAll('/upsell1', '/upsell2'));
+  fs.writeFileSync(pincelCheckout, fs.readFileSync(pincelCheckout, 'utf8').replaceAll('/upsell3', '/upsell2'));
   for (const theme of themes.filter(t => t.prefix)) {
     fs.writeFileSync(path.join(pages, `${theme.id}-pagamento-pincel.txt`), fs.readFileSync(pincelCheckout, 'utf8').replaceAll('/upsell2', `${theme.prefix}/upsell2`));
   }
