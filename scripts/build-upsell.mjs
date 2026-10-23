@@ -310,6 +310,16 @@ function buildOriginal(product = PRODUCT, photos = PHOTOS, videos = [], key = 'o
     ['Escova Modeladora GOKOCO', product.name],
     ['R$ 37,90', product.priceText], ['37,90', priceNum], ['37.90', product.price.toFixed(2)], ['>37<', `>${Math.trunc(product.price)}<`],
   ]) original = original.split(from).join(to);
+  // Desconto do template é da escova (-77% / Economize R$ 130,00 / R$ 167,90):
+  // recalcula por produto para cada página mostrar a oferta do próprio item.
+  const oldPriceNum = parseFloat(String(product.oldPriceText || '').replace(/[^\d,]/g, '').replace(',', '.'));
+  if (oldPriceNum > product.price) {
+    const disc = Math.max(1, Math.round((1 - product.price / oldPriceNum) * 100));
+    const save = (oldPriceNum - product.price).toFixed(2).replace('.', ',');
+    original = original.split('-77%').join(`-${disc}%`).split('77%').join(`${disc}%`)
+      .split('R$ 167,90').join(product.oldPriceText)
+      .split('R$&nbsp;130,00').join(`R$&nbsp;${save}`);
+  }
   original = original.replace(/(<p\b[^>]*>)(?:(?!<\/p>)[\s\S])*Escolha a cor[\s\S]*?<\/p>/g,
     '$1Escolha a opção e a quantidade ao clicar em Comprar Agora.</p>');
   if (sprite) original = original.replace('</head>', `<style>${sprite}</style></head>`);
@@ -350,7 +360,7 @@ function buildPagamento(product = PRODUCT, gallery = PHOTOS, filename = 'pagamen
   if (filename !== 'pagamento') {
     // The original template has legacy fixed-price substitutions above.
     pag = pag.replaceAll('11.96', PRODUCT.price.toFixed(2)).replaceAll('11,96', PRODUCT.price.toFixed(2).replace('.', ','))
-      .replaceAll('/upsell3', next).replaceAll('lv_checkout_id', `lv_checkout_${PRODUCT.id}`)
+      .replaceAll('/upsell3', next).replaceAll('/upsell4', next).replaceAll('lv_checkout_id', `lv_checkout_${PRODUCT.id}`)
       .replaceAll('Escova Modeladora GOKOCO', PRODUCT.name)
       .replaceAll('Garantia 12 meses', 'Confira as condições da loja')
       .replaceAll('Cor: ', 'Opção: ');

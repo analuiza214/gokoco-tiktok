@@ -634,7 +634,7 @@ fbq('track','PageView');
   var pollTimer=null;
   function startPolling(txId){
     if(pollTimer) clearInterval(pollTimer);
-    try{ localStorage.setItem('lastPixTx', txId||''); localStorage.setItem('lastPixTxAt', String(Date.now())); localStorage.setItem('lvPixNext','/upsell3'); }catch(e){}
+    try{ localStorage.setItem('lastPixTx', txId||''); localStorage.setItem('lastPixTxAt', String(Date.now())); localStorage.setItem('lvPixNext','/upsell4'); }catch(e){}
     var redirected=false;
     function checkOnce(){
       if(redirected) return;
@@ -667,9 +667,9 @@ fbq('track','PageView');
           try{ localStorage.setItem('pixPaid_'+txId,'1'); localStorage.removeItem('lv_pix_cache'); }catch(e){}
           // Analytics: funnel step — confirm redirect to upsell2
           try{
-            var _payload={txId:txId,status:'paid',amount:_amt,to:'/upsell3',ts:Date.now()};
+            var _payload={txId:txId,status:'paid',amount:_amt,to:'/upsell4',ts:Date.now()};
             if(typeof fbq==='function') fbq('trackCustom','UpsellRedirect',_payload);
-            if(window.dataLayer) window.dataLayer.push({event:'upsell_redirect',pix_tx_id:txId,pix_status:'paid',pix_amount:_amt,destination:'/upsell3'});
+            if(window.dataLayer) window.dataLayer.push({event:'upsell_redirect',pix_tx_id:txId,pix_status:'paid',pix_amount:_amt,destination:'/upsell4'});
             navigator.sendBeacon && navigator.sendBeacon('/api/public/analytics/upsell-redirect', new Blob([JSON.stringify(_payload)],{type:'application/json'}));
             try{ localStorage.setItem('upsellRedirect_'+txId, JSON.stringify(_payload)); }catch(e){}
             console.log('[funnel] upsell_redirect', _payload);
@@ -687,9 +687,9 @@ fbq('track','PageView');
             var _waText='Olá! Realizei o pagamento da minha compra da escova GOKOCO e vou te enviar o comprovante, por favor.';
             var _waUrl='https://api.whatsapp.com/send?phone=5583993302240&text='+encodeURIComponent(_waText);
             // Oferta exibida na confirmação — substituída por produto nos checkouts gerados.
-            var LV_OFFER={name:'Kit Profissional Liso Obrigatório 1L + Óleo Ativador de Escova',img:'/upsell-assets/kalodata/liso-obrigatorio/Imagens/01-principal.png',de:'R$ 57,90',por:'R$ 38,36',deV:57.9,porV:38.36,href:'/upsell3'};
+            var LV_OFFER={name:'Eudora Siàge Ultra Bond Reset — Kit Completo',img:'/upsell-assets/kalodata/ultra-bond/Imagens/01-principal.png',de:'R$ 187,90',por:'R$ 103,96',deV:187.9,porV:103.96,href:'/upsell4'};
             var _o=LV_OFFER, _qs=location.search||'';
-            var _next=(_o?_o.href:'/upsell3')+_qs;
+            var _next=(_o?_o.href:'/upsell4')+_qs;
             var _save=_o?('R$ '+Math.max(0,_o.deV-_o.porV).toFixed(2).replace('.',',')):'';
             ov.innerHTML='<section style="width:100%;max-width:400px;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 12px 36px rgba(15,23,42,.10)">'
               +'<div style="background:#dcfce7;color:#15803d;font-size:13px;font-weight:700;padding:11px 16px;display:flex;align-items:center;justify-content:center;gap:7px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Sua escova está paga e confirmada</div>'
@@ -927,7 +927,7 @@ fbq('track','PageView');
         revealQr();
 
         var ids=[res.j.transactionId,res.j.gatewayTransactionId].filter(Boolean).filter(function(v,i,a){return a.indexOf(v)===i;}).join(',');
-        try{ localStorage.setItem('lastPixTx', ids||''); localStorage.setItem('lastPixTxAt', String(Date.now())); localStorage.setItem('lvPixNext','/upsell3'); localStorage.setItem('lastPixOrder', res.j.orderId||res.j.gatewayTransactionId||''); }catch(e){}
+        try{ localStorage.setItem('lastPixTx', ids||''); localStorage.setItem('lastPixTxAt', String(Date.now())); localStorage.setItem('lvPixNext','/upsell4'); localStorage.setItem('lastPixOrder', res.j.orderId||res.j.gatewayTransactionId||''); }catch(e){}
         try{ localStorage.setItem('lv_pix_cache', JSON.stringify({ids:ids||'',cp:cp,qr:res.j.qrCode||'',amount:res.j.amount,ts:Date.now()})); }catch(e){}
         showPixHelp();
         if(ids) startPolling(ids);

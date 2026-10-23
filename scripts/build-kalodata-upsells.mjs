@@ -98,18 +98,22 @@ const genericFaq = p => [
 
 // Card exibido na confirmação do checkout anterior: o próximo produto do funil.
 // href usa o literal do template ('/upsell3') — a cadeia de replaces ajusta por tema.
+// "Preço de" por produto: fator próprio no catálogo, variando o desconto
+// exibido (33%–50%) entre os upsells em vez de um único valor repetido.
+export const oldPriceFor = p => Math.ceil(p.price * (p.oldFactor || 1.5)) - 0.1;
+
 export function offerFor(productId) {
   const p = upsellCatalog.find(q => q.id === productId);
   if (!p) return null;
   const cfg = productConfig(p, 1);
-  const deV = Math.ceil(p.price * 1.5) - 0.1;
+  const deV = oldPriceFor(p);
   return { name: p.name, img: `/upsell-assets/kalodata/${p.id}/Imagens/01-principal.png`, de: cfg.oldPriceText, por: cfg.priceText, deV, porV: p.price, href: '/upsell3' };
 }
 
 // Mesma forma do PRODUCT do build-upsell.mjs, preenchida a partir do catálogo.
 function productConfig(p, imageCount) {
   const cardPrice = Math.ceil(p.price * 1.1) - 0.1;
-  const oldPrice = Math.ceil(p.price * 1.5) - 0.1;
+  const oldPrice = oldPriceFor(p);
   const ratingText = p.rating.toFixed(1).replace('.', ',');
   const copy = PRODUCT_COPY[p.id];
   return {
@@ -185,7 +189,7 @@ export async function buildKalodataUpsells({ root, output, buildCheckout, buildO
     const images = url('Imagens'), videos = url('Videos');
     if (!images.length || !videos.length) throw new Error(`Mídias ausentes: ${p.id}`);
     const product = productConfig(p, images.length);
-    storefrontProducts.push({ ...p, images, videos, cfg: product });
+    storefrontProducts.push({ ...p, oldPrice: oldPriceFor(p), images, videos, cfg: product });
     const nextPath = p.step < 6 ? `upsell${p.step + 1}` : 'upsell-concluido';
     for (const theme of themes) {
       const key = `${theme.id}-${p.id}`;
@@ -253,7 +257,7 @@ export async function buildKalodataUpsells({ root, output, buildCheckout, buildO
     fs.writeFileSync(path.join(pages, `${theme.id}-concluido.txt`), `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Suas escolhas | ${theme.name}</title><link rel="stylesheet" href="/upsell-assets/kalodata.css"><body style="--accent:${theme.accent};--background:${theme.background};--header:${theme.header};--ink:${theme.ink}"><header class="store-header"><span class="brand">${theme.name}</span></header><main><section class="last-call"><h1>Você chegou ao fim dos complementos</h1><p>Você pode acompanhar os pedidos com pagamento confirmado na página de rastreio.</p><a class="buy" href="/rastreio.html">Acompanhar meu pedido</a><a class="skip" href="${theme.prefix}/upsell2">Rever os complementos</a></section></main></body></html>`);
   }
   const pincelCheckout = path.join(pages, 'pagamento.txt');
-  fs.writeFileSync(pincelCheckout, fs.readFileSync(pincelCheckout, 'utf8').replaceAll('/upsell3', '/upsell2'));
+  fs.writeFileSync(pincelCheckout, fs.readFileSync(pincelCheckout, 'utf8').replaceAll('/upsell3', '/upsell2').replaceAll('/upsell4', '/upsell2'));
   for (const theme of themes.filter(t => t.prefix)) {
     fs.writeFileSync(path.join(pages, `${theme.id}-pagamento-pincel.txt`), fs.readFileSync(pincelCheckout, 'utf8').replaceAll('/upsell2', `${theme.prefix}/upsell2`));
   }

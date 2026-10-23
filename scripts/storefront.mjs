@@ -6,7 +6,7 @@ const money = value => value.toLocaleString('pt-BR',{style:'currency',currency:'
 // como estão (já são os produtos da loja) e os complementos entram no fim.
 export function renderOriginalStorefront(products, lojaHtml) {
   const cards = products.map((p) => {
-    const oldPrice = Math.ceil(p.price * 1.5) - 0.1;
+    const oldPrice = p.oldPrice ?? Math.ceil(p.price * 1.5) - 0.1;
     const discount = Math.round((1 - p.price / oldPrice) * 100);
     const price = money(p.price).replace('R$', '').trim();
     return `<a class="product" href="/upsell${p.step}" aria-label="Ver ${escape(p.name)} por ${money(p.price)}"><div class="photo"><img src="${p.images[0]}" alt="${escape(p.name)}" loading="lazy"><span class="shipping">Frete grátis</span></div><div class="info"><p class="title">${escape(p.name)}</p><div><span class="price"><small>R$</small> ${price}</span><span class="discount">-${discount}%</span></div><div class="old">${money(oldPrice)}</div><div class="colors"><span class="dot" style="background:#e5e0d8"></span>${escape(p.contents)}</div></div></a>`;
