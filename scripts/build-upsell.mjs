@@ -183,9 +183,11 @@ async function bundleVariant(variant, { product = PRODUCT, photos = PHOTOS, vide
           if (rel.endsWith('hooks/use-cart.tsx')) code = 'export function useCart(){return {items:[],itemCount:0,total:0,addItem(){},removeItem(){},updateQuantity(){},clearCart(){}}}';
           else if (rel.endsWith('lib/data.ts') && !market) {
             if (storefront) {
-              // Vitrine Bella: a grade "Escolha Seu Kit" da home passa a listar
-              // os complementos do funil (catálogo inteiro substituído).
-              code = code.replace(/export const products: Product\[\] = \[[\s\S]*?\n\];/, () => `export const products: Product[] = ${JSON.stringify(storefront)};\n`);
+              // Vitrine Bella: a grade "Escolha Seu Kit" da home mantém o
+              // catálogo do site (escovas nas cores) e acrescenta os
+              // complementos do funil no fim.
+              code = code.replace(/export const products: Product\[\] = \[[\s\S]*?\n\];/,
+                (m) => `${m.slice(0, -2)},\n${storefront.map((i) => JSON.stringify(i)).join(',\n')}\n];`);
             } else {
               const item = {
                 id: `bella-${product.id}`, slug: product.slug, name: product.name,

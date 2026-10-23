@@ -212,6 +212,14 @@ export async function buildKalodataUpsells({ root, output, buildCheckout, buildO
       fs.writeFileSync(path.join(pages, `${theme.id}-vitrine.txt`), renderOriginalStorefront(storefrontProducts, lojaHtml));
     } else {
       const key = `${theme.id}-vitrine`;
+      // A escova (produto principal do site) também entra na vitrine: na TL é
+      // o primeiro resultado ("mais vendido") e na Bella o catálogo original da
+      // home é mantido, com os complementos no fim da grade.
+      const escovaTl = {
+        name: 'Kit 3 em 1 - Escova Modeladora GOKOCO Bivolt', href: '/tl/', img: '/images/f2/potes-1.webp',
+        priceInt: '37', priceDec: '90', oldPriceText: 'R$ 167,90', installment: '5x R$ 7,58 sem juros',
+        rating: 4.9, reviewCount: 2485, contents: 'Escova + luva térmica + prendedores + estojo',
+      };
       const items = storefrontProducts.map((p) => {
         const [priceInt, priceDec] = p.price.toFixed(2).split('.');
         return theme.id === 'tl' ? {
@@ -227,6 +235,7 @@ export async function buildKalodataUpsells({ root, output, buildCheckout, buildO
           features: p.cfg.features, productReviews: [],
         };
       });
+      if (theme.id === 'tl') items.unshift(escovaTl);
       await bundleVariant(theme.id, {
         key, page: 'vitrine', sprite: '', storefront: items,
         title: `Vitrine | ${theme.name}`,
