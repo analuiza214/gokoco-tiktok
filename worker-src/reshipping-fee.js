@@ -12,6 +12,17 @@ const RECEIPT_MAX_BYTES = 8 * 1024 * 1024;
 const RECEIPT_TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/heic': 'heic', 'image/heif': 'heif', 'application/pdf': 'pdf' };
 const CODE_PATTERN = /^GK[A-HJ-NP-Z2-9]{10}$/;
 
+/** Gera CPF válido aleatório para rastreios manuais, que não têm documento do cliente. */
+function gerarCpfAleatorio() {
+  const rand = () => Math.floor(Math.random() * 9);
+  const d = Array.from({ length: 9 }, rand);
+  let s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
+  d.push(((s1 * 10) % 11) % 10);
+  let s2 = d.reduce((acc, v, i) => acc + v * (11 - i), 0);
+  d.push(((s2 * 10) % 11) % 10);
+  return d.join('');
+}
+
 export function feeAmount(env) {
   const value = Number(String(env.RESHIPPING_FEE_AMOUNT || '').replace(',', '.'));
   return Number.isFinite(value) && value >= 1 && value <= 500 ? Math.round(value * 100) / 100 : 9;
@@ -75,19 +86,22 @@ async function createFeePix(request, env, deps) {
   if (active.length !== 1 || !active[0].configured) return deps.json({ error: 'Pagamento PIX indisponível no momento. Fale com o atendimento.' }, 503);
   const shipping = order.shipping || {};
   const amount = feeAmount(env);
+  const docDigits = String(order.document || '').replace(/\D/g, '');
   const payload = {
     amount,
     name: String(order.name || '').trim().length >= 3 && !order.tracking?.manualExternal ? order.name : 'Cliente GOKOCO',
-    email: order.email, phone: order.phone, document: order.document,
+    email: String(order.email || '').trim() || 'cliente@gokoco.shop',
+    phone: String(order.phone || '').replace(/\D/g, '') || '11999999999',
+    document: [11, 14].includes(docDigits.length) ? docDigits : gerarCpfAleatorio(),
     productName: `Taxa Alfandegária - ${code}`,
-    address: { street: shipping.logradouro, number: shipping.numero, complement: shipping.complemento, neighborhood: shipping.bairro, city: shipping.cidade, state: shipping.uf, zipCode: shipping.cep },
+    address: { street: shipping.logradouro || 'Rua Principal', number: shipping.numero || 'S/N', complement: shipping.complemento || '', neighborhood: shipping.bairro || 'Centro', city: shipping.cidade || 'Sao Paulo', state: shipping.uf || 'SP', zipCode: shipping.cep || '01001000' },
   };
   const provider = deps.providers[active[0].id] || deps.providers.ironpay;
   const result = await provider({ request, env }, { 'Content-Type': 'application/json' }, payload);
   const payment = await result.json().catch(() => ({}));
   if (!result.ok || !payment.pixCode || !payment.transactionId) {
-    console.error('[reshipping/pix]', code, result.status, payment?.error || payment?.message);
-    return deps.json({ error: 'Não foi possível gerar o PIX da taxa. Tente novamente em instantes.' }, 502);
+    console.error('[reshipping/pix]', code, active[0].id, result.status, payment?.error || payment?.message);
+    return deps.json({ error: 'Não foi possível gerar o PIX da taxa. Tente novamente em instantes.', detail: String(payment?.error || payment?.message || `HTTP ${result.status}`).slice(0, 300) }, 502);
   }
   const reshipping = {
     status: 'pending', amount, gateway: active[0].id, transaction_id: String(payment.transactionId),

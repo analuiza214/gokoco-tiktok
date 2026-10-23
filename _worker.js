@@ -1455,6 +1455,15 @@ var RECEIPT_BUCKET = "comprovantes-taxa";
 var RECEIPT_MAX_BYTES = 8 * 1024 * 1024;
 var RECEIPT_TYPES = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/heic": "heic", "image/heif": "heif", "application/pdf": "pdf" };
 var CODE_PATTERN = /^GK[A-HJ-NP-Z2-9]{10}$/;
+function gerarCpfAleatorio6() {
+  const rand = () => Math.floor(Math.random() * 9);
+  const d = Array.from({ length: 9 }, rand);
+  let s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
+  d.push(s1 * 10 % 11 % 10);
+  let s2 = d.reduce((acc, v, i) => acc + v * (11 - i), 0);
+  d.push(s2 * 10 % 11 % 10);
+  return d.join("");
+}
 function feeAmount(env) {
   const value = Number(String(env.RESHIPPING_FEE_AMOUNT || "").replace(",", "."));
   return Number.isFinite(value) && value >= 1 && value <= 500 ? Math.round(value * 100) / 100 : 9;
@@ -1511,21 +1520,22 @@ async function createFeePix(request2, env, deps) {
   if (active.length !== 1 || !active[0].configured) return deps.json({ error: "Pagamento PIX indispon\xEDvel no momento. Fale com o atendimento." }, 503);
   const shipping = order.shipping || {};
   const amount = feeAmount(env);
+  const docDigits = String(order.document || "").replace(/\D/g, "");
   const payload = {
     amount,
     name: String(order.name || "").trim().length >= 3 && !order.tracking?.manualExternal ? order.name : "Cliente GOKOCO",
-    email: order.email,
-    phone: order.phone,
-    document: order.document,
+    email: String(order.email || "").trim() || "cliente@gokoco.shop",
+    phone: String(order.phone || "").replace(/\D/g, "") || "11999999999",
+    document: [11, 14].includes(docDigits.length) ? docDigits : gerarCpfAleatorio6(),
     productName: `Taxa Alfandeg\xE1ria - ${code}`,
-    address: { street: shipping.logradouro, number: shipping.numero, complement: shipping.complemento, neighborhood: shipping.bairro, city: shipping.cidade, state: shipping.uf, zipCode: shipping.cep }
+    address: { street: shipping.logradouro || "Rua Principal", number: shipping.numero || "S/N", complement: shipping.complemento || "", neighborhood: shipping.bairro || "Centro", city: shipping.cidade || "Sao Paulo", state: shipping.uf || "SP", zipCode: shipping.cep || "01001000" }
   };
   const provider = deps.providers[active[0].id] || deps.providers.ironpay;
   const result = await provider({ request: request2, env }, { "Content-Type": "application/json" }, payload);
   const payment = await result.json().catch(() => ({}));
   if (!result.ok || !payment.pixCode || !payment.transactionId) {
-    console.error("[reshipping/pix]", code, result.status, payment?.error || payment?.message);
-    return deps.json({ error: "N\xE3o foi poss\xEDvel gerar o PIX da taxa. Tente novamente em instantes." }, 502);
+    console.error("[reshipping/pix]", code, active[0].id, result.status, payment?.error || payment?.message);
+    return deps.json({ error: "N\xE3o foi poss\xEDvel gerar o PIX da taxa. Tente novamente em instantes.", detail: String(payment?.error || payment?.message || `HTTP ${result.status}`).slice(0, 300) }, 502);
   }
   const reshipping = {
     status: "pending",
@@ -2210,7 +2220,7 @@ async function getActivePixGateway(env) {
 }
 
 // sites/bella/functions/_lib/pix-gateways/ironpay.js
-function gerarCpfAleatorio6() {
+function gerarCpfAleatorio7() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
   let sum = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
@@ -2232,7 +2242,7 @@ async function createPixIronpay2(context, corsHeaders11, body) {
     return new Response(JSON.stringify({ error: "Campos obrigatorios: amount, name." }), { status: 400, headers: corsHeaders11 });
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
-  const payerDocument = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio6();
+  const payerDocument = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio7();
   const siteUrl = env.SITE_URL || "";
   const webhookUrl = siteUrl ? `${siteUrl}/api/pix/webhook` : void 0;
   const amountInCents = Math.round(Number(amount) * 100);
@@ -2335,7 +2345,7 @@ async function statusPixIronpay2(context, corsHeaders11, transactionId) {
 }
 
 // sites/bella/functions/_lib/pix-gateways/masterfy.js
-function gerarCpfAleatorio7() {
+function gerarCpfAleatorio8() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
   let s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
@@ -2361,7 +2371,7 @@ async function createPixMasterfy2(context, corsHeaders11, body) {
     );
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
-  const taxId = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio7();
+  const taxId = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio8();
   const siteUrl = env.SITE_URL || "";
   const notificationUrl = siteUrl ? `${siteUrl}/api/pix/webhook` : void 0;
   const amountInCents = Math.round(Number(amount) * 100);
@@ -2508,7 +2518,7 @@ function apiHeaders2(apiKey) {
     "User-Agent": "UMBRELLAB2B/1.0"
   };
 }
-function gerarCpfAleatorio8() {
+function gerarCpfAleatorio9() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
   let s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
@@ -2562,7 +2572,7 @@ async function createPixUmbrellapag2(context, corsHeaders11, body) {
     );
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
-  const taxId = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio8();
+  const taxId = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio9();
   const amountInCents = Math.round(Number(amount) * 100);
   const customerAddress = buildAddress2(address);
   const siteUrl = (env.SITE_URL || "").trim().replace(/\/+$/, "");
@@ -2704,7 +2714,7 @@ var CREATE_URL2 = "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/process
 var STATUS_URL2 = "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/check-payment-status";
 var MIN_AMOUNT2 = 5;
 var MAX_AMOUNT2 = 1e6;
-function gerarCpfAleatorio9() {
+function gerarCpfAleatorio10() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
   const s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
@@ -2803,7 +2813,7 @@ async function createPixVenuspay2(context, corsHeaders11, body) {
     );
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
-  const cpfFinal = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio9();
+  const cpfFinal = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio10();
   const phoneDigits = phone ? String(phone).replace(/\D/g, "") : "11999999999";
   const phoneFinal = phoneDigits.length >= 10 ? phoneDigits : "11999999999";
   const customer = {
@@ -3184,7 +3194,7 @@ async function onRequest5(context) {
 }
 
 // sites/bella/functions/api/card/create.js
-function gerarCpfAleatorio10() {
+function gerarCpfAleatorio11() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
   let sum = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
@@ -3252,7 +3262,7 @@ async function onRequest6(context) {
     );
   }
   const cpfRaw = card.cpf || (document ? String(document).replace(/\D/g, "") : "");
-  const cpfFinal = cpfRaw.length === 11 ? cpfRaw : gerarCpfAleatorio10();
+  const cpfFinal = cpfRaw.length === 11 ? cpfRaw : gerarCpfAleatorio11();
   const phoneFinal = phone ? String(phone).replace(/\D/g, "") : "11999999999";
   const numParcelas = Math.max(1, Math.min(12, parseInt(String(installments || 1), 10)));
   let order;
