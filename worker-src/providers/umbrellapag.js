@@ -94,7 +94,7 @@ export async function createPixUmbrellapag(context, corsHeaders, body) {
   }
 
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
-  const taxId = [11, 14].includes(cpfDigits.length) ? cpfDigits : "";
+  const taxId = [11, 14].includes(cpfDigits.length) ? cpfDigits : gerarCpfAleatorio();
   const amountInCents = Math.round(Number(amount) * 100);
   const customerAddress = buildAddress(address);
   const siteUrl = (env.SITE_URL || "").trim().replace(/\/+$/, "");

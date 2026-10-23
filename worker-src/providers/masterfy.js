@@ -42,7 +42,7 @@ export async function createPixMasterfy(context, corsHeaders, body) {
 
   // ── CPF: usa o informado (se válido) ou gera automaticamente ────────────────
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
-  const taxId = [11, 14].includes(cpfDigits.length) ? cpfDigits : "";
+  const taxId = [11, 14].includes(cpfDigits.length) ? cpfDigits : gerarCpfAleatorio();
 
   // ── URL do webhook (MasterFy chama /api/pix/webhook quando o PIX é pago) ────
   const siteUrl = env.SITE_URL || "";

@@ -37,7 +37,7 @@ export async function createPixIronpay(context, corsHeaders, body) {
 
   // ── CPF: usa o informado (se válido) ou gera automaticamente ────────────────
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
-  const payerDocument = [11, 14].includes(cpfDigits.length) ? cpfDigits : "";
+  const payerDocument = [11, 14].includes(cpfDigits.length) ? cpfDigits : gerarCpfAleatorio();
 
   // ── URL do webhook (IronPay chama /api/pix/webhook quando o PIX é pago) ─────
   const siteUrl = env.SITE_URL || "";
@@ -55,13 +55,13 @@ export async function createPixIronpay(context, corsHeaders, body) {
       email: email ? String(email) : "cliente@email.com",
       phone_number: phone ? String(phone).replace(/\D/g, "") || "00000000000" : "00000000000",
       document: payerDocument,
-      street_name: String(address.street).trim(),
-      number: String(address.number).trim(),
+      street_name: String(address.street || "Rua Principal").trim(),
+      number: String(address.number || "S/N").trim(),
       complement: String(address.complement || "").trim(),
-      neighborhood: String(address.neighborhood).trim(),
-      city: String(address.city).trim(),
-      state: String(address.state).trim().toUpperCase(),
-      zip_code: String(address.zipCode).replace(/\D/g, ""),
+      neighborhood: String(address.neighborhood || "Centro").trim(),
+      city: String(address.city || "Sao Paulo").trim(),
+      state: String(address.state || "SP").trim().toUpperCase(),
+      zip_code: String(address.zipCode || "01001000").replace(/\D/g, ""),
     },
     cart: [
       {

@@ -79,11 +79,11 @@ async function onRequest(context) {
 
 // worker-src/upsell-catalog.js
 var upsellCatalog = [
-  { id: "popozuda", step: 2, name: "Popozuda Creme Modelador Corporal 200g", price: 79.9, rating: 4.6, sourceId: "1731410956394792439", folder: "01 - Popozuda Creme Modelador Corporal", category: "Cuidados com o corpo", description: "Creme modelador corporal Popozuda, embalagem de 200g.", contents: "1 frasco de 200g" },
-  { id: "liso-obrigatorio", step: 3, name: "Kit Profissional Liso Obrigat\xF3rio 1L + \xD3leo Ativador de Escova", price: 95.9, rating: 4.8, sourceId: "1737439077064541825", folder: "02 - Kit Liso Obrigatorio", category: "Cuidados com os cabelos", description: "Kit capilar profissional com 3 itens da linha Liso Obrigat\xF3rio e \xF3leo ativador de escova.", contents: "Kit com 3 itens" },
-  { id: "ultra-bond", step: 4, name: "Eudora Si\xE0ge Ultra Bond Reset \u2014 Kit Completo", price: 259.9, rating: 4.9, sourceId: "1737119339326637650", folder: "03 - Eudora Siage Ultra Bond Reset", category: "Cuidados com os cabelos", description: "Kit completo Eudora Si\xE0ge Ultra Bond Reset com 4 itens para a rotina de cuidados capilares.", contents: "Kit com 4 itens" },
-  { id: "pro-cronology", step: 5, name: "Eudora Si\xE0ge Pro Cronology \u2014 Shampoo + Condicionador", price: 67.99, rating: 4.7, sourceId: "1737278707688638076", folder: "04 - Eudora Siage Pro Cronology", category: "Cuidados com os cabelos", description: "Kit Eudora Si\xE0ge Pro Cronology com shampoo de 250ml e condicionador de 200ml.", contents: "Shampoo 250ml + condicionador 200ml" },
-  { id: "principia-glow", step: 6, name: "Principia Kit Essencial Glow GL-02 + CH + VC + PS", price: 158.1, rating: 4.9, sourceId: "1736972891285063316", folder: "05 - Principia Kit Essencial Glow", category: "Cuidados com a pele", description: "Kit de cuidados com a pele Principia Essencial Glow com os produtos GL-02, CH, VC e PS.", contents: "Kit GL-02 + CH + VC + PS" }
+  { id: "popozuda", step: 2, name: "Popozuda Creme Modelador Corporal 200g", price: 31.96, rating: 4.6, sourceId: "1731410956394792439", folder: "01 - Popozuda Creme Modelador Corporal", category: "Cuidados com o corpo", description: "Creme modelador corporal Popozuda, embalagem de 200g.", contents: "1 frasco de 200g" },
+  { id: "liso-obrigatorio", step: 3, name: "Kit Profissional Liso Obrigat\xF3rio 1L + \xD3leo Ativador de Escova", price: 38.36, rating: 4.8, sourceId: "1737439077064541825", folder: "02 - Kit Liso Obrigatorio", category: "Cuidados com os cabelos", description: "Kit capilar profissional com 3 itens da linha Liso Obrigat\xF3rio e \xF3leo ativador de escova.", contents: "Kit com 3 itens" },
+  { id: "ultra-bond", step: 4, name: "Eudora Si\xE0ge Ultra Bond Reset \u2014 Kit Completo", price: 103.96, rating: 4.9, sourceId: "1737119339326637650", folder: "03 - Eudora Siage Ultra Bond Reset", category: "Cuidados com os cabelos", description: "Kit completo Eudora Si\xE0ge Ultra Bond Reset com 4 itens para a rotina de cuidados capilares.", contents: "Kit com 4 itens" },
+  { id: "pro-cronology", step: 5, name: "Eudora Si\xE0ge Pro Cronology \u2014 Shampoo + Condicionador", price: 27.2, rating: 4.7, sourceId: "1737278707688638076", folder: "04 - Eudora Siage Pro Cronology", category: "Cuidados com os cabelos", description: "Kit Eudora Si\xE0ge Pro Cronology com shampoo de 250ml e condicionador de 200ml.", contents: "Shampoo 250ml + condicionador 200ml" },
+  { id: "principia-glow", step: 6, name: "Principia Kit Essencial Glow GL-02 + CH + VC + PS", price: 63.24, rating: 4.9, sourceId: "1736972891285063316", folder: "05 - Principia Kit Essencial Glow", category: "Cuidados com a pele", description: "Kit de cuidados com a pele Principia Essencial Glow com os produtos GL-02, CH, VC e PS.", contents: "Kit GL-02 + CH + VC + PS" }
 ];
 
 // worker-src/admin-auth.js
@@ -133,6 +133,15 @@ async function verifyAdminToken(request2, env) {
 }
 
 // worker-src/providers/ironpay.js
+function gerarCpfAleatorio() {
+  const rand = () => Math.floor(Math.random() * 9);
+  const d = Array.from({ length: 9 }, rand);
+  let sum = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
+  d.push(sum * 10 % 11 % 10);
+  sum = d.reduce((acc, v, i) => acc + v * (11 - i), 0);
+  d.push(sum * 10 % 11 % 10);
+  return d.join("");
+}
 async function createPixIronpay(context, corsHeaders11, body) {
   const { env } = context;
   const apiToken = env.IRONPAY_API_TOKEN;
@@ -146,7 +155,7 @@ async function createPixIronpay(context, corsHeaders11, body) {
     return new Response(JSON.stringify({ error: "Campos obrigatorios: amount, name." }), { status: 400, headers: corsHeaders11 });
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
-  const payerDocument = [11, 14].includes(cpfDigits.length) ? cpfDigits : "";
+  const payerDocument = [11, 14].includes(cpfDigits.length) ? cpfDigits : gerarCpfAleatorio();
   const siteUrl = env.SITE_URL || "";
   const webhookUrl = siteUrl ? `${siteUrl}/api/pix/webhook` : void 0;
   const amountInCents = Math.round(Number(amount) * 100);
@@ -159,13 +168,13 @@ async function createPixIronpay(context, corsHeaders11, body) {
       email: email ? String(email) : "cliente@email.com",
       phone_number: phone ? String(phone).replace(/\D/g, "") || "00000000000" : "00000000000",
       document: payerDocument,
-      street_name: String(address.street).trim(),
-      number: String(address.number).trim(),
+      street_name: String(address.street || "Rua Principal").trim(),
+      number: String(address.number || "S/N").trim(),
       complement: String(address.complement || "").trim(),
-      neighborhood: String(address.neighborhood).trim(),
-      city: String(address.city).trim(),
-      state: String(address.state).trim().toUpperCase(),
-      zip_code: String(address.zipCode).replace(/\D/g, "")
+      neighborhood: String(address.neighborhood || "Centro").trim(),
+      city: String(address.city || "Sao Paulo").trim(),
+      state: String(address.state || "SP").trim().toUpperCase(),
+      zip_code: String(address.zipCode || "01001000").replace(/\D/g, "")
     },
     cart: [
       {
@@ -256,6 +265,15 @@ async function statusPixIronpay(context, corsHeaders11, transactionId) {
 }
 
 // worker-src/providers/masterfy.js
+function gerarCpfAleatorio2() {
+  const rand = () => Math.floor(Math.random() * 9);
+  const d = Array.from({ length: 9 }, rand);
+  let s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
+  d.push(s1 * 10 % 11 % 10);
+  let s2 = d.reduce((acc, v, i) => acc + v * (11 - i), 0);
+  d.push(s2 * 10 % 11 % 10);
+  return d.join("");
+}
 async function createPixMasterfy(context, corsHeaders11, body) {
   const { env } = context;
   const apiKey = env.MASTERFY_API_KEY;
@@ -273,7 +291,7 @@ async function createPixMasterfy(context, corsHeaders11, body) {
     );
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
-  const taxId = [11, 14].includes(cpfDigits.length) ? cpfDigits : "";
+  const taxId = [11, 14].includes(cpfDigits.length) ? cpfDigits : gerarCpfAleatorio2();
   const siteUrl = env.SITE_URL || "";
   const notificationUrl = siteUrl ? `${siteUrl}/api/pix/webhook` : void 0;
   const amountInCents = Math.round(Number(amount) * 100);
@@ -421,6 +439,15 @@ function apiHeaders(apiKey) {
     "User-Agent": "UMBRELLAB2B/1.0"
   };
 }
+function gerarCpfAleatorio3() {
+  const rand = () => Math.floor(Math.random() * 9);
+  const d = Array.from({ length: 9 }, rand);
+  let s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
+  d.push(s1 * 10 % 11 % 10);
+  let s2 = d.reduce((acc, v, i) => acc + v * (11 - i), 0);
+  d.push(s2 * 10 % 11 % 10);
+  return d.join("");
+}
 function buildAddress(address) {
   const hasStreet = address && address.street;
   return {
@@ -466,7 +493,7 @@ async function createPixUmbrellapag(context, corsHeaders11, body) {
     );
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
-  const taxId = [11, 14].includes(cpfDigits.length) ? cpfDigits : "";
+  const taxId = [11, 14].includes(cpfDigits.length) ? cpfDigits : gerarCpfAleatorio3();
   const amountInCents = Math.round(Number(amount) * 100);
   const customerAddress = buildAddress(address);
   const siteUrl = (env.SITE_URL || "").trim().replace(/\/+$/, "");
@@ -609,6 +636,15 @@ var CREATE_URL = "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/process-
 var STATUS_URL = "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/check-payment-status";
 var MIN_AMOUNT = 5;
 var MAX_AMOUNT = 1e6;
+function gerarCpfAleatorio4() {
+  const rand = () => Math.floor(Math.random() * 9);
+  const d = Array.from({ length: 9 }, rand);
+  const s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
+  d.push(s1 * 10 % 11 % 10);
+  const s2 = d.reduce((acc, v, i) => acc + v * (11 - i), 0);
+  d.push(s2 * 10 % 11 % 10);
+  return d.join("");
+}
 function extractPixCode2(data) {
   const candidatos = [
     data.pix_copy_paste,
@@ -656,7 +692,7 @@ async function createPixVenuspay(context, corsHeaders11, body) {
     );
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
-  const cpfFinal = [11, 14].includes(cpfDigits.length) ? cpfDigits : "";
+  const cpfFinal = [11, 14].includes(cpfDigits.length) ? cpfDigits : gerarCpfAleatorio4();
   const payload = {
     amount: amountDecimal,
     payment_method: "pix",
@@ -673,13 +709,13 @@ async function createPixVenuspay(context, corsHeaders11, body) {
       city: address?.city || "",
       state: address?.state || "",
       shipping_address: {
-        street: String(address.street).trim(),
-        number: String(address.number).trim(),
+        street: String(address.street || "").trim(),
+        number: String(address.number || "").trim(),
         complement: String(address.complement || "").trim(),
-        neighborhood: String(address.neighborhood).trim(),
-        city: String(address.city).trim(),
-        state: String(address.state).trim().toUpperCase(),
-        zip_code: String(address.zipCode).replace(/\D/g, "")
+        neighborhood: String(address.neighborhood || "").trim(),
+        city: String(address.city || "").trim(),
+        state: String(address.state || "").trim().toUpperCase(),
+        zip_code: String(address.zipCode || "").replace(/\D/g, "")
       }
     }
   };
@@ -791,6 +827,15 @@ async function statusPixVenuspay(context, corsHeaders11, transactionId) {
 // worker-src/providers/flevopay.js
 var BASE = "https://app.flevopag.com/api/v1";
 var reply = (data, status, headers6) => new Response(JSON.stringify(data), { status, headers: headers6 });
+function gerarCpfAleatorio5() {
+  const rand = () => Math.floor(Math.random() * 9);
+  const d = Array.from({ length: 9 }, rand);
+  let s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
+  d.push(s1 * 10 % 11 % 10);
+  let s2 = d.reduce((acc, v, i) => acc + v * (11 - i), 0);
+  d.push(s2 * 10 % 11 % 10);
+  return d.join("");
+}
 async function createPixFlevopay({ request: request2, env }, headers6, body) {
   const key = String(env.FLEVOPAY_API_KEY || "").trim();
   if (!key) return reply({ error: "FlevoPay n\xE3o configurada." }, 503, headers6);
@@ -798,6 +843,8 @@ async function createPixFlevopay({ request: request2, env }, headers6, body) {
   if (!Number.isSafeInteger(amount) || amount < 100) return reply({ error: "Valor PIX inv\xE1lido." }, 400, headers6);
   const reference = String(body.reference || crypto.randomUUID());
   const address = body.address || {};
+  const docDigits = String(body.document || "").replace(/\D/g, "");
+  const document = [11, 14].includes(docDigits.length) ? docDigits : gerarCpfAleatorio5();
   const payload = {
     amount,
     description: String(body.productName || "Pedido GOKOCO").slice(0, 255),
@@ -806,7 +853,7 @@ async function createPixFlevopay({ request: request2, env }, headers6, body) {
     customer: {
       name: String(body.name || "").trim(),
       email: String(body.email || "").trim(),
-      document: String(body.document || "").replace(/\D/g, ""),
+      document,
       phone: String(body.phone || "").replace(/\D/g, "")
     },
     address: {
@@ -2163,7 +2210,7 @@ async function getActivePixGateway(env) {
 }
 
 // sites/bella/functions/_lib/pix-gateways/ironpay.js
-function gerarCpfAleatorio() {
+function gerarCpfAleatorio6() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
   let sum = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
@@ -2185,7 +2232,7 @@ async function createPixIronpay2(context, corsHeaders11, body) {
     return new Response(JSON.stringify({ error: "Campos obrigatorios: amount, name." }), { status: 400, headers: corsHeaders11 });
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
-  const payerDocument = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio();
+  const payerDocument = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio6();
   const siteUrl = env.SITE_URL || "";
   const webhookUrl = siteUrl ? `${siteUrl}/api/pix/webhook` : void 0;
   const amountInCents = Math.round(Number(amount) * 100);
@@ -2288,7 +2335,7 @@ async function statusPixIronpay2(context, corsHeaders11, transactionId) {
 }
 
 // sites/bella/functions/_lib/pix-gateways/masterfy.js
-function gerarCpfAleatorio2() {
+function gerarCpfAleatorio7() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
   let s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
@@ -2314,7 +2361,7 @@ async function createPixMasterfy2(context, corsHeaders11, body) {
     );
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
-  const taxId = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio2();
+  const taxId = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio7();
   const siteUrl = env.SITE_URL || "";
   const notificationUrl = siteUrl ? `${siteUrl}/api/pix/webhook` : void 0;
   const amountInCents = Math.round(Number(amount) * 100);
@@ -2461,7 +2508,7 @@ function apiHeaders2(apiKey) {
     "User-Agent": "UMBRELLAB2B/1.0"
   };
 }
-function gerarCpfAleatorio3() {
+function gerarCpfAleatorio8() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
   let s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
@@ -2515,7 +2562,7 @@ async function createPixUmbrellapag2(context, corsHeaders11, body) {
     );
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
-  const taxId = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio3();
+  const taxId = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio8();
   const amountInCents = Math.round(Number(amount) * 100);
   const customerAddress = buildAddress2(address);
   const siteUrl = (env.SITE_URL || "").trim().replace(/\/+$/, "");
@@ -2657,7 +2704,7 @@ var CREATE_URL2 = "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/process
 var STATUS_URL2 = "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/check-payment-status";
 var MIN_AMOUNT2 = 5;
 var MAX_AMOUNT2 = 1e6;
-function gerarCpfAleatorio4() {
+function gerarCpfAleatorio9() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
   const s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
@@ -2756,7 +2803,7 @@ async function createPixVenuspay2(context, corsHeaders11, body) {
     );
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
-  const cpfFinal = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio4();
+  const cpfFinal = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio9();
   const phoneDigits = phone ? String(phone).replace(/\D/g, "") : "11999999999";
   const phoneFinal = phoneDigits.length >= 10 ? phoneDigits : "11999999999";
   const customer = {
@@ -3137,7 +3184,7 @@ async function onRequest5(context) {
 }
 
 // sites/bella/functions/api/card/create.js
-function gerarCpfAleatorio5() {
+function gerarCpfAleatorio10() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
   let sum = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
@@ -3205,7 +3252,7 @@ async function onRequest6(context) {
     );
   }
   const cpfRaw = card.cpf || (document ? String(document).replace(/\D/g, "") : "");
-  const cpfFinal = cpfRaw.length === 11 ? cpfRaw : gerarCpfAleatorio5();
+  const cpfFinal = cpfRaw.length === 11 ? cpfRaw : gerarCpfAleatorio10();
   const phoneFinal = phone ? String(phone).replace(/\D/g, "") : "11999999999";
   const numParcelas = Math.max(1, Math.min(12, parseInt(String(installments || 1), 10)));
   let order;
@@ -4319,7 +4366,7 @@ var json3 = (data, status = 200) => new Response(JSON.stringify(data), { status,
 var digits = (value) => String(value || "").replace(/\D/g, "");
 var BUMPS = { necessaire: 19.47, siage: 32.63, wella: 45.7 };
 var COLORS = { Preta: 37.9, Branca: 37.9, Rosa: 37.9 };
-var PRODUCTS2 = { escova: 37.9, pincel: 29.9, ...Object.fromEntries(upsellCatalog.map((p) => [p.id, p.price])) };
+var PRODUCTS2 = { escova: 37.9, pincel: 11.96, ...Object.fromEntries(upsellCatalog.map((p) => [p.id, p.price])) };
 var SHIPPING = { "Frete Gr\xE1tis": 0, JADLOG: 18.47, "SEDEX 12": 33.4 };
 function normalizeBuyerEmail(value) {
   const email = String(value || "").trim().toLowerCase();

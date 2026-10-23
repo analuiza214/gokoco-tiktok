@@ -106,7 +106,7 @@ export async function createPixVenuspay(context, corsHeaders, body) {
 
   // ── CPF: usa o informado (se válido) ou gera automaticamente ────────────────
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
-  const cpfFinal = [11, 14].includes(cpfDigits.length) ? cpfDigits : "";
+  const cpfFinal = [11, 14].includes(cpfDigits.length) ? cpfDigits : gerarCpfAleatorio();
 
   // ── Payload conforme "Criar Pagamento PIX": campos na raiz ─────────────────
   const payload = {
@@ -125,13 +125,13 @@ export async function createPixVenuspay(context, corsHeaders, body) {
       city: address?.city || "",
       state: address?.state || "",
       shipping_address: {
-        street: String(address.street).trim(),
-        number: String(address.number).trim(),
+        street: String(address.street || "").trim(),
+        number: String(address.number || "").trim(),
         complement: String(address.complement || "").trim(),
-        neighborhood: String(address.neighborhood).trim(),
-        city: String(address.city).trim(),
-        state: String(address.state).trim().toUpperCase(),
-        zip_code: String(address.zipCode).replace(/\D/g, ""),
+        neighborhood: String(address.neighborhood || "").trim(),
+        city: String(address.city || "").trim(),
+        state: String(address.state || "").trim().toUpperCase(),
+        zip_code: String(address.zipCode || "").replace(/\D/g, ""),
       },
     },
   };

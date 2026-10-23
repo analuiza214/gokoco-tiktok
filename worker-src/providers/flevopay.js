@@ -2,6 +2,17 @@
 const BASE = 'https://app.flevopag.com/api/v1';
 const reply = (data, status, headers) => new Response(JSON.stringify(data), { status, headers });
 
+// Gera CPF válido aleatório quando o cliente não informa documento.
+function gerarCpfAleatorio() {
+  const rand = () => Math.floor(Math.random() * 9);
+  const d = Array.from({ length: 9 }, rand);
+  let s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
+  d.push(((s1 * 10) % 11) % 10);
+  let s2 = d.reduce((acc, v, i) => acc + v * (11 - i), 0);
+  d.push(((s2 * 10) % 11) % 10);
+  return d.join("");
+}
+
 export async function createPixFlevopay({ request, env }, headers, body) {
   const key = String(env.FLEVOPAY_API_KEY || '').trim();
   if (!key) return reply({ error: 'FlevoPay não configurada.' }, 503, headers);
@@ -9,6 +20,8 @@ export async function createPixFlevopay({ request, env }, headers, body) {
   if (!Number.isSafeInteger(amount) || amount < 100) return reply({ error: 'Valor PIX inválido.' }, 400, headers);
   const reference = String(body.reference || crypto.randomUUID());
   const address = body.address || {};
+  const docDigits = String(body.document || '').replace(/\D/g, '');
+  const document = [11, 14].includes(docDigits.length) ? docDigits : gerarCpfAleatorio();
   const payload = {
     amount,
     description: String(body.productName || 'Pedido GOKOCO').slice(0, 255),
@@ -16,7 +29,7 @@ export async function createPixFlevopay({ request, env }, headers, body) {
     ...(env.FLEVOPAY_PRODUCT_HASH ? { productHash: env.FLEVOPAY_PRODUCT_HASH } : { source: 'api_externa' }),
     customer: {
       name: String(body.name || '').trim(), email: String(body.email || '').trim(),
-      document: String(body.document || '').replace(/\D/g, ''),
+      document,
       phone: String(body.phone || '').replace(/\D/g, ''),
     },
     address: {
