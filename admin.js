@@ -149,7 +149,7 @@ function matchingOrders(feeDates = selectedStatus === 'taxa') {
     else if (selectedPeriod === '30dias') periodMatch = days <= 30;
     if (!periodMatch) return false;
     if (siteVariant) return (order.siteVariant || 'gokoco') === siteVariant;
-    const haystack = [order.name, order.email, order.phone, order.transaction_id, order.reshipping?.transaction_id, ...(Array.isArray(order.products) ? order.products.map((p) => p.name) : [])].join(' ').toLocaleLowerCase('pt-BR');
+    const haystack = [order.name, order.email, order.phone, order.transaction_id, order.reshipping?.transaction_id, order.shippingTracking?.code, ...(Array.isArray(order.products) ? order.products.map((p) => p.name) : [])].join(' ').toLocaleLowerCase('pt-BR');
     return !term || haystack.includes(term);
   });
 }
