@@ -350,6 +350,9 @@ $('login-form').addEventListener('submit', async (event) => {
   finally { submit.disabled = false; submit.textContent = 'Entrar'; }
 });
 $('refresh').addEventListener('click', load);
+// Painel aberto = varredura contínua: a cada 60s confere pagamentos novos,
+// pendentes antigos e a loja Vídeo sem precisar recarregar.
+setInterval(() => { if (token && !document.hidden) api('reconcile-payments', { method: 'POST' }).catch(() => {}); }, 60000);
 $('logout').addEventListener('click', showLogin);
 $('external-tracking-form').addEventListener('submit', async (event) => {
   event.preventDefault();

@@ -488,7 +488,21 @@ async function siteAsset(request, env) {
   return new Response(asset.body, { status: asset.status, headers });
 }
 
-async function statusPix(request, env) {
+// Varredura oportunista: enquanto houver checkout aberto consultando status,
+// um lote pequeno de pedidos antigos é verificado no gateway (trava de 45s
+// no KV para não chamar em excesso).
+async function maybeReconcileBacklog(env, ctx) {
+  const kv = env.PIX_RATELIMIT;
+  if (!kv) return;
+  try {
+    if (await kv.get('reconcile:last')) return;
+    await kv.put('reconcile:last', String(Date.now()), { expirationTtl: 45 });
+  } catch { return; }
+  const run = reconcilePendingPayments(env, 2, true).catch((error) => console.error('[payment/backlog]', error?.message || error));
+  if (ctx?.waitUntil) ctx.waitUntil(run); else await run;
+}
+
+async function statusPix(request, env, ctx) {
   const id = new URL(request.url).searchParams.get('id');
   if (!id || id.length > 150) return json({ error: 'Transação inválida.' }, 400);
   const ids = id.split(',').slice(0, 2);
@@ -498,6 +512,7 @@ async function statusPix(request, env) {
     if (rows[0]) { order = rows[0]; break; }
   }
   if (!order) return json({ status: 'unknown' }, 404);
+  await maybeReconcileBacklog(env, ctx);
   if (order.status === 'paid') {
     const shippingTracking = await registerOrderTracking(env, order.id, order.updated_at || order.created_at).catch((error) => { console.error('[tracking/status]', error.message); return null; });
     await deliverPaidPurchase(env, db, order.id).catch((error) => console.error('[purchase/status]', error.message));
@@ -951,7 +966,7 @@ export default {
       }
       if (path === '/api/market/pix/create' && request.method === 'POST') return await createMarketPix(request, env, ctx);
       if (path === '/api/public/pix/create' && request.method === 'POST') return await createPix(request, env, ctx);
-      if (path === '/api/public/pix/status' && request.method === 'GET') return await statusPix(request, env);
+      if (path === '/api/public/pix/status' && request.method === 'GET') return await statusPix(request, env, ctx);
       if (path === '/api/pix/webhook' && request.method === 'POST') return await webhook(request, env);
       if (path.startsWith('/api/')) return json({ error: 'Rota não encontrada.' }, 404);
       return siteAsset(request, env);

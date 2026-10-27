@@ -4802,7 +4802,20 @@ async function siteAsset(request2, env) {
   headers6.set("Content-Type", "text/html; charset=utf-8");
   return new Response(asset.body, { status: asset.status, headers: headers6 });
 }
-async function statusPix(request2, env) {
+async function maybeReconcileBacklog(env, ctx) {
+  const kv = env.PIX_RATELIMIT;
+  if (!kv) return;
+  try {
+    if (await kv.get("reconcile:last")) return;
+    await kv.put("reconcile:last", String(Date.now()), { expirationTtl: 45 });
+  } catch {
+    return;
+  }
+  const run = reconcilePendingPayments(env, 2, true).catch((error) => console.error("[payment/backlog]", error?.message || error));
+  if (ctx?.waitUntil) ctx.waitUntil(run);
+  else await run;
+}
+async function statusPix(request2, env, ctx) {
   const id = new URL(request2.url).searchParams.get("id");
   if (!id || id.length > 150) return json3({ error: "Transa\xE7\xE3o inv\xE1lida." }, 400);
   const ids = id.split(",").slice(0, 2);
@@ -4815,6 +4828,7 @@ async function statusPix(request2, env) {
     }
   }
   if (!order) return json3({ status: "unknown" }, 404);
+  await maybeReconcileBacklog(env, ctx);
   if (order.status === "paid") {
     const shippingTracking2 = await registerOrderTracking(env, order.id, order.updated_at || order.created_at).catch((error) => {
       console.error("[tracking/status]", error.message);
@@ -5291,7 +5305,7 @@ var index_default = {
       }
       if (path === "/api/market/pix/create" && request2.method === "POST") return await createMarketPix(request2, env, ctx);
       if (path === "/api/public/pix/create" && request2.method === "POST") return await createPix(request2, env, ctx);
-      if (path === "/api/public/pix/status" && request2.method === "GET") return await statusPix(request2, env);
+      if (path === "/api/public/pix/status" && request2.method === "GET") return await statusPix(request2, env, ctx);
       if (path === "/api/pix/webhook" && request2.method === "POST") return await webhook(request2, env);
       if (path.startsWith("/api/")) return json3({ error: "Rota n\xE3o encontrada." }, 404);
       return siteAsset(request2, env);
