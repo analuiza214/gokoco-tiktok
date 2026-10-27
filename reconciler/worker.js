@@ -22,7 +22,9 @@ export default {
     }
     const queue = await call('/api/process-purchase-queue?phase=fulfillment');
     const recovery = rateLimited ? null : await call('/api/process-purchase-queue?phase=recovery');
-    console.log('Payment reconciliation completed', { ...summary, queue, recovery });
+    // A loja Vídeo tem reconcile próprio; uma passada por minuto basta.
+    const bella = await call('/video/api/reconcile-payments').catch((error) => ({ error: error.message }));
+    console.log('Payment reconciliation completed', { ...summary, queue, recovery, bella });
     if (summary.failed) console.error('Falhas temporárias de consulta ao gateway', { failed: summary.failed });
   },
   fetch() { return Response.json({ service: 'gokoco-payment-reconciler', ok: true }); },

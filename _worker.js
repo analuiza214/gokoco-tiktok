@@ -5196,7 +5196,7 @@ async function reconcileReshippingFees(env, limit = 3) {
   }
   return summary;
 }
-async function reconcilePaymentsRoute(request2, env) {
+async function reconcilePaymentsRoute(request2, env, ctx) {
   const cron = Boolean(env.CRON_SECRET && request2.headers.get("x-cron-secret") === env.CRON_SECRET);
   if (!cron) {
     const denied = await requireAdmin(request2, env);
@@ -5204,7 +5204,15 @@ async function reconcilePaymentsRoute(request2, env) {
   }
   if (request2.method !== "POST") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
   const payments = await reconcilePendingPayments(env, 3, true, !cron);
+  if (!cron) payments.backlog = await reconcilePendingPayments(env, 3, true);
   payments.reshipping = await reconcileReshippingFees(env, payments.rateLimited ? 0 : 3);
+  if (!cron) {
+    const bellaRun = onRequest14({ request: request2, env: bellaEnvironment(env) }).then((response) => response.json().catch(() => null)).catch(() => null);
+    if (ctx?.waitUntil) ctx.waitUntil(bellaRun.then((bella) => {
+      payments.bella = bella;
+    }));
+    else payments.bella = await bellaRun;
+  }
   return json3(payments);
 }
 async function fulfillConfirmedPayment(env) {
@@ -5249,7 +5257,7 @@ var index_default = {
       if (path === "/api/admin/bella-orders") return await adminBellaOrders(request2, env);
       if (path === "/api/admin/bella-card") return await adminBellaCard(request2, env);
       if (path === "/api/admin/bella-tracking-email") return await adminBellaTrackingEmail(request2, env);
-      if (path === "/api/admin/reconcile-payments") return await reconcilePaymentsRoute(request2, env);
+      if (path === "/api/admin/reconcile-payments") return await reconcilePaymentsRoute(request2, env, ctx);
       if (path === "/api/admin/send-order-email") return await adminSendOrderEmail(request2, env);
       if (path === "/api/admin/order-tracking") return await adminUpdateOrderTracking(request2, env);
       if (path === "/api/admin/manual-payment") return await adminManualPayment(request2, env);

@@ -854,15 +854,26 @@ async function reconcileReshippingFees(env, limit = 3) {
   return summary;
 }
 
-async function reconcilePaymentsRoute(request, env) {
+async function reconcilePaymentsRoute(request, env, ctx) {
   const cron = Boolean(env.CRON_SECRET && request.headers.get('x-cron-secret') === env.CRON_SECRET);
   if (!cron) { const denied = await requireAdmin(request, env); if (denied) return denied; }
   if (request.method !== 'POST') return json({ error: 'Método inválido.' }, 405);
   // Lote pequeno e sequencial evita o limite de consultas dos gateways.
   // Rastreio, pixel e e-mail seguem nas filas com proteção contra duplicação.
-  // No admin, confira primeiro os pedidos recentes; a rotina agendada percorre os mais antigos.
+  // No admin, confira primeiro os pedidos recentes e depois um lote dos mais
+  // antigos, para não deixar pedidos pagos para trás quando a rotina
+  // agendada não estiver publicada.
   const payments = await reconcilePendingPayments(env, 3, true, !cron);
+  if (!cron) payments.backlog = await reconcilePendingPayments(env, 3, true);
   payments.reshipping = await reconcileReshippingFees(env, payments.rateLimited ? 0 : 3);
+  if (!cron) {
+    // Mesmo backend e mesmas credenciais: o painel também sincroniza a loja Vídeo.
+    const bellaRun = bellaReconcilePayments({ request, env: bellaEnvironment(env) })
+      .then((response) => response.json().catch(() => null))
+      .catch(() => null);
+    if (ctx?.waitUntil) ctx.waitUntil(bellaRun.then((bella) => { payments.bella = bella; }));
+    else payments.bella = await bellaRun;
+  }
   return json(payments);
 }
 
@@ -911,7 +922,7 @@ export default {
       if (path === '/api/admin/bella-orders') return await adminBellaOrders(request, env);
       if (path === '/api/admin/bella-card') return await adminBellaCard(request, env);
       if (path === '/api/admin/bella-tracking-email') return await adminBellaTrackingEmail(request, env);
-      if (path === '/api/admin/reconcile-payments') return await reconcilePaymentsRoute(request, env);
+      if (path === '/api/admin/reconcile-payments') return await reconcilePaymentsRoute(request, env, ctx);
       if (path === '/api/admin/send-order-email') return await adminSendOrderEmail(request, env);
       if (path === '/api/admin/order-tracking') return await adminUpdateOrderTracking(request, env);
       if (path === '/api/admin/manual-payment') return await adminManualPayment(request, env);
