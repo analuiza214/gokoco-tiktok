@@ -1,6 +1,7 @@
 /** Configuração de gateways — mesma tabela do admin (gokoco_gateways) com fallback padrão. */
 
 const DEFAULT_GATEWAYS = [
+  { id: "invictuspay", name: "InvictusPay", method: "pix", enabled: false },
   { id: "ironpay", name: "IronPay", method: "pix", enabled: false },
   { id: "masterfy", name: "MasterFy", method: "pix", enabled: false },
   { id: "umbrellapag", name: "UmbrellaPag", method: "pix", enabled: false },
@@ -27,6 +28,7 @@ async function supabaseFetch(env, path) {
 }
 
 export function gatewayConfigured(env, id) {
+  if (id === "invictuspay") return !!String(env.INVICTUSPAY_API_KEY || "").trim();
   if (id === "ironpay") {
     return [env.IRONPAY_API_TOKEN, env.IRONPAY_OFFER_HASH, env.IRONPAY_PRODUCT_HASH]
       .every((value) => String(value || "").trim());

@@ -14,6 +14,7 @@ import { createPixIronpay } from "../../_lib/pix-gateways/ironpay.js";
 import { createPixMasterfy } from "../../_lib/pix-gateways/masterfy.js";
 import { createPixUmbrellapag } from "../../_lib/pix-gateways/umbrellapag.js";
 import { createPixVenuspay } from "../../_lib/pix-gateways/venuspay.js";
+import { createPixInvictuspay } from "../../_lib/pix-gateways/invictuspay.js";
 import { createPixFlevopay } from "../../_lib/pix-gateways/flevopay.js";
 import { getLeadById, savePixLead, nextLeadPixAmount } from "../../_lib/leads-store.js";
 import { sendUtmifyOrder } from "../../_lib/utmify.js";
@@ -102,6 +103,7 @@ export async function onRequest(context) {
   if (activeGateway === "masterfy") response = await createPixMasterfy(context, corsHeaders, safeBody);
   else if (activeGateway === "umbrellapag") response = await createPixUmbrellapag(context, corsHeaders, safeBody);
   else if (activeGateway === "venuspay_pix") response = await createPixVenuspay(context, corsHeaders, safeBody);
+  else if (activeGateway === "invictuspay") response = await createPixInvictuspay(context, corsHeaders, safeBody);
   else if (activeGateway === "flevopay") response = await createPixFlevopay(context, corsHeaders, safeBody);
   else response = await createPixIronpay(context, corsHeaders, safeBody);
 

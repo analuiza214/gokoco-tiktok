@@ -5,6 +5,7 @@ import { createPixIronpay } from './providers/ironpay.js';
 import { createPixMasterfy } from './providers/masterfy.js';
 import { createPixUmbrellapag } from './providers/umbrellapag.js';
 import { createPixVenuspay } from './providers/venuspay.js';
+import { createPixInvictuspay } from './providers/invictuspay.js';
 import { createPixFlevopay } from './providers/flevopay.js';
 import { queryPixGatewayStatus } from './pix-gateway-status.js';
 import { capturePurchaseTracking, recoverCustomerAttribution, purchaseDestination, purchaseSummary, deliverPaidPurchase, deliverPendingPurchase, deliverReshippingFee } from './purchase-tracking.js';
@@ -35,6 +36,7 @@ const gateways = [
   { id: 'masterfy', name: 'MasterFy', method: 'pix' },
   { id: 'umbrellapag', name: 'UmbrellaPag', method: 'pix' },
   { id: 'venuspay_pix', name: 'Venus Pay PIX', method: 'pix' },
+  { id: 'invictuspay', name: 'InvictusPay', method: 'pix' },
   { id: 'flevopay', name: 'FlevoPay', method: 'pix' },
   { id: 'venuspay', name: 'Venus Pay Cartão', method: 'card' },
 ];
@@ -105,6 +107,7 @@ function configured(env, id) {
   if (id === 'masterfy') return !!env.MASTERFY_API_KEY;
   if (id === 'umbrellapag') return !!env.UMBRELLAPAG_API_KEY;
   if (id === 'venuspay_pix' || id === 'venuspay') return !!env.VENUS_PAY_SECRET_KEY;
+  if (id === 'invictuspay') return !!String(env.INVICTUSPAY_API_KEY || '').trim();
   if (id === 'flevopay') return !!env.FLEVOPAY_API_KEY;
   return false;
 }
@@ -237,6 +240,7 @@ async function createPix(request, env, ctx, siteVariant = 'gokoco') {
   const result = provider === 'masterfy' ? await createPixMasterfy(context, headers, payload)
     : provider === 'umbrellapag' ? await createPixUmbrellapag(context, headers, payload)
     : provider === 'venuspay_pix' ? await createPixVenuspay(context, headers, payload)
+    : provider === 'invictuspay' ? await createPixInvictuspay(context, headers, payload)
     : provider === 'flevopay' ? await createPixFlevopay(context, headers, payload)
     : await createPixIronpay(context, headers, payload);
   const payment = await result.json().catch(() => ({}));
@@ -947,7 +951,7 @@ export default {
       if (path.startsWith('/api/public/reshipping-fee/') || path === '/api/admin/reshipping-receipt' || path === '/api/admin/reshipping-fee/paid') {
         const handled = await handleReshippingRoute(path, request, env, {
           db, json, listGateways, requireAdmin, queryPixGatewayStatus, deliverReshippingFee,
-          providers: { ironpay: createPixIronpay, masterfy: createPixMasterfy, umbrellapag: createPixUmbrellapag, venuspay_pix: createPixVenuspay, flevopay: createPixFlevopay },
+          providers: { invictuspay: createPixInvictuspay, ironpay: createPixIronpay, masterfy: createPixMasterfy, umbrellapag: createPixUmbrellapag, venuspay_pix: createPixVenuspay, flevopay: createPixFlevopay },
         });
         if (handled) return handled;
       }
