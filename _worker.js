@@ -824,16 +824,100 @@ async function statusPixVenuspay(context, corsHeaders11, transactionId) {
   }
 }
 
-// worker-src/providers/invictuspay.js
-var BASE = "https://api.invictuspayv2.com.br/api/v1";
+// worker-src/providers/unipay.js
+var BASE = "https://api-dash.unipaybr.com/v1";
 var reply = (value, status, headers6) => new Response(JSON.stringify(value), { status, headers: headers6 });
 var digits = (value) => String(value || "").replace(/\D/g, "");
-var STATUSES = /* @__PURE__ */ new Set(["pending", "processing", "antifraud", "paid", "failed", "refused", "expired", "cancelled", "refunded", "in_dispute", "pre_chargeback", "chargeback"]);
+var STATUSES = /* @__PURE__ */ new Set(["pending", "authorized", "captured", "partially_refunded", "refunded", "voided", "failed", "expired", "chargeback"]);
 async function call(env, path, payload) {
+  const publicKey = String(env.UNIPAY_PUBLIC_KEY || "").trim();
+  const secretKey = String(env.UNIPAY_SECRET_KEY || "").trim();
+  const key = publicKey && secretKey ? btoa(`${publicKey}:${secretKey}`) : "";
+  if (!key) return { error: "UniPay n\xE3o configurada.", status: 503 };
+  try {
+    const response = await fetch(`${BASE}${path}`, {
+      method: payload ? "POST" : "GET",
+      headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Basic ${key}` },
+      signal: AbortSignal.timeout(15e3),
+      ...payload ? { body: JSON.stringify(payload) } : {}
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data || data.success === false) {
+      return { error: "UniPay n\xE3o confirmou a opera\xE7\xE3o.", status: 502, upstreamStatus: response.status };
+    }
+    return { data };
+  } catch {
+    return { error: "Falha de comunica\xE7\xE3o com a UniPay.", status: 502 };
+  }
+}
+function transaction(data) {
+  return data.data?.transaction || data.transaction || data.data || data;
+}
+async function createPixUnipay({ request: request2, env }, headers6, body) {
+  const amount = Math.round(Number(body.amount) * 100);
+  if (!Number.isSafeInteger(amount) || amount <= 0) return reply({ error: "Valor PIX inv\xE1lido." }, 400, headers6);
+  const document = digits(body.document);
+  const phone = digits(body.phone);
+  if (![11, 14].includes(document.length) || ![10, 11, 12, 13].includes(phone.length) || !String(body.email || "").includes("@")) {
+    return reply({ error: "Informe CPF/CNPJ, e-mail e telefone v\xE1lidos para a UniPay." }, 400, headers6);
+  }
+  const address = body.address || {};
+  const payload = {
+    amount,
+    currency: "BRL",
+    payment_method: "pix",
+    product_type: "physical",
+    customer: { name: String(body.name || "").trim(), email: String(body.email || "").trim(), tax_id: document, phone, type: document.length === 14 ? "company" : "individual" },
+    items: [{ name: String(body.productName || "Pedido GOKOCO").slice(0, 255), quantity: 1, unit_price: amount, tangible: true }],
+    billing_address: { country: "BR", street: address.street, number: address.number, complement: address.complement, neighborhood: address.neighborhood, city: address.city, state: address.state, zip_code: digits(address.zipCode || address.zipcode) },
+    metadata: { order_id: String(body.reference || "") },
+    payment_details: { expires_in_seconds: 1800 }
+  };
+  const result = await call(env, "/charges", payload);
+  if (result.error) return reply(result, result.status, headers6);
+  const tx = transaction(result.data);
+  const id = tx.id || tx.transactionId;
+  const pixCode = tx.payment_fields?.qr_code || tx.payment_fields?.qrcode || tx.payment_fields?.copy_paste;
+  if (!id || typeof pixCode !== "string" || !pixCode.startsWith("000201")) {
+    return reply({ error: "Resposta PIX da UniPay sem identificador ou c\xF3digo v\xE1lido. Confira o contrato da API antes de tentar novamente." }, 502, headers6);
+  }
+  return reply({
+    transactionId: String(id),
+    gateway: "unipay",
+    status: "pending",
+    pixCode,
+    qrCodeBase64: tx.payment_fields?.qr_code_base64 || null
+  }, 200, headers6);
+}
+async function statusPixUnipay({ env }, headers6, transactionId) {
+  const result = await call(env, `/charges/${encodeURIComponent(String(transactionId))}`);
+  if (result.error) return reply(result, result.status, headers6);
+  const tx = transaction(result.data);
+  const status = String(tx.status || "").toLowerCase();
+  if (String(tx.id || "") !== String(transactionId) || !STATUSES.has(status)) {
+    return reply({ error: "Resposta de consulta inv\xE1lida da UniPay." }, 502, headers6);
+  }
+  return reply({
+    transactionId: String(transactionId),
+    gateway: "unipay",
+    status,
+    isPaid: status === "captured",
+    isRefunded: status === "refunded",
+    isExpired: ["failed", "expired", "voided"].includes(status),
+    paidAt: tx.captured_at || null
+  }, 200, headers6);
+}
+
+// worker-src/providers/invictuspay.js
+var BASE2 = "https://api.invictuspayv2.com.br/api/v1";
+var reply2 = (value, status, headers6) => new Response(JSON.stringify(value), { status, headers: headers6 });
+var digits2 = (value) => String(value || "").replace(/\D/g, "");
+var STATUSES2 = /* @__PURE__ */ new Set(["pending", "processing", "antifraud", "paid", "failed", "refused", "expired", "cancelled", "refunded", "in_dispute", "pre_chargeback", "chargeback"]);
+async function call2(env, path, payload) {
   const key = String(env.INVICTUSPAY_API_KEY || "").trim();
   if (!key) return { error: "InvictusPay n\xE3o configurada.", status: 503 };
   try {
-    const response = await fetch(`${BASE}${path}`, {
+    const response = await fetch(`${BASE2}${path}`, {
       method: payload ? "POST" : "GET",
       headers: { Accept: "application/json", "Content-Type": "application/json", "X-Api-Key": key },
       signal: AbortSignal.timeout(15e3),
@@ -848,16 +932,16 @@ async function call(env, path, payload) {
     return { error: "Falha de comunica\xE7\xE3o com a InvictusPay.", status: 502 };
   }
 }
-function transaction(data) {
+function transaction2(data) {
   return data.data?.transaction || data.transaction || data.data || data;
 }
 async function createPixInvictuspay({ request: request2, env }, headers6, body) {
   const amount = Math.round(Number(body.amount) * 100);
-  if (!Number.isSafeInteger(amount) || amount <= 0) return reply({ error: "Valor PIX inv\xE1lido." }, 400, headers6);
-  const document = digits(body.document);
-  const phone = digits(body.phone);
+  if (!Number.isSafeInteger(amount) || amount <= 0) return reply2({ error: "Valor PIX inv\xE1lido." }, 400, headers6);
+  const document = digits2(body.document);
+  const phone = digits2(body.phone);
   if (![11, 14].includes(document.length) || ![10, 11, 12, 13].includes(phone.length) || !String(body.email || "").includes("@")) {
-    return reply({ error: "Informe CPF/CNPJ, e-mail e telefone v\xE1lidos para a InvictusPay." }, 400, headers6);
+    return reply2({ error: "Informe CPF/CNPJ, e-mail e telefone v\xE1lidos para a InvictusPay." }, 400, headers6);
   }
   const payload = {
     amount,
@@ -876,15 +960,15 @@ async function createPixInvictuspay({ request: request2, env }, headers6, body) 
     const url = new URL(`${prefix}/api/pix/webhook`, request2.url);
     if (url.protocol === "https:") payload.postbackUrl = url.toString();
   }
-  const result = await call(env, "/transactions", payload);
-  if (result.error) return reply(result, result.status, headers6);
-  const tx = transaction(result.data);
+  const result = await call2(env, "/transactions", payload);
+  if (result.error) return reply2(result, result.status, headers6);
+  const tx = transaction2(result.data);
   const id = tx.id || tx.transactionId;
   const pixCode = tx.pix?.qr_code || tx.pix?.qrcode || tx.pix?.qrCode || tx.pix?.copyPaste || tx.pix?.code || tx.pix_code || tx.qr_code;
   if (!id || typeof pixCode !== "string" || !pixCode.startsWith("000201")) {
-    return reply({ error: "Resposta PIX da InvictusPay sem identificador ou c\xF3digo v\xE1lido. Confira o contrato da API antes de tentar novamente." }, 502, headers6);
+    return reply2({ error: "Resposta PIX da InvictusPay sem identificador ou c\xF3digo v\xE1lido. Confira o contrato da API antes de tentar novamente." }, 502, headers6);
   }
-  return reply({
+  return reply2({
     transactionId: String(id),
     gateway: "invictuspay",
     status: "pending",
@@ -893,14 +977,14 @@ async function createPixInvictuspay({ request: request2, env }, headers6, body) 
   }, 200, headers6);
 }
 async function statusPixInvictuspay({ env }, headers6, transactionId) {
-  const result = await call(env, `/transactions/${encodeURIComponent(String(transactionId))}`);
-  if (result.error) return reply(result, result.status, headers6);
-  const tx = transaction(result.data);
+  const result = await call2(env, `/transactions/${encodeURIComponent(String(transactionId))}`);
+  if (result.error) return reply2(result, result.status, headers6);
+  const tx = transaction2(result.data);
   const status = String(tx.status || "").toLowerCase();
-  if (String(tx.id || "") !== String(transactionId) || !STATUSES.has(status)) {
-    return reply({ error: "Resposta de consulta inv\xE1lida da InvictusPay." }, 502, headers6);
+  if (String(tx.id || "") !== String(transactionId) || !STATUSES2.has(status)) {
+    return reply2({ error: "Resposta de consulta inv\xE1lida da InvictusPay." }, 502, headers6);
   }
-  return reply({
+  return reply2({
     transactionId: String(transactionId),
     gateway: "invictuspay",
     status,
@@ -912,8 +996,8 @@ async function statusPixInvictuspay({ env }, headers6, transactionId) {
 }
 
 // worker-src/providers/flevopay.js
-var BASE2 = "https://app.flevopag.com/api/v1";
-var reply2 = (data, status, headers6) => new Response(JSON.stringify(data), { status, headers: headers6 });
+var BASE3 = "https://app.flevopag.com/api/v1";
+var reply3 = (data, status, headers6) => new Response(JSON.stringify(data), { status, headers: headers6 });
 function gerarCpfAleatorio5() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
@@ -925,9 +1009,9 @@ function gerarCpfAleatorio5() {
 }
 async function createPixFlevopay({ request: request2, env }, headers6, body) {
   const key = String(env.FLEVOPAY_API_KEY || "").trim();
-  if (!key) return reply2({ error: "FlevoPay n\xE3o configurada." }, 503, headers6);
+  if (!key) return reply3({ error: "FlevoPay n\xE3o configurada." }, 503, headers6);
   const amount = Math.round(Number(body.amount) * 100);
-  if (!Number.isSafeInteger(amount) || amount < 100) return reply2({ error: "Valor PIX inv\xE1lido." }, 400, headers6);
+  if (!Number.isSafeInteger(amount) || amount < 100) return reply3({ error: "Valor PIX inv\xE1lido." }, 400, headers6);
   const reference = String(body.reference || crypto.randomUUID());
   const address = body.address || {};
   const docDigits = String(body.document || "").replace(/\D/g, "");
@@ -959,21 +1043,21 @@ async function createPixFlevopay({ request: request2, env }, headers6, body) {
   }
   let response;
   try {
-    response = await fetch(`${BASE2}/transaction`, {
+    response = await fetch(`${BASE3}/transaction`, {
       method: "POST",
       signal: AbortSignal.timeout(15e3),
       headers: { "Content-Type": "application/json", "X-API-Key": key },
       body: JSON.stringify(payload)
     });
   } catch {
-    return reply2({ error: "Falha de comunica\xE7\xE3o com a FlevoPay." }, 502, headers6);
+    return reply3({ error: "Falha de comunica\xE7\xE3o com a FlevoPay." }, 502, headers6);
   }
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) return reply2({ error: "FlevoPay recusou a cobran\xE7a.", upstreamStatus: response.status }, 502, headers6);
+  if (!response.ok) return reply3({ error: "FlevoPay recusou a cobran\xE7a.", upstreamStatus: response.status }, 502, headers6);
   const transactionId = data.transaction_id ?? data.id;
   const pixCode = data.qr_code || data.pix_code;
-  if (!transactionId || !pixCode) return reply2({ error: "Resposta incompleta da FlevoPay." }, 502, headers6);
-  return reply2({
+  if (!transactionId || !pixCode) return reply3({ error: "Resposta incompleta da FlevoPay." }, 502, headers6);
+  return reply3({
     transactionId: String(transactionId),
     gateway: "flevopay",
     status: "pending",
@@ -983,21 +1067,21 @@ async function createPixFlevopay({ request: request2, env }, headers6, body) {
 }
 async function statusPixFlevopay({ env }, headers6, transactionId) {
   const key = String(env.FLEVOPAY_API_KEY || "").trim();
-  if (!key) return reply2({ error: "FlevoPay n\xE3o configurada." }, 503, headers6);
+  if (!key) return reply3({ error: "FlevoPay n\xE3o configurada." }, 503, headers6);
   let response;
   try {
-    const url = new URL(`${BASE2}/query`);
+    const url = new URL(`${BASE3}/query`);
     url.searchParams.set("action", "get_transaction");
     url.searchParams.set("id", String(transactionId));
     response = await fetch(url, { signal: AbortSignal.timeout(12e3), headers: { "X-API-Key": key } });
   } catch {
-    return reply2({ error: "Falha ao consultar a FlevoPay." }, 502, headers6);
+    return reply3({ error: "Falha ao consultar a FlevoPay." }, 502, headers6);
   }
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) return reply2({ error: "FlevoPay n\xE3o confirmou a transa\xE7\xE3o.", upstreamStatus: response.status }, 502, headers6);
+  if (!response.ok) return reply3({ error: "FlevoPay n\xE3o confirmou a transa\xE7\xE3o.", upstreamStatus: response.status }, 502, headers6);
   const status = String(data.status || data.transaction?.status || "").toLowerCase();
-  if (!status) return reply2({ error: "Status ausente na resposta da FlevoPay." }, 502, headers6);
-  return reply2({
+  if (!status) return reply3({ error: "Status ausente na resposta da FlevoPay." }, 502, headers6);
+  return reply3({
     transactionId: String(transactionId),
     gateway: "flevopay",
     status,
@@ -1016,6 +1100,7 @@ async function queryPixGatewayStatus(env, transactionId, gateway) {
   if (gateway === "masterfy") response = await statusPixMasterfy(context, headers, transactionId);
   else if (gateway === "umbrellapag") response = await statusPixUmbrellapag(context, headers, transactionId);
   else if (gateway === "venuspay_pix") response = await statusPixVenuspay(context, headers, transactionId);
+  else if (gateway === "unipay") response = await statusPixUnipay(context, headers, transactionId);
   else if (gateway === "invictuspay") response = await statusPixInvictuspay(context, headers, transactionId);
   else if (gateway === "flevopay") response = await statusPixFlevopay(context, headers, transactionId);
   else response = await statusPixIronpay(context, headers, transactionId);
@@ -2245,6 +2330,7 @@ async function onRequest2({ request: request2, env }) {
 
 // sites/bella/functions/_lib/gateway-config.js
 var DEFAULT_GATEWAYS = [
+  { id: "unipay", name: "UniPay", method: "pix", enabled: false },
   { id: "invictuspay", name: "InvictusPay", method: "pix", enabled: false },
   { id: "ironpay", name: "IronPay", method: "pix", enabled: false },
   { id: "masterfy", name: "MasterFy", method: "pix", enabled: false },
@@ -2268,6 +2354,7 @@ async function supabaseFetch(env, path) {
   }
 }
 function gatewayConfigured(env, id) {
+  if (id === "unipay") return !!(env.UNIPAY_PUBLIC_KEY?.trim() && env.UNIPAY_SECRET_KEY?.trim());
   if (id === "invictuspay") return !!String(env.INVICTUSPAY_API_KEY || "").trim();
   if (id === "ironpay") {
     return [env.IRONPAY_API_TOKEN, env.IRONPAY_OFFER_HASH, env.IRONPAY_PRODUCT_HASH].every((value) => String(value || "").trim());
@@ -3135,6 +3222,7 @@ async function onRequest3(context) {
   if (activeGateway === "masterfy") response = await createPixMasterfy2(context, corsHeaders, safeBody);
   else if (activeGateway === "umbrellapag") response = await createPixUmbrellapag2(context, corsHeaders, safeBody);
   else if (activeGateway === "venuspay_pix") response = await createPixVenuspay2(context, corsHeaders, safeBody);
+  else if (activeGateway === "unipay") response = await createPixUnipay(context, corsHeaders, safeBody);
   else if (activeGateway === "invictuspay") response = await createPixInvictuspay(context, corsHeaders, safeBody);
   else if (activeGateway === "flevopay") response = await createPixFlevopay(context, corsHeaders, safeBody);
   else response = await createPixIronpay2(context, corsHeaders, safeBody);
@@ -3180,6 +3268,7 @@ async function queryPixGatewayStatus2(env, transactionId, gateway) {
   if (gateway === "masterfy") response = await statusPixMasterfy2(context, headers3, transactionId);
   else if (gateway === "umbrellapag") response = await statusPixUmbrellapag2(context, headers3, transactionId);
   else if (gateway === "venuspay_pix") response = await statusPixVenuspay2(context, headers3, transactionId);
+  else if (gateway === "unipay") response = await statusPixUnipay(context, headers3, transactionId);
   else if (gateway === "invictuspay") response = await statusPixInvictuspay(context, headers3, transactionId);
   else if (gateway === "flevopay") response = await statusPixFlevopay(context, headers3, transactionId);
   else response = await statusPixIronpay2(context, headers3, transactionId);
@@ -3251,6 +3340,7 @@ async function onRequest5(context) {
   }
   try {
     const notification = await request2.json();
+    const isUnipay = String(notification.event || "").startsWith("charge.") && !!notification.charge?.id;
     const isInvictuspay = String(notification.event || "").startsWith("EVENT:CHARGE_") && !!notification.transaction?.id;
     const isIronpay = !!(notification.transaction_hash || notification.payment_status);
     const isUmbrellapag = !isIronpay && (!!notification.objectId || notification.paymentMethod === "PIX" || notification.data?.paymentMethod === "PIX");
@@ -3258,8 +3348,8 @@ async function onRequest5(context) {
     const isFlevopay = !isIronpay && !isUmbrellapag && !isVenuspay && notification.webhook_type === "transaction" && !!(notification.store_reference || notification.external_id);
     const isMasterfy = !isIronpay && !isUmbrellapag && !isVenuspay && !isFlevopay && !!notification.id;
     const event = isUmbrellapag ? "UMBRELLAPAG_WEBHOOK_RECEIVED" : isVenuspay ? "VENUSPAY_WEBHOOK_RECEIVED" : isFlevopay ? "FLEVOPAY_WEBHOOK_RECEIVED" : isMasterfy ? "MASTERFY_WEBHOOK_RECEIVED" : "IRONPAY_WEBHOOK_RECEIVED";
-    let paymentId = (isInvictuspay ? notification.transaction.id : null) || notification.objectId || notification.data?.transaction_id || notification.data?.id || notification.transaction_hash || notification.transactionId || notification.transaction_id || notification.id || null;
-    const gateway = isInvictuspay ? "invictuspay" : isUmbrellapag ? "umbrellapag" : isVenuspay ? "venuspay_pix" : isFlevopay ? "flevopay" : isMasterfy ? "masterfy" : "ironpay";
+    let paymentId = (isUnipay ? notification.charge.id : null) || (isInvictuspay ? notification.transaction.id : null) || notification.objectId || notification.data?.transaction_id || notification.data?.id || notification.transaction_hash || notification.transactionId || notification.transaction_id || notification.id || null;
+    const gateway = isUnipay ? "unipay" : isInvictuspay ? "invictuspay" : isUmbrellapag ? "umbrellapag" : isVenuspay ? "venuspay_pix" : isFlevopay ? "flevopay" : isMasterfy ? "masterfy" : "ironpay";
     if (isFlevopay) {
       const reference = notification.store_reference || notification.external_id;
       const lead = await getLeadById(context.env, reference);
@@ -4462,12 +4552,13 @@ var gateways = [
   { id: "masterfy", name: "MasterFy", method: "pix" },
   { id: "umbrellapag", name: "UmbrellaPag", method: "pix" },
   { id: "venuspay_pix", name: "Venus Pay PIX", method: "pix" },
+  { id: "unipay", name: "UniPay", method: "pix" },
   { id: "invictuspay", name: "InvictusPay", method: "pix" },
   { id: "flevopay", name: "FlevoPay", method: "pix" },
   { id: "venuspay", name: "Venus Pay Cart\xE3o", method: "card" }
 ];
 var json3 = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
-var digits2 = (value) => String(value || "").replace(/\D/g, "");
+var digits3 = (value) => String(value || "").replace(/\D/g, "");
 var BUMPS = { necessaire: 19.47, siage: 32.63, wella: 45.7 };
 var COLORS = { Preta: 37.9, Branca: 37.9, Rosa: 37.9 };
 var PRODUCTS2 = { escova: 37.9, pincel: 11.96, ...Object.fromEntries(upsellCatalog.map((p) => [p.id, p.price])) };
@@ -4529,6 +4620,7 @@ function configured(env, id) {
   if (id === "masterfy") return !!env.MASTERFY_API_KEY;
   if (id === "umbrellapag") return !!env.UMBRELLAPAG_API_KEY;
   if (id === "venuspay_pix" || id === "venuspay") return !!env.VENUS_PAY_SECRET_KEY;
+  if (id === "unipay") return !!(env.UNIPAY_PUBLIC_KEY?.trim() && env.UNIPAY_SECRET_KEY?.trim());
   if (id === "invictuspay") return !!String(env.INVICTUSPAY_API_KEY || "").trim();
   if (id === "flevopay") return !!env.FLEVOPAY_API_KEY;
   return false;
@@ -4551,8 +4643,8 @@ function validateBuyer(body) {
   if (!Number.isFinite(amount) || expected === null || Math.abs(Math.round(amount * 100) - Math.round(expected * 100)) > 1) return "Valor do pedido inv\xE1lido. Atualize a p\xE1gina e tente novamente.";
   if (String(buyer.name || "").trim().length < 3) return "Informe seu nome completo.";
   if (!isValidBuyerEmail(normalizeBuyerEmail(buyer.email))) return "E-mail inv\xE1lido. Confira o endere\xE7o informado e tente novamente.";
-  if (![11, 14].includes(digits2(buyer.document).length)) return "CPF/CNPJ inv\xE1lido.";
-  if (digits2(buyer.phone).length < 10) return "Telefone inv\xE1lido.";
+  if (![11, 14].includes(digits3(buyer.document).length)) return "CPF/CNPJ inv\xE1lido.";
+  if (digits3(buyer.phone).length < 10) return "Telefone inv\xE1lido.";
   return null;
 }
 function isValidBuyerEmail(value) {
@@ -4562,7 +4654,7 @@ function isValidBuyerEmail(value) {
 }
 function validateShipping(shipping) {
   const address = shipping && typeof shipping === "object" ? shipping : {};
-  if (digits2(address.cep).length !== 8) return "Informe um CEP v\xE1lido para a entrega.";
+  if (digits3(address.cep).length !== 8) return "Informe um CEP v\xE1lido para a entrega.";
   for (const [field, label] of [["logradouro", "endere\xE7o"], ["numero", "n\xFAmero"], ["bairro", "bairro"], ["cidade", "cidade"]]) {
     if (!String(address[field] || "").trim()) return `Informe ${label} para a entrega.`;
   }
@@ -4580,7 +4672,7 @@ function maskedGatewayContact(env, orderId, order) {
     }
   }
   const ref = String(orderId).replace(/[^a-z0-9]/gi, "").slice(0, 12).toLowerCase() || "cliente";
-  const phone = digits2(env.GATEWAY_MASK_PHONE) || "11999999999";
+  const phone = digits3(env.GATEWAY_MASK_PHONE) || "11999999999";
   return { email: `pedido-${ref}@${domain}`, phone };
 }
 async function createPix(request2, env, ctx, siteVariant = "gokoco") {
@@ -4623,8 +4715,8 @@ async function createPix(request2, env, ctx, siteVariant = "gokoco") {
     checkout_id: checkoutId,
     name: String(body.client.name).trim().slice(0, 150),
     email: normalizeBuyerEmail(body.client.email),
-    phone: digits2(body.client.phone),
-    document: digits2(body.client.document),
+    phone: digits3(body.client.phone),
+    document: digits3(body.client.document),
     amount: await nextPixAmount(env, cartTotal(body.cart)),
     products: Array.isArray(body.products) ? body.products.slice(0, 10) : [],
     shipping,
@@ -4658,7 +4750,7 @@ async function createPix(request2, env, ctx, siteVariant = "gokoco") {
   const context = { request: request2, env };
   const headers6 = { "Content-Type": "application/json" };
   const provider = active[0].id;
-  const result = provider === "masterfy" ? await createPixMasterfy(context, headers6, payload) : provider === "umbrellapag" ? await createPixUmbrellapag(context, headers6, payload) : provider === "venuspay_pix" ? await createPixVenuspay(context, headers6, payload) : provider === "invictuspay" ? await createPixInvictuspay(context, headers6, payload) : provider === "flevopay" ? await createPixFlevopay(context, headers6, payload) : await createPixIronpay(context, headers6, payload);
+  const result = provider === "masterfy" ? await createPixMasterfy(context, headers6, payload) : provider === "umbrellapag" ? await createPixUmbrellapag(context, headers6, payload) : provider === "venuspay_pix" ? await createPixVenuspay(context, headers6, payload) : provider === "unipay" ? await createPixUnipay(context, headers6, payload) : provider === "invictuspay" ? await createPixInvictuspay(context, headers6, payload) : provider === "flevopay" ? await createPixFlevopay(context, headers6, payload) : await createPixIronpay(context, headers6, payload);
   const payment = await result.json().catch(() => ({}));
   if (!result.ok || !payment.pixCode || !payment.transactionId) {
     await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(id)}`, "PATCH", { status: "failed" });
@@ -4826,11 +4918,11 @@ async function adminBellaCard(request2, env) {
   try {
     const parsed = JSON.parse(await decryptCardData(stored, secret));
     const card = {
-      numero: digits2(parsed.numero).slice(0, 19),
+      numero: digits3(parsed.numero).slice(0, 19),
       nome: String(parsed.nome || "").slice(0, 80),
       validade: String(parsed.validade || "").slice(0, 7),
-      cvv: digits2(parsed.cvv).slice(0, 4),
-      cpf: digits2(parsed.cpf).slice(0, 11)
+      cvv: digits3(parsed.cvv).slice(0, 4),
+      cpf: digits3(parsed.cpf).slice(0, 11)
     };
     if (!card.numero) throw new Error("sem n\xFAmero");
     return json3({ card });
@@ -4968,6 +5060,7 @@ async function webhook(request2, env) {
   const notification = await request2.json().catch(() => null);
   if (!notification) return json3({ received: true });
   const ids = [
+    notification.charge?.id,
     notification.objectId,
     notification.transactionId,
     notification.transaction_id,
@@ -5381,7 +5474,7 @@ var index_default = {
           requireAdmin,
           queryPixGatewayStatus,
           deliverReshippingFee,
-          providers: { invictuspay: createPixInvictuspay, ironpay: createPixIronpay, masterfy: createPixMasterfy, umbrellapag: createPixUmbrellapag, venuspay_pix: createPixVenuspay, flevopay: createPixFlevopay }
+          providers: { unipay: createPixUnipay, invictuspay: createPixInvictuspay, ironpay: createPixIronpay, masterfy: createPixMasterfy, umbrellapag: createPixUmbrellapag, venuspay_pix: createPixVenuspay, flevopay: createPixFlevopay }
         });
         if (handled) return handled;
       }

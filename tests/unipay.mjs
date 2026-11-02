@@ -1,0 +1,38 @@
+import assert from 'node:assert/strict';
+import { createPixUnipay, statusPixUnipay } from '../worker-src/providers/unipay.js';
+const env = { UNIPAY_PUBLIC_KEY: 'pk_test', UNIPAY_SECRET_KEY: 'sk_test' };
+const context = { env, request: new Request('https://shop.example/video/api/pix/create') };
+const body = { amount: 37.91, name: 'Teste', email: 'teste@example.com', document: '12345678909', phone: '11999999999', reference: 'order-test' };
+const originalFetch = globalThis.fetch;
+let count = 0;
+try {
+  globalThis.fetch = async (url, options) => {
+    count++;
+    assert.equal(url, 'https://api-dash.unipaybr.com/v1/charges');
+    assert.equal(options.headers.Authorization, `Basic ${btoa('pk_test:sk_test')}`);
+    const payload = JSON.parse(options.body);
+    assert.equal(payload.amount, 3791);
+    assert.equal(payload.items.reduce((sum, item) => sum + item.unit_price, 0), payload.amount);
+    assert.equal(payload.metadata.order_id, body.reference);
+    assert.equal(payload.product_type, 'physical');
+    assert.equal(payload.customer.tax_id, body.document);
+    return Response.json({ success: true, data: { id: 'tx-test', payment_fields: { qr_code: '000201-test', qr_code_base64: null } } });
+  };
+  const created = await createPixUnipay(context, {}, body);
+  assert.equal(created.status, 200);
+  assert.equal((await created.json()).transactionId, 'tx-test');
+  assert.equal((await createPixUnipay(context, {}, { ...body, amount: NaN })).status, 400);
+  assert.equal(count, 1);
+  assert.equal((await createPixUnipay({ env: {} }, {}, body)).status, 503);
+  globalThis.fetch = async () => Response.json({ id: 'tx-test', status: 'captured', captured_at: '2026-10-28T12:00:00Z' });
+  assert.equal((await (await statusPixUnipay(context, {}, 'tx-test')).json()).isPaid, true);
+  globalThis.fetch = async () => Response.json({ id: 'different', status: 'captured' });
+  assert.equal((await statusPixUnipay(context, {}, 'tx-test')).status, 502);
+  globalThis.fetch = async () => Response.json({ id: 'tx-test', status: 'unknown' });
+  assert.equal((await statusPixUnipay(context, {}, 'tx-test')).status, 502);
+  globalThis.fetch = async () => Response.json({ id: 'tx-test' });
+  assert.equal((await createPixUnipay(context, {}, body)).status, 502);
+  globalThis.fetch = async () => { throw new Error('timeout'); };
+  assert.equal((await statusPixUnipay(context, {}, 'tx-test')).status, 502);
+  console.log('UniPay: validação, payload, consulta e falhas passaram (API simulada).');
+} finally { globalThis.fetch = originalFetch; }

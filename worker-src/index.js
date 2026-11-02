@@ -5,6 +5,7 @@ import { createPixIronpay } from './providers/ironpay.js';
 import { createPixMasterfy } from './providers/masterfy.js';
 import { createPixUmbrellapag } from './providers/umbrellapag.js';
 import { createPixVenuspay } from './providers/venuspay.js';
+import { createPixUnipay } from './providers/unipay.js';
 import { createPixInvictuspay } from './providers/invictuspay.js';
 import { createPixFlevopay } from './providers/flevopay.js';
 import { queryPixGatewayStatus } from './pix-gateway-status.js';
@@ -36,6 +37,7 @@ const gateways = [
   { id: 'masterfy', name: 'MasterFy', method: 'pix' },
   { id: 'umbrellapag', name: 'UmbrellaPag', method: 'pix' },
   { id: 'venuspay_pix', name: 'Venus Pay PIX', method: 'pix' },
+  { id: 'unipay', name: 'UniPay', method: 'pix' },
   { id: 'invictuspay', name: 'InvictusPay', method: 'pix' },
   { id: 'flevopay', name: 'FlevoPay', method: 'pix' },
   { id: 'venuspay', name: 'Venus Pay Cartão', method: 'card' },
@@ -107,6 +109,7 @@ function configured(env, id) {
   if (id === 'masterfy') return !!env.MASTERFY_API_KEY;
   if (id === 'umbrellapag') return !!env.UMBRELLAPAG_API_KEY;
   if (id === 'venuspay_pix' || id === 'venuspay') return !!env.VENUS_PAY_SECRET_KEY;
+  if (id === 'unipay') return !!(env.UNIPAY_PUBLIC_KEY?.trim() && env.UNIPAY_SECRET_KEY?.trim());
   if (id === 'invictuspay') return !!String(env.INVICTUSPAY_API_KEY || '').trim();
   if (id === 'flevopay') return !!env.FLEVOPAY_API_KEY;
   return false;
@@ -240,6 +243,7 @@ async function createPix(request, env, ctx, siteVariant = 'gokoco') {
   const result = provider === 'masterfy' ? await createPixMasterfy(context, headers, payload)
     : provider === 'umbrellapag' ? await createPixUmbrellapag(context, headers, payload)
     : provider === 'venuspay_pix' ? await createPixVenuspay(context, headers, payload)
+    : provider === 'unipay' ? await createPixUnipay(context, headers, payload)
     : provider === 'invictuspay' ? await createPixInvictuspay(context, headers, payload)
     : provider === 'flevopay' ? await createPixFlevopay(context, headers, payload)
     : await createPixIronpay(context, headers, payload);
@@ -559,7 +563,7 @@ async function webhook(request, env) {
   const notification = await request.json().catch(() => null);
   if (!notification) return json({ received: true });
   const ids = [
-    notification.objectId, notification.transactionId, notification.transaction_id, notification.transactionHash, notification.transaction_hash, notification.id, notification.external_id, notification.store_reference,
+    notification.charge?.id, notification.objectId, notification.transactionId, notification.transaction_id, notification.transactionHash, notification.transaction_hash, notification.id, notification.external_id, notification.store_reference,
     notification.object?.id, notification.object?.transaction_id, notification.object?.transactionId, notification.object?.hash,
     notification.transaction?.id, notification.transaction?.transaction_id, notification.transaction?.hash,
     notification.payment?.id, notification.payment?.transaction_id, notification.payment?.transactionId,
@@ -951,7 +955,7 @@ export default {
       if (path.startsWith('/api/public/reshipping-fee/') || path === '/api/admin/reshipping-receipt' || path === '/api/admin/reshipping-fee/paid') {
         const handled = await handleReshippingRoute(path, request, env, {
           db, json, listGateways, requireAdmin, queryPixGatewayStatus, deliverReshippingFee,
-          providers: { invictuspay: createPixInvictuspay, ironpay: createPixIronpay, masterfy: createPixMasterfy, umbrellapag: createPixUmbrellapag, venuspay_pix: createPixVenuspay, flevopay: createPixFlevopay },
+          providers: { unipay: createPixUnipay, invictuspay: createPixInvictuspay, ironpay: createPixIronpay, masterfy: createPixMasterfy, umbrellapag: createPixUmbrellapag, venuspay_pix: createPixVenuspay, flevopay: createPixFlevopay },
         });
         if (handled) return handled;
       }

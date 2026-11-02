@@ -28,6 +28,7 @@ export async function onRequest(context) {
 
   try {
     const notification = await request.json();
+    const isUnipay = String(notification.event || "").startsWith("charge.") && !!notification.charge?.id;
     const isInvictuspay = String(notification.event || "").startsWith("EVENT:CHARGE_") && !!notification.transaction?.id;
     const isIronpay = !!(notification.transaction_hash || notification.payment_status);
     const isUmbrellapag =
@@ -51,6 +52,7 @@ export async function onRequest(context) {
           ? "MASTERFY_WEBHOOK_RECEIVED"
           : "IRONPAY_WEBHOOK_RECEIVED";
     let paymentId =
+      (isUnipay ? notification.charge.id : null) ||
       (isInvictuspay ? notification.transaction.id : null) ||
       notification.objectId ||
       notification.data?.transaction_id ||
@@ -60,7 +62,7 @@ export async function onRequest(context) {
       notification.transaction_id ||
       notification.id ||
       null;
-    const gateway = isInvictuspay ? "invictuspay" : isUmbrellapag ? "umbrellapag" : isVenuspay ? "venuspay_pix" : isFlevopay ? "flevopay" : isMasterfy ? "masterfy" : "ironpay";
+    const gateway = isUnipay ? "unipay" : isInvictuspay ? "invictuspay" : isUmbrellapag ? "umbrellapag" : isVenuspay ? "venuspay_pix" : isFlevopay ? "flevopay" : isMasterfy ? "masterfy" : "ironpay";
 
     if (isFlevopay) {
       const reference = notification.store_reference || notification.external_id;
