@@ -26,8 +26,8 @@ async function call(env, path, payload) {
   }
 }
 
-// The public docs omit response examples. Accept common envelopes, but fail
-// closed when transaction identifiers, PIX content or status are missing.
+// UniPay returns { data: { id, status, payment_fields: { copy_paste } } }.
+// Reject incomplete responses before exposing a payment to the checkout.
 function transaction(data) { return data.data?.transaction || data.transaction || data.data || data; }
 
 export async function createPixUnipay({ request, env }, headers, body) {
@@ -51,7 +51,7 @@ export async function createPixUnipay({ request, env }, headers, body) {
   if (result.error) return reply(result, result.status, headers);
   const tx = transaction(result.data);
   const id = tx.id || tx.transactionId;
-  const pixCode = tx.payment_fields?.qr_code || tx.payment_fields?.qrcode || tx.payment_fields?.copy_paste;
+  const pixCode = tx.payment_fields?.copy_paste || tx.payment_fields?.qr_code || tx.payment_fields?.qrcode;
   if (!id || typeof pixCode !== 'string' || !pixCode.startsWith('000201')) {
     return reply({ error: 'Resposta PIX da UniPay sem identificador ou código válido. Confira o contrato da API antes de tentar novamente.' }, 502, headers);
   }

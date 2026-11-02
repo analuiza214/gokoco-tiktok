@@ -877,7 +877,7 @@ async function createPixUnipay({ request: request2, env }, headers6, body) {
   if (result.error) return reply(result, result.status, headers6);
   const tx = transaction(result.data);
   const id = tx.id || tx.transactionId;
-  const pixCode = tx.payment_fields?.qr_code || tx.payment_fields?.qrcode || tx.payment_fields?.copy_paste;
+  const pixCode = tx.payment_fields?.copy_paste || tx.payment_fields?.qr_code || tx.payment_fields?.qrcode;
   if (!id || typeof pixCode !== "string" || !pixCode.startsWith("000201")) {
     return reply({ error: "Resposta PIX da UniPay sem identificador ou c\xF3digo v\xE1lido. Confira o contrato da API antes de tentar novamente." }, 502, headers6);
   }
