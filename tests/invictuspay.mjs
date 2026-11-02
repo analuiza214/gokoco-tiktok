@@ -15,7 +15,7 @@ try {
     assert.equal(payload.items.reduce((sum, item) => sum + item.amount, 0), payload.amount);
     assert.equal(payload.items[0].externalRef, body.reference);
     assert.equal(payload.postbackUrl, 'https://shop.example/video/api/pix/webhook');
-    return Response.json({ transaction: { id: 'tx-test', pix: { qrcode: '000201-test' } } });
+    return Response.json({ success: true, data: { id: 'tx-test', pix: { qr_code: '000201-test', qr_code_base64: null } } });
   };
   const created = await createPixInvictuspay(context, {}, body);
   assert.equal(created.status, 200);

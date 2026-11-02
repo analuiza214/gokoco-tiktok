@@ -52,12 +52,12 @@ export async function createPixInvictuspay({ request, env }, headers, body) {
   if (result.error) return reply(result, result.status, headers);
   const tx = transaction(result.data);
   const id = tx.id || tx.transactionId;
-  const pixCode = tx.pix?.qrcode || tx.pix?.qrCode || tx.pix?.copyPaste || tx.pix?.code || tx.pix_code || tx.qr_code;
+  const pixCode = tx.pix?.qr_code || tx.pix?.qrcode || tx.pix?.qrCode || tx.pix?.copyPaste || tx.pix?.code || tx.pix_code || tx.qr_code;
   if (!id || typeof pixCode !== 'string' || !pixCode.startsWith('000201')) {
     return reply({ error: 'Resposta PIX da InvictusPay sem identificador ou código válido. Confira o contrato da API antes de tentar novamente.' }, 502, headers);
   }
   return reply({ transactionId: String(id), gateway: 'invictuspay', status: 'pending', pixCode,
-    qrCodeBase64: tx.pix?.qrCodeBase64 || tx.qr_code_base64 || null }, 200, headers);
+    qrCodeBase64: tx.pix?.qr_code_base64 || tx.pix?.qrCodeBase64 || tx.qr_code_base64 || null }, 200, headers);
 }
 
 export async function statusPixInvictuspay({ env }, headers, transactionId) {

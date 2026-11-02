@@ -880,7 +880,7 @@ async function createPixInvictuspay({ request: request2, env }, headers6, body) 
   if (result.error) return reply(result, result.status, headers6);
   const tx = transaction(result.data);
   const id = tx.id || tx.transactionId;
-  const pixCode = tx.pix?.qrcode || tx.pix?.qrCode || tx.pix?.copyPaste || tx.pix?.code || tx.pix_code || tx.qr_code;
+  const pixCode = tx.pix?.qr_code || tx.pix?.qrcode || tx.pix?.qrCode || tx.pix?.copyPaste || tx.pix?.code || tx.pix_code || tx.qr_code;
   if (!id || typeof pixCode !== "string" || !pixCode.startsWith("000201")) {
     return reply({ error: "Resposta PIX da InvictusPay sem identificador ou c\xF3digo v\xE1lido. Confira o contrato da API antes de tentar novamente." }, 502, headers6);
   }
@@ -889,7 +889,7 @@ async function createPixInvictuspay({ request: request2, env }, headers6, body) 
     gateway: "invictuspay",
     status: "pending",
     pixCode,
-    qrCodeBase64: tx.pix?.qrCodeBase64 || tx.qr_code_base64 || null
+    qrCodeBase64: tx.pix?.qr_code_base64 || tx.pix?.qrCodeBase64 || tx.qr_code_base64 || null
   }, 200, headers6);
 }
 async function statusPixInvictuspay({ env }, headers6, transactionId) {
