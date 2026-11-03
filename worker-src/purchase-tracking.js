@@ -1,6 +1,7 @@
+import {deliverVerdefy} from './verdefy-sales.js';
 // Adaptado do envio de pedidos pagos da loja Top Mix.
 // O estado de envio usa o JSON tracking existente; não exige migração do banco.
-const ATTRIBUTION_KEYS = ['src', 'sck', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'fbclid', 'gclid', 'ttclid'];
+const ATTRIBUTION_KEYS = ['src', 'sck', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'utm_id', 'fbclid', 'gclid', 'ttclid'];
 const text = (value, limit = 500) => typeof value === 'string' ? value.slice(0, limit) : '';
 const utc = (value) => new Date(value).toISOString().slice(0, 19).replace('T', ' ');
 
@@ -175,6 +176,7 @@ async function swapTracking(db, env, order, tracking) {
 }
 
 export async function deliverPaidPurchase(env, db, orderId, paidAt) {
+  await deliverVerdefy(env,db,orderId).catch(()=>console.error("[verdefy] Sync pending."));
   const destination = purchaseDestination(env);
   if (!destination) return { state: 'not_configured' };
   for (let attempt = 0; attempt < 3; attempt++) {

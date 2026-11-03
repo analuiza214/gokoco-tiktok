@@ -1,5 +1,5 @@
 (function () {
-  var keys = ['src', 'sck', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'fbclid', 'gclid', 'ttclid'];
+  var keys = ['src', 'sck', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'utm_id', 'fbclid', 'gclid', 'ttclid'];
   var storeKey = 'gokoco_attribution';
   var saved = {};
   try { saved = JSON.parse(localStorage.getItem(storeKey) || '{}'); } catch (_) {}

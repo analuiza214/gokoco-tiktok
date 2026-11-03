@@ -1,3 +1,4 @@
+import {retryVerdefy} from './verdefy-sales.js';
 import { onRequest as adminLogin } from './admin-login.js';
 import { upsellCatalog } from './upsell-catalog.js';
 import { verifyAdminToken } from './admin-auth.js';
@@ -966,11 +967,12 @@ export default {
         if (phase === 'recovery') return json({ recovery: await processRecoveryQueue(env, db, queryPixGatewayStatus) });
         const payments = phase === 'fulfillment' ? null : await reconcilePendingPayments(env, 2, true);
         await fulfillConfirmedPayment(env);
+        const verdefy = await retryVerdefy(env, db).catch(()=>({state:"retry_pending"}));
         const purchases = await retryPaidPurchases(env, 1);
         const pendingPurchases = await retryPendingPurchases(env);
         const emails = await retryPaidEmails(env, db);
         const recovery = phase === 'fulfillment' ? null : await processRecoveryQueue(env, db, queryPixGatewayStatus, 1);
-        return json({ payments, purchases, pendingPurchases, emails, recovery });
+        return json({ payments, purchases, pendingPurchases, emails, recovery, verdefy });
       }
       if (path === '/api/market/pix/create' && request.method === 'POST') return await createMarketPix(request, env, ctx);
       if (path === '/api/public/pix/create' && request.method === 'POST') return await createPix(request, env, ctx);
