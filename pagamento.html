@@ -855,7 +855,11 @@ fbq('track','PageView');
     var payload={
       checkoutId: (function(){
         var id=''; try{id=sessionStorage.getItem('lv_checkout_id')||'';}catch(e){}
-        if(!id){ id=crypto.randomUUID(); try{sessionStorage.setItem('lv_checkout_id',id);}catch(e){} }
+        if(!id){
+          // Webviews antigas (TikTok/Instagram) não têm crypto.randomUUID — fallback manual.
+          id=(crypto.randomUUID?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=Math.random()*16|0;return (c==='x'?r:(r&0x3|0x8)).toString(16);}));
+          try{sessionStorage.setItem('lv_checkout_id',id);}catch(e){}
+        }
         return id;
       })(),
       amount: amount,

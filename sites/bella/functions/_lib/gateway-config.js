@@ -18,6 +18,7 @@ async function supabaseFetch(env, path) {
 
   const res = await fetch(`${url}${path}`, {
     headers: { apikey: key, Authorization: `Bearer ${key}` },
+    signal: AbortSignal.timeout(20000),
   });
 
   if (!res.ok) throw new Error("Não foi possível consultar a configuração dos gateways.");

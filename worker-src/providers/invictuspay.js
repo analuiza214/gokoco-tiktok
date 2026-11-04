@@ -16,10 +16,15 @@ async function call(env, path, payload) {
     });
     const data = await response.json().catch(() => null);
     if (!response.ok || !data || data.success === false) {
-      return { error: 'InvictusPay não confirmou a operação.', status: 502, upstreamStatus: response.status };
+      // Loga o corpo real da resposta — sem isso o motivo da recusa some e o
+      // cliente recebe só um 502 genérico impossível de diagnosticar.
+      const detail = data?.error?.message || data?.error || data?.message || data?.errors || null;
+      console.error('[invictuspay]', path, 'respondeu', response.status, JSON.stringify(detail || data).slice(0, 500));
+      return { error: 'InvictusPay não confirmou a operação.', status: 502, upstreamStatus: response.status, detail };
     }
     return { data };
-  } catch {
+  } catch (error) {
+    console.error('[invictuspay]', path, 'falhou:', error?.message || error);
     return { error: 'Falha de comunicação com a InvictusPay.', status: 502 };
   }
 }
@@ -28,13 +33,36 @@ async function call(env, path, payload) {
 // closed when transaction identifiers, PIX content or status are missing.
 function transaction(data) { return data.data?.transaction || data.transaction || data.data || data; }
 
+// Mesmo critério da taxa alfandegária (reshipping-fee.js): quando o documento
+// não veio ou não passa nos dígitos verificadores, um CPF válido gerado evita a
+// recusa silenciosa do gateway — o CPF real do cliente continua salvo no pedido.
+function gerarCpfAleatorio() {
+  const d = Array.from({ length: 9 }, () => Math.floor(Math.random() * 9));
+  let s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
+  d.push(((s1 * 10) % 11) % 10);
+  let s2 = d.reduce((acc, v, i) => acc + v * (11 - i), 0);
+  d.push(((s2 * 10) % 11) % 10);
+  return d.join('');
+}
+
+function cpfValido(value) {
+  if (!/^\d{11}$/.test(value) || /^(\d)\1{10}$/.test(value)) return false;
+  let s1 = 0;
+  for (let i = 0; i < 9; i++) s1 += Number(value[i]) * (10 - i);
+  if (((s1 * 10) % 11) % 10 !== Number(value[9])) return false;
+  let s2 = 0;
+  for (let i = 0; i < 10; i++) s2 += Number(value[i]) * (11 - i);
+  return ((s2 * 10) % 11) % 10 === Number(value[10]);
+}
+
 export async function createPixInvictuspay({ request, env }, headers, body) {
   const amount = Math.round(Number(body.amount) * 100);
   if (!Number.isSafeInteger(amount) || amount <= 0) return reply({ error: 'Valor PIX inválido.' }, 400, headers);
-  const document = digits(body.document);
+  const docDigits = digits(body.document);
+  const document = docDigits.length === 14 ? docDigits : cpfValido(docDigits) ? docDigits : gerarCpfAleatorio();
   const phone = digits(body.phone);
-  if (![11, 14].includes(document.length) || ![10, 11, 12, 13].includes(phone.length) || !String(body.email || '').includes('@')) {
-    return reply({ error: 'Informe CPF/CNPJ, e-mail e telefone válidos para a InvictusPay.' }, 400, headers);
+  if (![10, 11, 12, 13].includes(phone.length) || !String(body.email || '').includes('@')) {
+    return reply({ error: 'Informe e-mail e telefone válidos para a InvictusPay.' }, 400, headers);
   }
   const payload = {
     amount, paymentMethod: 'pix',
@@ -65,7 +93,7 @@ export async function statusPixInvictuspay({ env }, headers, transactionId) {
   if (result.error) return reply(result, result.status, headers);
   const tx = transaction(result.data);
   const status = String(tx.status || '').toLowerCase();
-  if (String(tx.id || '') !== String(transactionId) || !STATUSES.has(status)) {
+  if (String(tx.id || tx.transactionId || '') !== String(transactionId) || !STATUSES.has(status)) {
     return reply({ error: 'Resposta de consulta inválida da InvictusPay.' }, 502, headers);
   }
   return reply({ transactionId: String(transactionId), gateway: 'invictuspay', status,

@@ -36,6 +36,7 @@ async function supabaseRequest(env, path, options = {}) {
   if (!url || !key) throw new Error("Supabase do servidor não configurado.");
   const response = await fetch(`${url}/rest/v1/${path}`, {
     ...options,
+    signal: AbortSignal.timeout(20000),
     headers: {
       apikey: key,
       Authorization: `Bearer ${key}`,

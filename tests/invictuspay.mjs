@@ -11,6 +11,7 @@ try {
     assert.equal(url, 'https://api.invictuspayv2.com.br/api/v1/transactions');
     assert.equal(options.headers['X-Api-Key'], env.INVICTUSPAY_API_KEY);
     const payload = JSON.parse(options.body);
+    globalThis.lastPayload = options.body;
     assert.equal(payload.amount, 3791);
     assert.equal(payload.items.reduce((sum, item) => sum + item.amount, 0), payload.amount);
     assert.equal(payload.items[0].externalRef, body.reference);
@@ -20,8 +21,16 @@ try {
   const created = await createPixInvictuspay(context, {}, body);
   assert.equal(created.status, 200);
   assert.equal((await created.json()).transactionId, 'tx-test');
+  // Sem documento (checkout /video) ou CPF inválido: gera CPF válido em vez de 400.
+  const semDoc = await createPixInvictuspay(context, {}, { ...body, document: undefined });
+  assert.equal(semDoc.status, 200);
+  const docRuim = await createPixInvictuspay(context, {}, { ...body, document: '00000000000' });
+  assert.equal(docRuim.status, 200);
+  const docGerado = JSON.parse(globalThis.lastPayload).customer.document;
+  assert.match(docGerado, /^\d{11}$/);
+  assert.notEqual(docGerado, '00000000000');
   assert.equal((await createPixInvictuspay(context, {}, { ...body, amount: NaN })).status, 400);
-  assert.equal(count, 1);
+  assert.equal(count, 3);
   assert.equal((await createPixInvictuspay({ env: {} }, {}, body)).status, 503);
   globalThis.fetch = async () => Response.json({ id: 'tx-test', status: 'paid', paid_at: '2026-10-28T12:00:00Z' });
   assert.equal((await (await statusPixInvictuspay(context, {}, 'tx-test')).json()).isPaid, true);

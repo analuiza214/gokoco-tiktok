@@ -98,6 +98,7 @@ async function db(env, table, query = '', method = 'GET', body) {
       'Content-Type': 'application/json',
       Prefer: query.includes('on_conflict=') ? 'resolution=merge-duplicates,return=representation' : 'return=representation',
     },
+    signal: AbortSignal.timeout(20000),
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   const value = await response.json().catch(() => null);
@@ -182,7 +183,24 @@ async function createPix(request, env, ctx, siteVariant = 'gokoco') {
   const checkoutId = String(body.checkoutId || '');
   if (!/^[a-f0-9-]{20,50}$/i.test(checkoutId)) return json({ message: 'Identificador de checkout inválido.' }, 400);
   const previous = await db(env, 'gokoco_orders', `?checkout_id=eq.${encodeURIComponent(checkoutId)}&select=*&limit=1`);
-  if (previous[0]?.pix_code) {
+  // Libera pedidos presos: uma tentativa que morreu em "creating" (>2min, sem
+  // retorno do gateway) ou um PIX já expirado no gateway (30min, margem de 5min)
+  // viram "failed" e geram uma cobrança nova — em vez de travar o checkout num
+  // 409 permanente ou devolver um QR morto.
+  const CREATING_TTL_MS = 2 * 60 * 1000;
+  const PIX_TTL_MS = 25 * 60 * 1000;
+  if (previous[0]) {
+    const creatingAge = Date.now() - (Date.parse(previous[0].updated_at || previous[0].created_at || '') || 0);
+    const pixAge = Date.now() - (Date.parse(previous[0].created_at || '') || 0);
+    const stale = previous[0].status === 'expired'
+      || (previous[0].status === 'creating' && creatingAge > CREATING_TTL_MS)
+      || (previous[0].status === 'pending' && pixAge > PIX_TTL_MS);
+    if (stale) {
+      const freed = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(previous[0].id)}&status=eq.${previous[0].status}&select=id`, 'PATCH', { status: 'failed', updated_at: new Date().toISOString() });
+      if (freed.length) previous[0].status = 'failed';
+    }
+  }
+  if (previous[0]?.pix_code && ['pending', 'paid'].includes(previous[0].status)) {
     const old = previous[0];
     if (old.status === 'pending' && purchaseDestination(env) === 'utmify') {
       const send = deliverPendingPurchase(env, db, old.id).catch((error) => console.error('[purchase/pending]', old.id, error?.message || error));

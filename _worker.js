@@ -1,139 +1,197 @@
-// worker-src/admin-login.js
-var CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Content-Type": "application/json"
-};
-var TOKEN_TTL_MS = 8 * 60 * 60 * 1e3;
-async function hmacSign(payload, secret) {
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(payload));
-  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-function timingSafeEqual(a, b) {
-  if (typeof a !== "string" || typeof b !== "string") return false;
-  if (a.length !== b.length) {
-    let dummy = 0;
-    for (let i = 0; i < a.length; i++) dummy |= a.charCodeAt(i);
-    return false;
-  }
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) {
-    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return diff === 0;
-}
-async function onRequest(context) {
-  const { request: request2, env } = context;
-  if (request2.method === "OPTIONS") {
-    return new Response("", { status: 204, headers: CORS });
-  }
-  if (request2.method !== "POST") {
-    return new Response(
-      JSON.stringify({ error: "Method not allowed" }),
-      { status: 405, headers: CORS }
-    );
-  }
-  const ADMIN_USER = env.ADMIN_USER;
-  const ADMIN_PASS = env.ADMIN_PASS;
-  const ADMIN_SESSION_SECRET = env.ADMIN_SESSION_SECRET;
-  if (!ADMIN_USER || !ADMIN_PASS || !ADMIN_SESSION_SECRET) {
-    console.error("[admin-login] Vari\xE1veis de ambiente n\xE3o configuradas.");
-    return new Response(
-      JSON.stringify({ error: "Servidor n\xE3o configurado corretamente." }),
-      { status: 500, headers: CORS }
-    );
-  }
-  let body;
+// worker-src/providers/unipay.js
+var BASE = "https://api-dash.unipaybr.com/v1";
+var reply = (value, status, headers6) => new Response(JSON.stringify(value), { status, headers: headers6 });
+var digits = (value) => String(value || "").replace(/\D/g, "");
+var STATUSES = /* @__PURE__ */ new Set(["pending", "authorized", "captured", "partially_refunded", "refunded", "voided", "failed", "expired", "chargeback"]);
+async function call(env, path, payload) {
+  const publicKey = String(env.UNIPAY_PUBLIC_KEY || "").trim();
+  const secretKey = String(env.UNIPAY_SECRET_KEY || "").trim();
+  const key = publicKey && secretKey ? btoa(`${publicKey}:${secretKey}`) : "";
+  if (!key) return { error: "UniPay n\xE3o configurada.", status: 503 };
   try {
-    body = await request2.json();
+    const response = await fetch(`${BASE}${path}`, {
+      method: payload ? "POST" : "GET",
+      headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Basic ${key}` },
+      signal: AbortSignal.timeout(15e3),
+      ...payload ? { body: JSON.stringify(payload) } : {}
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data || data.success === false) {
+      return { error: "UniPay n\xE3o confirmou a opera\xE7\xE3o.", status: 502, upstreamStatus: response.status };
+    }
+    return { data };
   } catch {
-    return new Response(
-      JSON.stringify({ error: "JSON inv\xE1lido" }),
-      { status: 400, headers: CORS }
-    );
+    return { error: "Falha de comunica\xE7\xE3o com a UniPay.", status: 502 };
   }
-  const { usuario, senha } = body ?? {};
-  const userOk = timingSafeEqual(String(usuario ?? ""), ADMIN_USER);
-  const passOk = timingSafeEqual(String(senha ?? ""), ADMIN_PASS);
-  if (!userOk || !passOk) {
-    await new Promise((r) => setTimeout(r, 1500));
-    return new Response(
-      JSON.stringify({ error: "Usu\xE1rio ou senha incorretos." }),
-      { status: 401, headers: CORS }
-    );
+}
+function transaction(data) {
+  return data.data?.transaction || data.transaction || data.data || data;
+}
+async function createPixUnipay({ request: request2, env }, headers6, body) {
+  const amount = Math.round(Number(body.amount) * 100);
+  if (!Number.isSafeInteger(amount) || amount <= 0) return reply({ error: "Valor PIX inv\xE1lido." }, 400, headers6);
+  const document = digits(body.document);
+  const phone = digits(body.phone);
+  if (![11, 14].includes(document.length) || ![10, 11, 12, 13].includes(phone.length) || !String(body.email || "").includes("@")) {
+    return reply({ error: "Informe CPF/CNPJ, e-mail e telefone v\xE1lidos para a UniPay." }, 400, headers6);
   }
-  const exp = Date.now() + TOKEN_TTL_MS;
-  const payload = JSON.stringify({ exp });
-  const payloadB64 = btoa(payload);
-  const sig = await hmacSign(payloadB64, ADMIN_SESSION_SECRET);
-  const token = `${payloadB64}.${sig}`;
-  return new Response(JSON.stringify({ token }), { status: 200, headers: CORS });
+  const address = body.address || {};
+  const payload = {
+    amount,
+    currency: "BRL",
+    payment_method: "pix",
+    product_type: "physical",
+    customer: { name: String(body.name || "").trim(), email: String(body.email || "").trim(), tax_id: document, phone, type: document.length === 14 ? "company" : "individual" },
+    items: [{ name: String(body.productName || "Pedido GOKOCO").slice(0, 255), quantity: 1, unit_price: amount, tangible: true }],
+    billing_address: { country: "BR", street: address.street, number: address.number, complement: address.complement, neighborhood: address.neighborhood, city: address.city, state: address.state, zip_code: digits(address.zipCode || address.zipcode) },
+    metadata: { order_id: String(body.reference || "") },
+    payment_details: { expires_in_seconds: 1800 }
+  };
+  const result = await call(env, "/charges", payload);
+  if (result.error) return reply(result, result.status, headers6);
+  const tx = transaction(result.data);
+  const id = tx.id || tx.transactionId;
+  const pixCode = tx.payment_fields?.copy_paste || tx.payment_fields?.qr_code || tx.payment_fields?.qrcode;
+  if (!id || typeof pixCode !== "string" || !pixCode.startsWith("000201")) {
+    return reply({ error: "Resposta PIX da UniPay sem identificador ou c\xF3digo v\xE1lido. Confira o contrato da API antes de tentar novamente." }, 502, headers6);
+  }
+  return reply({
+    transactionId: String(id),
+    gateway: "unipay",
+    status: "pending",
+    pixCode,
+    qrCodeBase64: tx.payment_fields?.qr_code_base64 || null
+  }, 200, headers6);
+}
+async function statusPixUnipay({ env }, headers6, transactionId) {
+  const result = await call(env, `/charges/${encodeURIComponent(String(transactionId))}`);
+  if (result.error) return reply(result, result.status, headers6);
+  const tx = transaction(result.data);
+  const status = String(tx.status || "").toLowerCase();
+  if (String(tx.id || "") !== String(transactionId) || !STATUSES.has(status)) {
+    return reply({ error: "Resposta de consulta inv\xE1lida da UniPay." }, 502, headers6);
+  }
+  return reply({
+    transactionId: String(transactionId),
+    gateway: "unipay",
+    status,
+    isPaid: status === "captured",
+    isRefunded: status === "refunded",
+    isExpired: ["failed", "expired", "voided"].includes(status),
+    paidAt: tx.captured_at || null
+  }, 200, headers6);
 }
 
-// worker-src/upsell-catalog.js
-var upsellCatalog = [
-  { id: "popozuda", step: 2, name: "Popozuda Creme Modelador Corporal 200g", price: 31.96, oldFactor: 1.5, rating: 4.6, sourceId: "1731410956394792439", folder: "01 - Popozuda Creme Modelador Corporal", category: "Cuidados com o corpo", description: "Creme modelador corporal Popozuda, embalagem de 200g.", contents: "1 frasco de 200g" },
-  { id: "liso-obrigatorio", step: 3, name: "Kit Profissional Liso Obrigat\xF3rio 1L + \xD3leo Ativador de Escova", price: 38.36, oldFactor: 1.65, rating: 4.8, sourceId: "1737439077064541825", folder: "02 - Kit Liso Obrigatorio", category: "Cuidados com os cabelos", description: "Kit capilar profissional com 3 itens da linha Liso Obrigat\xF3rio e \xF3leo ativador de escova.", contents: "Kit com 3 itens" },
-  { id: "ultra-bond", step: 4, name: "Eudora Si\xE0ge Ultra Bond Reset \u2014 Kit Completo", price: 103.96, oldFactor: 1.8, rating: 4.9, sourceId: "1737119339326637650", folder: "03 - Eudora Siage Ultra Bond Reset", category: "Cuidados com os cabelos", description: "Kit completo Eudora Si\xE0ge Ultra Bond Reset com 4 itens para a rotina de cuidados capilares.", contents: "Kit com 4 itens" },
-  { id: "pro-cronology", step: 5, name: "Eudora Si\xE0ge Pro Cronology \u2014 Shampoo + Condicionador", price: 27.2, oldFactor: 1.95, rating: 4.7, sourceId: "1737278707688638076", folder: "04 - Eudora Siage Pro Cronology", category: "Cuidados com os cabelos", description: "Kit Eudora Si\xE0ge Pro Cronology com shampoo de 250ml e condicionador de 200ml.", contents: "Shampoo 250ml + condicionador 200ml" },
-  { id: "principia-glow", step: 6, name: "Principia Kit Essencial Glow GL-02 + CH + VC + PS", price: 63.24, oldFactor: 1.6, rating: 4.9, sourceId: "1736972891285063316", folder: "05 - Principia Kit Essencial Glow", category: "Cuidados com a pele", description: "Kit de cuidados com a pele Principia Essencial Glow com os produtos GL-02, CH, VC e PS.", contents: "Kit GL-02 + CH + VC + PS" }
-];
-
-// worker-src/admin-auth.js
-async function hmacSign2(payload, secret) {
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(payload));
-  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-function timingSafeEqual2(a, b) {
-  if (typeof a !== "string" || typeof b !== "string") return false;
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
-async function verifyAdminToken(request2, env) {
-  const secret = env.ADMIN_SESSION_SECRET;
-  if (!secret) return { valid: false, error: "Servidor n\xE3o configurado." };
-  const auth = request2.headers.get("Authorization") ?? "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : null;
-  if (!token) return { valid: false, error: "N\xE3o autorizado." };
-  const dot = token.lastIndexOf(".");
-  if (dot === -1) return { valid: false, error: "Token inv\xE1lido." };
-  const payloadB64 = token.slice(0, dot);
-  const providedSig = token.slice(dot + 1);
-  const expectedSig = await hmacSign2(payloadB64, secret);
-  if (!timingSafeEqual2(expectedSig, providedSig)) {
-    return { valid: false, error: "Token inv\xE1lido." };
-  }
-  let payload;
+// worker-src/providers/invictuspay.js
+var BASE2 = "https://api.invictuspayv2.com.br/api/v1";
+var reply2 = (value, status, headers6) => new Response(JSON.stringify(value), { status, headers: headers6 });
+var digits2 = (value) => String(value || "").replace(/\D/g, "");
+var STATUSES2 = /* @__PURE__ */ new Set(["pending", "processing", "antifraud", "paid", "failed", "refused", "expired", "cancelled", "refunded", "in_dispute", "pre_chargeback", "chargeback"]);
+async function call2(env, path, payload) {
+  const key = String(env.INVICTUSPAY_API_KEY || "").trim();
+  if (!key) return { error: "InvictusPay n\xE3o configurada.", status: 503 };
   try {
-    payload = JSON.parse(atob(payloadB64));
-  } catch {
-    return { valid: false, error: "Token inv\xE1lido." };
+    const response = await fetch(`${BASE2}${path}`, {
+      method: payload ? "POST" : "GET",
+      headers: { Accept: "application/json", "Content-Type": "application/json", "X-Api-Key": key },
+      signal: AbortSignal.timeout(15e3),
+      ...payload ? { body: JSON.stringify(payload) } : {}
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data || data.success === false) {
+      const detail = data?.error?.message || data?.error || data?.message || data?.errors || null;
+      console.error("[invictuspay]", path, "respondeu", response.status, JSON.stringify(detail || data).slice(0, 500));
+      return { error: "InvictusPay n\xE3o confirmou a opera\xE7\xE3o.", status: 502, upstreamStatus: response.status, detail };
+    }
+    return { data };
+  } catch (error) {
+    console.error("[invictuspay]", path, "falhou:", error?.message || error);
+    return { error: "Falha de comunica\xE7\xE3o com a InvictusPay.", status: 502 };
   }
-  if (!payload.exp || Date.now() > payload.exp) {
-    return { valid: false, error: "Sess\xE3o expirada." };
+}
+function transaction2(data) {
+  return data.data?.transaction || data.transaction || data.data || data;
+}
+function gerarCpfAleatorio() {
+  const d = Array.from({ length: 9 }, () => Math.floor(Math.random() * 9));
+  let s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
+  d.push(s1 * 10 % 11 % 10);
+  let s2 = d.reduce((acc, v, i) => acc + v * (11 - i), 0);
+  d.push(s2 * 10 % 11 % 10);
+  return d.join("");
+}
+function cpfValido(value) {
+  if (!/^\d{11}$/.test(value) || /^(\d)\1{10}$/.test(value)) return false;
+  let s1 = 0;
+  for (let i = 0; i < 9; i++) s1 += Number(value[i]) * (10 - i);
+  if (s1 * 10 % 11 % 10 !== Number(value[9])) return false;
+  let s2 = 0;
+  for (let i = 0; i < 10; i++) s2 += Number(value[i]) * (11 - i);
+  return s2 * 10 % 11 % 10 === Number(value[10]);
+}
+async function createPixInvictuspay({ request: request2, env }, headers6, body) {
+  const amount = Math.round(Number(body.amount) * 100);
+  if (!Number.isSafeInteger(amount) || amount <= 0) return reply2({ error: "Valor PIX inv\xE1lido." }, 400, headers6);
+  const docDigits = digits2(body.document);
+  const document = docDigits.length === 14 ? docDigits : cpfValido(docDigits) ? docDigits : gerarCpfAleatorio();
+  const phone = digits2(body.phone);
+  if (![10, 11, 12, 13].includes(phone.length) || !String(body.email || "").includes("@")) {
+    return reply2({ error: "Informe e-mail e telefone v\xE1lidos para a InvictusPay." }, 400, headers6);
   }
-  return { valid: true };
+  const payload = {
+    amount,
+    paymentMethod: "pix",
+    customer: { name: String(body.name || "").trim(), email: String(body.email || "").trim(), document, phone },
+    items: [{
+      description: String(body.productName || "Pedido GOKOCO").slice(0, 255),
+      quantity: 1,
+      amount,
+      ...body.reference ? { externalRef: String(body.reference) } : {}
+    }],
+    pix: { expirationInSeconds: 1800 }
+  };
+  if (request2?.url) {
+    const prefix = new URL(request2.url).pathname.startsWith("/video/") ? "/video" : "";
+    const url = new URL(`${prefix}/api/pix/webhook`, request2.url);
+    if (url.protocol === "https:") payload.postbackUrl = url.toString();
+  }
+  const result = await call2(env, "/transactions", payload);
+  if (result.error) return reply2(result, result.status, headers6);
+  const tx = transaction2(result.data);
+  const id = tx.id || tx.transactionId;
+  const pixCode = tx.pix?.qr_code || tx.pix?.qrcode || tx.pix?.qrCode || tx.pix?.copyPaste || tx.pix?.code || tx.pix_code || tx.qr_code;
+  if (!id || typeof pixCode !== "string" || !pixCode.startsWith("000201")) {
+    return reply2({ error: "Resposta PIX da InvictusPay sem identificador ou c\xF3digo v\xE1lido. Confira o contrato da API antes de tentar novamente." }, 502, headers6);
+  }
+  return reply2({
+    transactionId: String(id),
+    gateway: "invictuspay",
+    status: "pending",
+    pixCode,
+    qrCodeBase64: tx.pix?.qr_code_base64 || tx.pix?.qrCodeBase64 || tx.qr_code_base64 || null
+  }, 200, headers6);
+}
+async function statusPixInvictuspay({ env }, headers6, transactionId) {
+  const result = await call2(env, `/transactions/${encodeURIComponent(String(transactionId))}`);
+  if (result.error) return reply2(result, result.status, headers6);
+  const tx = transaction2(result.data);
+  const status = String(tx.status || "").toLowerCase();
+  if (String(tx.id || tx.transactionId || "") !== String(transactionId) || !STATUSES2.has(status)) {
+    return reply2({ error: "Resposta de consulta inv\xE1lida da InvictusPay." }, 502, headers6);
+  }
+  return reply2({
+    transactionId: String(transactionId),
+    gateway: "invictuspay",
+    status,
+    isPaid: status === "paid",
+    isRefunded: status === "refunded",
+    isExpired: ["failed", "refused", "expired", "cancelled"].includes(status),
+    paidAt: tx.paid_at || null
+  }, 200, headers6);
 }
 
 // worker-src/providers/ironpay.js
-function gerarCpfAleatorio() {
+function gerarCpfAleatorio2() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
   let sum = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
@@ -155,7 +213,7 @@ async function createPixIronpay(context, corsHeaders11, body) {
     return new Response(JSON.stringify({ error: "Campos obrigatorios: amount, name." }), { status: 400, headers: corsHeaders11 });
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
-  const payerDocument = [11, 14].includes(cpfDigits.length) ? cpfDigits : gerarCpfAleatorio();
+  const payerDocument = [11, 14].includes(cpfDigits.length) ? cpfDigits : gerarCpfAleatorio2();
   const siteUrl = env.SITE_URL || "";
   const webhookUrl = siteUrl ? `${siteUrl}/api/pix/webhook` : void 0;
   const amountInCents = Math.round(Number(amount) * 100);
@@ -265,7 +323,7 @@ async function statusPixIronpay(context, corsHeaders11, transactionId) {
 }
 
 // worker-src/providers/masterfy.js
-function gerarCpfAleatorio2() {
+function gerarCpfAleatorio3() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
   let s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
@@ -291,7 +349,7 @@ async function createPixMasterfy(context, corsHeaders11, body) {
     );
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
-  const taxId = [11, 14].includes(cpfDigits.length) ? cpfDigits : gerarCpfAleatorio2();
+  const taxId = [11, 14].includes(cpfDigits.length) ? cpfDigits : gerarCpfAleatorio3();
   const siteUrl = env.SITE_URL || "";
   const notificationUrl = siteUrl ? `${siteUrl}/api/pix/webhook` : void 0;
   const amountInCents = Math.round(Number(amount) * 100);
@@ -439,7 +497,7 @@ function apiHeaders(apiKey) {
     "User-Agent": "UMBRELLAB2B/1.0"
   };
 }
-function gerarCpfAleatorio3() {
+function gerarCpfAleatorio4() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
   let s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
@@ -493,7 +551,7 @@ async function createPixUmbrellapag(context, corsHeaders11, body) {
     );
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
-  const taxId = [11, 14].includes(cpfDigits.length) ? cpfDigits : gerarCpfAleatorio3();
+  const taxId = [11, 14].includes(cpfDigits.length) ? cpfDigits : gerarCpfAleatorio4();
   const amountInCents = Math.round(Number(amount) * 100);
   const customerAddress = buildAddress(address);
   const siteUrl = (env.SITE_URL || "").trim().replace(/\/+$/, "");
@@ -636,7 +694,7 @@ var CREATE_URL = "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/process-
 var STATUS_URL = "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/check-payment-status";
 var MIN_AMOUNT = 5;
 var MAX_AMOUNT = 1e6;
-function gerarCpfAleatorio4() {
+function gerarCpfAleatorio5() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
   const s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
@@ -692,7 +750,7 @@ async function createPixVenuspay(context, corsHeaders11, body) {
     );
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
-  const cpfFinal = [11, 14].includes(cpfDigits.length) ? cpfDigits : gerarCpfAleatorio4();
+  const cpfFinal = [11, 14].includes(cpfDigits.length) ? cpfDigits : gerarCpfAleatorio5();
   const payload = {
     amount: amountDecimal,
     payment_method: "pix",
@@ -824,181 +882,10 @@ async function statusPixVenuspay(context, corsHeaders11, transactionId) {
   }
 }
 
-// worker-src/providers/unipay.js
-var BASE = "https://api-dash.unipaybr.com/v1";
-var reply = (value, status, headers6) => new Response(JSON.stringify(value), { status, headers: headers6 });
-var digits = (value) => String(value || "").replace(/\D/g, "");
-var STATUSES = /* @__PURE__ */ new Set(["pending", "authorized", "captured", "partially_refunded", "refunded", "voided", "failed", "expired", "chargeback"]);
-async function call(env, path, payload) {
-  const publicKey = String(env.UNIPAY_PUBLIC_KEY || "").trim();
-  const secretKey = String(env.UNIPAY_SECRET_KEY || "").trim();
-  const key = publicKey && secretKey ? btoa(`${publicKey}:${secretKey}`) : "";
-  if (!key) return { error: "UniPay n\xE3o configurada.", status: 503 };
-  try {
-    const response = await fetch(`${BASE}${path}`, {
-      method: payload ? "POST" : "GET",
-      headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Basic ${key}` },
-      signal: AbortSignal.timeout(15e3),
-      ...payload ? { body: JSON.stringify(payload) } : {}
-    });
-    const data = await response.json().catch(() => null);
-    if (!response.ok || !data || data.success === false) {
-      return { error: "UniPay n\xE3o confirmou a opera\xE7\xE3o.", status: 502, upstreamStatus: response.status };
-    }
-    return { data };
-  } catch {
-    return { error: "Falha de comunica\xE7\xE3o com a UniPay.", status: 502 };
-  }
-}
-function transaction(data) {
-  return data.data?.transaction || data.transaction || data.data || data;
-}
-async function createPixUnipay({ request: request2, env }, headers6, body) {
-  const amount = Math.round(Number(body.amount) * 100);
-  if (!Number.isSafeInteger(amount) || amount <= 0) return reply({ error: "Valor PIX inv\xE1lido." }, 400, headers6);
-  const document = digits(body.document);
-  const phone = digits(body.phone);
-  if (![11, 14].includes(document.length) || ![10, 11, 12, 13].includes(phone.length) || !String(body.email || "").includes("@")) {
-    return reply({ error: "Informe CPF/CNPJ, e-mail e telefone v\xE1lidos para a UniPay." }, 400, headers6);
-  }
-  const address = body.address || {};
-  const payload = {
-    amount,
-    currency: "BRL",
-    payment_method: "pix",
-    product_type: "physical",
-    customer: { name: String(body.name || "").trim(), email: String(body.email || "").trim(), tax_id: document, phone, type: document.length === 14 ? "company" : "individual" },
-    items: [{ name: String(body.productName || "Pedido GOKOCO").slice(0, 255), quantity: 1, unit_price: amount, tangible: true }],
-    billing_address: { country: "BR", street: address.street, number: address.number, complement: address.complement, neighborhood: address.neighborhood, city: address.city, state: address.state, zip_code: digits(address.zipCode || address.zipcode) },
-    metadata: { order_id: String(body.reference || "") },
-    payment_details: { expires_in_seconds: 1800 }
-  };
-  const result = await call(env, "/charges", payload);
-  if (result.error) return reply(result, result.status, headers6);
-  const tx = transaction(result.data);
-  const id = tx.id || tx.transactionId;
-  const pixCode = tx.payment_fields?.copy_paste || tx.payment_fields?.qr_code || tx.payment_fields?.qrcode;
-  if (!id || typeof pixCode !== "string" || !pixCode.startsWith("000201")) {
-    return reply({ error: "Resposta PIX da UniPay sem identificador ou c\xF3digo v\xE1lido. Confira o contrato da API antes de tentar novamente." }, 502, headers6);
-  }
-  return reply({
-    transactionId: String(id),
-    gateway: "unipay",
-    status: "pending",
-    pixCode,
-    qrCodeBase64: tx.payment_fields?.qr_code_base64 || null
-  }, 200, headers6);
-}
-async function statusPixUnipay({ env }, headers6, transactionId) {
-  const result = await call(env, `/charges/${encodeURIComponent(String(transactionId))}`);
-  if (result.error) return reply(result, result.status, headers6);
-  const tx = transaction(result.data);
-  const status = String(tx.status || "").toLowerCase();
-  if (String(tx.id || "") !== String(transactionId) || !STATUSES.has(status)) {
-    return reply({ error: "Resposta de consulta inv\xE1lida da UniPay." }, 502, headers6);
-  }
-  return reply({
-    transactionId: String(transactionId),
-    gateway: "unipay",
-    status,
-    isPaid: status === "captured",
-    isRefunded: status === "refunded",
-    isExpired: ["failed", "expired", "voided"].includes(status),
-    paidAt: tx.captured_at || null
-  }, 200, headers6);
-}
-
-// worker-src/providers/invictuspay.js
-var BASE2 = "https://api.invictuspayv2.com.br/api/v1";
-var reply2 = (value, status, headers6) => new Response(JSON.stringify(value), { status, headers: headers6 });
-var digits2 = (value) => String(value || "").replace(/\D/g, "");
-var STATUSES2 = /* @__PURE__ */ new Set(["pending", "processing", "antifraud", "paid", "failed", "refused", "expired", "cancelled", "refunded", "in_dispute", "pre_chargeback", "chargeback"]);
-async function call2(env, path, payload) {
-  const key = String(env.INVICTUSPAY_API_KEY || "").trim();
-  if (!key) return { error: "InvictusPay n\xE3o configurada.", status: 503 };
-  try {
-    const response = await fetch(`${BASE2}${path}`, {
-      method: payload ? "POST" : "GET",
-      headers: { Accept: "application/json", "Content-Type": "application/json", "X-Api-Key": key },
-      signal: AbortSignal.timeout(15e3),
-      ...payload ? { body: JSON.stringify(payload) } : {}
-    });
-    const data = await response.json().catch(() => null);
-    if (!response.ok || !data || data.success === false) {
-      return { error: "InvictusPay n\xE3o confirmou a opera\xE7\xE3o.", status: 502, upstreamStatus: response.status };
-    }
-    return { data };
-  } catch {
-    return { error: "Falha de comunica\xE7\xE3o com a InvictusPay.", status: 502 };
-  }
-}
-function transaction2(data) {
-  return data.data?.transaction || data.transaction || data.data || data;
-}
-async function createPixInvictuspay({ request: request2, env }, headers6, body) {
-  const amount = Math.round(Number(body.amount) * 100);
-  if (!Number.isSafeInteger(amount) || amount <= 0) return reply2({ error: "Valor PIX inv\xE1lido." }, 400, headers6);
-  const document = digits2(body.document);
-  const phone = digits2(body.phone);
-  if (![11, 14].includes(document.length) || ![10, 11, 12, 13].includes(phone.length) || !String(body.email || "").includes("@")) {
-    return reply2({ error: "Informe CPF/CNPJ, e-mail e telefone v\xE1lidos para a InvictusPay." }, 400, headers6);
-  }
-  const payload = {
-    amount,
-    paymentMethod: "pix",
-    customer: { name: String(body.name || "").trim(), email: String(body.email || "").trim(), document, phone },
-    items: [{
-      description: String(body.productName || "Pedido GOKOCO").slice(0, 255),
-      quantity: 1,
-      amount,
-      ...body.reference ? { externalRef: String(body.reference) } : {}
-    }],
-    pix: { expirationInSeconds: 1800 }
-  };
-  if (request2?.url) {
-    const prefix = new URL(request2.url).pathname.startsWith("/video/") ? "/video" : "";
-    const url = new URL(`${prefix}/api/pix/webhook`, request2.url);
-    if (url.protocol === "https:") payload.postbackUrl = url.toString();
-  }
-  const result = await call2(env, "/transactions", payload);
-  if (result.error) return reply2(result, result.status, headers6);
-  const tx = transaction2(result.data);
-  const id = tx.id || tx.transactionId;
-  const pixCode = tx.pix?.qr_code || tx.pix?.qrcode || tx.pix?.qrCode || tx.pix?.copyPaste || tx.pix?.code || tx.pix_code || tx.qr_code;
-  if (!id || typeof pixCode !== "string" || !pixCode.startsWith("000201")) {
-    return reply2({ error: "Resposta PIX da InvictusPay sem identificador ou c\xF3digo v\xE1lido. Confira o contrato da API antes de tentar novamente." }, 502, headers6);
-  }
-  return reply2({
-    transactionId: String(id),
-    gateway: "invictuspay",
-    status: "pending",
-    pixCode,
-    qrCodeBase64: tx.pix?.qr_code_base64 || tx.pix?.qrCodeBase64 || tx.qr_code_base64 || null
-  }, 200, headers6);
-}
-async function statusPixInvictuspay({ env }, headers6, transactionId) {
-  const result = await call2(env, `/transactions/${encodeURIComponent(String(transactionId))}`);
-  if (result.error) return reply2(result, result.status, headers6);
-  const tx = transaction2(result.data);
-  const status = String(tx.status || "").toLowerCase();
-  if (String(tx.id || "") !== String(transactionId) || !STATUSES2.has(status)) {
-    return reply2({ error: "Resposta de consulta inv\xE1lida da InvictusPay." }, 502, headers6);
-  }
-  return reply2({
-    transactionId: String(transactionId),
-    gateway: "invictuspay",
-    status,
-    isPaid: status === "paid",
-    isRefunded: status === "refunded",
-    isExpired: ["failed", "refused", "expired", "cancelled"].includes(status),
-    paidAt: tx.paid_at || null
-  }, 200, headers6);
-}
-
 // worker-src/providers/flevopay.js
 var BASE3 = "https://app.flevopag.com/api/v1";
 var reply3 = (data, status, headers6) => new Response(JSON.stringify(data), { status, headers: headers6 });
-function gerarCpfAleatorio5() {
+function gerarCpfAleatorio6() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
   let s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
@@ -1015,7 +902,7 @@ async function createPixFlevopay({ request: request2, env }, headers6, body) {
   const reference = String(body.reference || crypto.randomUUID());
   const address = body.address || {};
   const docDigits = String(body.document || "").replace(/\D/g, "");
-  const document = [11, 14].includes(docDigits.length) ? docDigits : gerarCpfAleatorio5();
+  const document = [11, 14].includes(docDigits.length) ? docDigits : gerarCpfAleatorio6();
   const payload = {
     amount,
     description: String(body.productName || "Pedido GOKOCO").slice(0, 255),
@@ -1118,12 +1005,200 @@ async function queryPixGatewayStatus(env, transactionId, gateway) {
   };
 }
 
+// worker-src/verdefy-sales.js
+var gateways = /* @__PURE__ */ new Set(["masterfy", "umbrellapag", "venuspay_pix", "unipay", "invictuspay", "flevopay", "ironpay"]);
+async function mirrorVerdefy(env, order, query = queryPixGatewayStatus, send = fetch) {
+  if (!env.VERDEFY_SALES_TOKEN) return { state: "not_configured" };
+  if (order.status !== "paid" || order.tracking?.manualPayment || order.tracking?.manualExternal || !gateways.has(order.gateway) || !order.transaction_id) return { state: "ineligible" };
+  const verified = await query(env, order.transaction_id, order.gateway);
+  if (!verified.isPaid || verified.isRefunded) throw Error("Pagamento n\xE3o confirmado pelo gateway.");
+  const paidAt = verified.paidAt || order.tracking?._payment?.paid_at || order.tracking?._purchase?.paid_at;
+  if (!paidAt || !Number.isFinite(Date.parse(paidAt))) throw Error("Data confirmada de pagamento ausente.");
+  const payload = { source: "gokoco", orderId: String(order.id), status: "paid", confirmedByProvider: true, currency: "BRL", amount: Math.round(Number(order.amount) * 100), netAmount: null, createdAt: order.created_at, paidAt, gateway: order.gateway, tracking: order.tracking, items: (order.products || []).map((p) => ({ productId: p.id ? String(p.id) : "", title: p.name, quantity: p.quantity })) };
+  const r = await send("https://verdefy-sales.joazinhisonetinho44.workers.dev/v1/sales", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + env.VERDEFY_SALES_TOKEN }, body: JSON.stringify(payload), signal: AbortSignal.timeout(12e3) });
+  if (!r.ok) throw Error("Verdefy HTTP " + r.status);
+  const receipt = await r.json();
+  if (receipt.ok !== true) throw Error("Recebimento n\xE3o confirmado.");
+  return { state: "sent", sent_at: (/* @__PURE__ */ new Date()).toISOString() };
+}
+async function deliverVerdefy(env, db2, orderId, mirror = mirrorVerdefy) {
+  if (!env.VERDEFY_SALES_TOKEN) return { state: "not_configured" };
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const order = (await db2(env, "gokoco_orders", `?id=eq.${encodeURIComponent(orderId)}&status=eq.paid&select=*&limit=1`))?.[0];
+    if (!order) return { state: "not_paid" };
+    const prior = order.tracking?._verdefy || {};
+    if (["sent", "ineligible"].includes(prior.state)) return prior;
+    if (Date.parse(prior.retry_at) > Date.now() || Date.parse(prior.lease_until) > Date.now()) return { state: "retry_pending" };
+    const pending = { state: "sending", attempts: (Number(prior.attempts) || 0) + 1, lease_until: new Date(Date.now() + 12e4).toISOString() };
+    const tracking = { ...order.tracking, _verdefy: pending };
+    const swap = async (before, after) => db2(env, "gokoco_orders", `?id=eq.${encodeURIComponent(order.id)}&status=eq.paid&tracking=eq.${encodeURIComponent(JSON.stringify(before || {}))}&select=*`, "PATCH", { tracking: after });
+    if (!(await swap(order.tracking, tracking))?.[0]) continue;
+    let result;
+    try {
+      result = await mirror(env, order);
+    } catch {
+      result = { state: "failed", retry_at: new Date(Date.now() + Math.min(36e5, 6e4 * 2 ** Math.min(pending.attempts, 6))).toISOString(), error: "Falha na confirma\xE7\xE3o ou envio ao Verdefy." };
+    }
+    for (let save = 0; save < 3; save++) {
+      const latest = (await db2(env, "gokoco_orders", `?id=eq.${encodeURIComponent(order.id)}&status=eq.paid&select=*&limit=1`))?.[0];
+      if (!latest) return { state: "not_paid" };
+      if (latest.tracking?._verdefy?.lease_until !== pending.lease_until) return { state: "busy" };
+      if ((await swap(latest.tracking, { ...latest.tracking, _verdefy: { ...result, attempts: pending.attempts } }))?.[0]) return result;
+    }
+    return { state: "busy" };
+  }
+  return { state: "busy" };
+}
+async function retryVerdefy(env, db2) {
+  if (!env.VERDEFY_SALES_TOKEN) return { configured: false, processed: 0 };
+  const since = new Date(Date.now() - 7 * 864e5).toISOString();
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const rows = await db2(env, "gokoco_orders", `?status=eq.paid&gateway=neq.manual_tracking&updated_at=gte.${encodeURIComponent(since)}&and=(or(tracking->_verdefy->>state.is.null,tracking->_verdefy->>state.in.(failed,sending)),or(tracking->_verdefy->>retry_at.is.null,tracking->_verdefy->>retry_at.lte.${encodeURIComponent(now)}))&select=id&order=updated_at.asc&limit=1`);
+  const results = await Promise.allSettled(rows.map((o) => deliverVerdefy(env, db2, o.id)));
+  return { configured: true, processed: rows.length, sent: results.filter((r) => r.status === "fulfilled" && r.value.state === "sent").length };
+}
+
+// worker-src/admin-login.js
+var CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Content-Type": "application/json"
+};
+var TOKEN_TTL_MS = 8 * 60 * 60 * 1e3;
+async function hmacSign(payload, secret) {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(payload));
+  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+function timingSafeEqual(a, b) {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  if (a.length !== b.length) {
+    let dummy = 0;
+    for (let i = 0; i < a.length; i++) dummy |= a.charCodeAt(i);
+    return false;
+  }
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}
+async function onRequest(context) {
+  const { request: request2, env } = context;
+  if (request2.method === "OPTIONS") {
+    return new Response("", { status: 204, headers: CORS });
+  }
+  if (request2.method !== "POST") {
+    return new Response(
+      JSON.stringify({ error: "Method not allowed" }),
+      { status: 405, headers: CORS }
+    );
+  }
+  const ADMIN_USER = env.ADMIN_USER;
+  const ADMIN_PASS = env.ADMIN_PASS;
+  const ADMIN_SESSION_SECRET = env.ADMIN_SESSION_SECRET;
+  if (!ADMIN_USER || !ADMIN_PASS || !ADMIN_SESSION_SECRET) {
+    console.error("[admin-login] Vari\xE1veis de ambiente n\xE3o configuradas.");
+    return new Response(
+      JSON.stringify({ error: "Servidor n\xE3o configurado corretamente." }),
+      { status: 500, headers: CORS }
+    );
+  }
+  let body;
+  try {
+    body = await request2.json();
+  } catch {
+    return new Response(
+      JSON.stringify({ error: "JSON inv\xE1lido" }),
+      { status: 400, headers: CORS }
+    );
+  }
+  const { usuario, senha } = body ?? {};
+  const userOk = timingSafeEqual(String(usuario ?? ""), ADMIN_USER);
+  const passOk = timingSafeEqual(String(senha ?? ""), ADMIN_PASS);
+  if (!userOk || !passOk) {
+    await new Promise((r) => setTimeout(r, 1500));
+    return new Response(
+      JSON.stringify({ error: "Usu\xE1rio ou senha incorretos." }),
+      { status: 401, headers: CORS }
+    );
+  }
+  const exp = Date.now() + TOKEN_TTL_MS;
+  const payload = JSON.stringify({ exp });
+  const payloadB64 = btoa(payload);
+  const sig = await hmacSign(payloadB64, ADMIN_SESSION_SECRET);
+  const token = `${payloadB64}.${sig}`;
+  return new Response(JSON.stringify({ token }), { status: 200, headers: CORS });
+}
+
+// worker-src/upsell-catalog.js
+var upsellCatalog = [
+  { id: "popozuda", step: 2, name: "Popozuda Creme Modelador Corporal 200g", price: 31.96, oldFactor: 1.5, rating: 4.6, sourceId: "1731410956394792439", folder: "01 - Popozuda Creme Modelador Corporal", category: "Cuidados com o corpo", description: "Creme modelador corporal Popozuda, embalagem de 200g.", contents: "1 frasco de 200g" },
+  { id: "liso-obrigatorio", step: 3, name: "Kit Profissional Liso Obrigat\xF3rio 1L + \xD3leo Ativador de Escova", price: 38.36, oldFactor: 1.65, rating: 4.8, sourceId: "1737439077064541825", folder: "02 - Kit Liso Obrigatorio", category: "Cuidados com os cabelos", description: "Kit capilar profissional com 3 itens da linha Liso Obrigat\xF3rio e \xF3leo ativador de escova.", contents: "Kit com 3 itens" },
+  { id: "ultra-bond", step: 4, name: "Eudora Si\xE0ge Ultra Bond Reset \u2014 Kit Completo", price: 103.96, oldFactor: 1.8, rating: 4.9, sourceId: "1737119339326637650", folder: "03 - Eudora Siage Ultra Bond Reset", category: "Cuidados com os cabelos", description: "Kit completo Eudora Si\xE0ge Ultra Bond Reset com 4 itens para a rotina de cuidados capilares.", contents: "Kit com 4 itens" },
+  { id: "pro-cronology", step: 5, name: "Eudora Si\xE0ge Pro Cronology \u2014 Shampoo + Condicionador", price: 27.2, oldFactor: 1.95, rating: 4.7, sourceId: "1737278707688638076", folder: "04 - Eudora Siage Pro Cronology", category: "Cuidados com os cabelos", description: "Kit Eudora Si\xE0ge Pro Cronology com shampoo de 250ml e condicionador de 200ml.", contents: "Shampoo 250ml + condicionador 200ml" },
+  { id: "principia-glow", step: 6, name: "Principia Kit Essencial Glow GL-02 + CH + VC + PS", price: 63.24, oldFactor: 1.6, rating: 4.9, sourceId: "1736972891285063316", folder: "05 - Principia Kit Essencial Glow", category: "Cuidados com a pele", description: "Kit de cuidados com a pele Principia Essencial Glow com os produtos GL-02, CH, VC e PS.", contents: "Kit GL-02 + CH + VC + PS" }
+];
+
+// worker-src/admin-auth.js
+async function hmacSign2(payload, secret) {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(payload));
+  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+function timingSafeEqual2(a, b) {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+async function verifyAdminToken(request2, env) {
+  const secret = env.ADMIN_SESSION_SECRET;
+  if (!secret) return { valid: false, error: "Servidor n\xE3o configurado." };
+  const auth = request2.headers.get("Authorization") ?? "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : null;
+  if (!token) return { valid: false, error: "N\xE3o autorizado." };
+  const dot = token.lastIndexOf(".");
+  if (dot === -1) return { valid: false, error: "Token inv\xE1lido." };
+  const payloadB64 = token.slice(0, dot);
+  const providedSig = token.slice(dot + 1);
+  const expectedSig = await hmacSign2(payloadB64, secret);
+  if (!timingSafeEqual2(expectedSig, providedSig)) {
+    return { valid: false, error: "Token inv\xE1lido." };
+  }
+  let payload;
+  try {
+    payload = JSON.parse(atob(payloadB64));
+  } catch {
+    return { valid: false, error: "Token inv\xE1lido." };
+  }
+  if (!payload.exp || Date.now() > payload.exp) {
+    return { valid: false, error: "Sess\xE3o expirada." };
+  }
+  return { valid: true };
+}
+
 // worker-src/purchase-tracking.js
-var ATTRIBUTION_KEYS = ["src", "sck", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "fbclid", "gclid", "ttclid"];
+var ATTRIBUTION_KEYS = ["src", "sck", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "utm_id", "fbclid", "gclid", "ttclid"];
 var text = (value, limit = 500) => typeof value === "string" ? value.slice(0, limit) : "";
 var utc = (value) => new Date(value).toISOString().slice(0, 19).replace("T", " ");
 function capturePurchaseTracking(request2, body) {
   const tracking = Object.fromEntries(ATTRIBUTION_KEYS.map((key) => [key, text(body.tracking?.[key]) || null]));
+  if (/^[-a-f0-9]{36}$/.test(body.tracking?.verdefy_pixel || "")) tracking.verdefy_pixel = body.tracking.verdefy_pixel;
   const fb = body.fb || {};
   const fbp = text(fb.fbp, 200);
   const fbc = text(fb.fbc, 300);
@@ -1303,6 +1378,7 @@ async function swapTracking(db2, env, order, tracking) {
   return rows?.[0] || null;
 }
 async function deliverPaidPurchase(env, db2, orderId, paidAt) {
+  await deliverVerdefy(env, db2, orderId).catch(() => console.error("[verdefy] Sync pending."));
   const destination = purchaseDestination(env);
   if (!destination) return { state: "not_configured" };
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -1628,7 +1704,7 @@ var RECEIPT_BUCKET = "comprovantes-taxa";
 var RECEIPT_MAX_BYTES = 8 * 1024 * 1024;
 var RECEIPT_TYPES = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/heic": "heic", "image/heif": "heif", "application/pdf": "pdf" };
 var CODE_PATTERN = /^GK[A-HJ-NP-Z2-9]{10}$/;
-function gerarCpfAleatorio6() {
+function gerarCpfAleatorio7() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
   let s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
@@ -1699,7 +1775,7 @@ async function createFeePix(request2, env, deps) {
     name: String(order.name || "").trim().length >= 3 && !order.tracking?.manualExternal ? order.name : "Cliente GOKOCO",
     email: String(order.email || "").trim() || "cliente@gokoco.shop",
     phone: String(order.phone || "").replace(/\D/g, "") || "11999999999",
-    document: [11, 14].includes(docDigits.length) ? docDigits : gerarCpfAleatorio6(),
+    document: [11, 14].includes(docDigits.length) ? docDigits : gerarCpfAleatorio7(),
     productName: `Taxa Alfandeg\xE1ria - ${code}`,
     address: { street: shipping.logradouro || "Rua Principal", number: shipping.numero || "S/N", complement: shipping.complemento || "", neighborhood: shipping.bairro || "Centro", city: shipping.cidade || "Sao Paulo", state: shipping.uf || "SP", zipCode: shipping.cep || "01001000" }
   };
@@ -1999,6 +2075,7 @@ async function supabaseRequest(env, path, options = {}) {
   if (!url || !key) throw new Error("Supabase do servidor n\xE3o configurado.");
   const response = await fetch(`${url}/rest/v1/${path}`, {
     ...options,
+    signal: AbortSignal.timeout(2e4),
     headers: {
       apikey: key,
       Authorization: `Bearer ${key}`,
@@ -2344,7 +2421,8 @@ async function supabaseFetch(env, path) {
   const key = (env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
   if (!url || !key) throw new Error("Banco de gateways n\xE3o configurado.");
   const res = await fetch(`${url}${path}`, {
-    headers: { apikey: key, Authorization: `Bearer ${key}` }
+    headers: { apikey: key, Authorization: `Bearer ${key}` },
+    signal: AbortSignal.timeout(2e4)
   });
   if (!res.ok) throw new Error("N\xE3o foi poss\xEDvel consultar a configura\xE7\xE3o dos gateways.");
   try {
@@ -2388,8 +2466,8 @@ async function listGateways(env) {
   });
 }
 async function getActivePixGateway(env) {
-  const gateways2 = await listGateways(env);
-  const active = gateways2.filter((g) => g.method === "pix" && g.enabled);
+  const gateways3 = await listGateways(env);
+  const active = gateways3.filter((g) => g.method === "pix" && g.enabled);
   if (active.length > 1) throw new Error("Mais de um gateway PIX ativo. Salve novamente a escolha no painel.");
   if (!active.length) return null;
   if (!active[0].configured) throw new Error("O gateway PIX selecionado est\xE1 sem credenciais completas.");
@@ -2397,7 +2475,7 @@ async function getActivePixGateway(env) {
 }
 
 // sites/bella/functions/_lib/pix-gateways/ironpay.js
-function gerarCpfAleatorio7() {
+function gerarCpfAleatorio8() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
   let sum = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
@@ -2419,7 +2497,7 @@ async function createPixIronpay2(context, corsHeaders11, body) {
     return new Response(JSON.stringify({ error: "Campos obrigatorios: amount, name." }), { status: 400, headers: corsHeaders11 });
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
-  const payerDocument = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio7();
+  const payerDocument = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio8();
   const siteUrl = env.SITE_URL || "";
   const webhookUrl = siteUrl ? `${siteUrl}/api/pix/webhook` : void 0;
   const amountInCents = Math.round(Number(amount) * 100);
@@ -2522,7 +2600,7 @@ async function statusPixIronpay2(context, corsHeaders11, transactionId) {
 }
 
 // sites/bella/functions/_lib/pix-gateways/masterfy.js
-function gerarCpfAleatorio8() {
+function gerarCpfAleatorio9() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
   let s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
@@ -2548,7 +2626,7 @@ async function createPixMasterfy2(context, corsHeaders11, body) {
     );
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
-  const taxId = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio8();
+  const taxId = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio9();
   const siteUrl = env.SITE_URL || "";
   const notificationUrl = siteUrl ? `${siteUrl}/api/pix/webhook` : void 0;
   const amountInCents = Math.round(Number(amount) * 100);
@@ -2695,7 +2773,7 @@ function apiHeaders2(apiKey) {
     "User-Agent": "UMBRELLAB2B/1.0"
   };
 }
-function gerarCpfAleatorio9() {
+function gerarCpfAleatorio10() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
   let s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
@@ -2749,7 +2827,7 @@ async function createPixUmbrellapag2(context, corsHeaders11, body) {
     );
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
-  const taxId = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio9();
+  const taxId = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio10();
   const amountInCents = Math.round(Number(amount) * 100);
   const customerAddress = buildAddress2(address);
   const siteUrl = (env.SITE_URL || "").trim().replace(/\/+$/, "");
@@ -2891,7 +2969,7 @@ var CREATE_URL2 = "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/process
 var STATUS_URL2 = "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/check-payment-status";
 var MIN_AMOUNT2 = 5;
 var MAX_AMOUNT2 = 1e6;
-function gerarCpfAleatorio10() {
+function gerarCpfAleatorio11() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
   const s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
@@ -2990,7 +3068,7 @@ async function createPixVenuspay2(context, corsHeaders11, body) {
     );
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
-  const cpfFinal = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio10();
+  const cpfFinal = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio11();
   const phoneDigits = phone ? String(phone).replace(/\D/g, "") : "11999999999";
   const phoneFinal = phoneDigits.length >= 10 ? phoneDigits : "11999999999";
   const customer = {
@@ -3377,7 +3455,7 @@ async function onRequest5(context) {
 }
 
 // sites/bella/functions/api/card/create.js
-function gerarCpfAleatorio11() {
+function gerarCpfAleatorio12() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
   let sum = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
@@ -3401,8 +3479,8 @@ async function onRequest6(context) {
       headers: corsHeaders4
     });
   }
-  const gateways2 = await listGateways(env);
-  const venuspay = gateways2.find((g) => g.id === "venuspay");
+  const gateways3 = await listGateways(env);
+  const venuspay = gateways3.find((g) => g.id === "venuspay");
   if (venuspay && !venuspay.enabled) {
     return new Response(
       JSON.stringify({ error: "Pagamento por cart\xE3o temporariamente indispon\xEDvel." }),
@@ -3445,7 +3523,7 @@ async function onRequest6(context) {
     );
   }
   const cpfRaw = card.cpf || (document ? String(document).replace(/\D/g, "") : "");
-  const cpfFinal = cpfRaw.length === 11 ? cpfRaw : gerarCpfAleatorio11();
+  const cpfFinal = cpfRaw.length === 11 ? cpfRaw : gerarCpfAleatorio12();
   const phoneFinal = phone ? String(phone).replace(/\D/g, "") : "11999999999";
   const numParcelas = Math.max(1, Math.min(12, parseInt(String(installments || 1), 10)));
   let order;
@@ -3803,16 +3881,16 @@ async function onRequest10({ request: request2, env }) {
     databaseProject = new URL(String(env.SUPABASE_URL || "")).hostname.split(".")[0] || null;
   } catch {
   }
-  let gateways2 = [];
+  let gateways3 = [];
   let activePixGateway = null;
   let gatewayError = null;
   try {
-    gateways2 = await listGateways(env);
+    gateways3 = await listGateways(env);
     activePixGateway = await getActivePixGateway(env);
   } catch (error) {
     gatewayError = error instanceof Error ? error.message : "Falha ao consultar gateways.";
   }
-  const pixGateways = gateways2.filter((gateway) => gateway.method === "pix").map(({ id, name, enabled, configured: configured2 }) => ({ id, name, enabled, configured: configured2 }));
+  const pixGateways = gateways3.filter((gateway) => gateway.method === "pix").map(({ id, name, enabled, configured: configured2 }) => ({ id, name, enabled, configured: configured2 }));
   const ok = requiredServerConfig.supabaseUrl && requiredServerConfig.supabaseServiceRole && !!activePixGateway && !gatewayError;
   return new Response(JSON.stringify({
     ok,
@@ -4547,7 +4625,7 @@ async function onRequest16(context) {
 
 // worker-src/index.js
 var JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
-var gateways = [
+var gateways2 = [
   { id: "ironpay", name: "IronPay", method: "pix" },
   { id: "masterfy", name: "MasterFy", method: "pix" },
   { id: "umbrellapag", name: "UmbrellaPag", method: "pix" },
@@ -4609,6 +4687,7 @@ async function db(env, table, query = "", method = "GET", body) {
       "Content-Type": "application/json",
       Prefer: query.includes("on_conflict=") ? "resolution=merge-duplicates,return=representation" : "return=representation"
     },
+    signal: AbortSignal.timeout(2e4),
     ...body === void 0 ? {} : { body: JSON.stringify(body) }
   });
   const value = await response.json().catch(() => null);
@@ -4627,7 +4706,7 @@ function configured(env, id) {
 }
 async function listGateways2(env) {
   const rows = await db(env, "gokoco_gateways", "?select=id,enabled,updated_at");
-  return gateways.map((g) => {
+  return gateways2.map((g) => {
     const saved = rows.find((row) => row.id === g.id);
     return { ...g, enabled: saved ? !!saved.enabled : g.method === "card", configured: configured(env, g.id), updated_at: saved?.updated_at || null };
   });
@@ -4685,7 +4764,18 @@ async function createPix(request2, env, ctx, siteVariant = "gokoco") {
   const checkoutId = String(body.checkoutId || "");
   if (!/^[a-f0-9-]{20,50}$/i.test(checkoutId)) return json3({ message: "Identificador de checkout inv\xE1lido." }, 400);
   const previous = await db(env, "gokoco_orders", `?checkout_id=eq.${encodeURIComponent(checkoutId)}&select=*&limit=1`);
-  if (previous[0]?.pix_code) {
+  const CREATING_TTL_MS = 2 * 60 * 1e3;
+  const PIX_TTL_MS = 25 * 60 * 1e3;
+  if (previous[0]) {
+    const creatingAge = Date.now() - (Date.parse(previous[0].updated_at || previous[0].created_at || "") || 0);
+    const pixAge = Date.now() - (Date.parse(previous[0].created_at || "") || 0);
+    const stale = previous[0].status === "expired" || previous[0].status === "creating" && creatingAge > CREATING_TTL_MS || previous[0].status === "pending" && pixAge > PIX_TTL_MS;
+    if (stale) {
+      const freed = await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(previous[0].id)}&status=eq.${previous[0].status}&select=id`, "PATCH", { status: "failed", updated_at: (/* @__PURE__ */ new Date()).toISOString() });
+      if (freed.length) previous[0].status = "failed";
+    }
+  }
+  if (previous[0]?.pix_code && ["pending", "paid"].includes(previous[0].status)) {
     const old = previous[0];
     if (old.status === "pending" && purchaseDestination(env) === "utmify") {
       const send = deliverPendingPurchase(env, db, old.id).catch((error) => console.error("[purchase/pending]", old.id, error?.message || error));
@@ -5282,9 +5372,9 @@ async function adminGateways(request2, env) {
   if (request2.method === "GET") return json3({ gateways: await listGateways2(env) });
   if (request2.method !== "PATCH") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
   const { id, enabled } = await request2.json().catch(() => ({}));
-  if (!gateways.some((g) => g.id === id) || typeof enabled !== "boolean") return json3({ error: "Gateway inv\xE1lido." }, 400);
+  if (!gateways2.some((g) => g.id === id) || typeof enabled !== "boolean") return json3({ error: "Gateway inv\xE1lido." }, 400);
   if (enabled && !configured(env, id)) return json3({ error: "Configure a chave deste gateway no Cloudflare antes de ativ\xE1-lo." }, 400);
-  if (enabled && gateways.find((g) => g.id === id)?.method === "pix") await db(env, "gokoco_gateways", "?enabled=eq.true&id=neq.venuspay", "PATCH", { enabled: false, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
+  if (enabled && gateways2.find((g) => g.id === id)?.method === "pix") await db(env, "gokoco_gateways", "?enabled=eq.true&id=neq.venuspay", "PATCH", { enabled: false, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
   await db(env, "gokoco_gateways", "?on_conflict=id", "POST", { id, enabled, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
   return json3({ gateways: await listGateways2(env) });
 }
@@ -5485,11 +5575,12 @@ var index_default = {
         if (phase === "recovery") return json3({ recovery: await processRecoveryQueue(env, db, queryPixGatewayStatus) });
         const payments = phase === "fulfillment" ? null : await reconcilePendingPayments(env, 2, true);
         await fulfillConfirmedPayment(env);
+        const verdefy = await retryVerdefy(env, db).catch(() => ({ state: "retry_pending" }));
         const purchases = await retryPaidPurchases(env, 1);
         const pendingPurchases = await retryPendingPurchases(env);
         const emails = await retryPaidEmails(env, db);
         const recovery = phase === "fulfillment" ? null : await processRecoveryQueue(env, db, queryPixGatewayStatus, 1);
-        return json3({ payments, purchases, pendingPurchases, emails, recovery });
+        return json3({ payments, purchases, pendingPurchases, emails, recovery, verdefy });
       }
       if (path === "/api/market/pix/create" && request2.method === "POST") return await createMarketPix(request2, env, ctx);
       if (path === "/api/public/pix/create" && request2.method === "POST") return await createPix(request2, env, ctx);
