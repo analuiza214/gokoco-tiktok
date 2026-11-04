@@ -18,13 +18,14 @@
     var value = document.cookie.split(';').map(function (item) { return item.trim(); }).find(function (item) { return item.indexOf(name + '=') === 0; });
     return value ? value.slice(name.length + 1) : '';
   }
-  window.getUTMs = function () {
+  window.getVerdefyTracking = function () {
     var result = {};
     if(verdefyPixel)result.verdefy_pixel=verdefyPixel;
     keys.forEach(function (key) { if (saved[key]) result[key] = saved[key]; });
     result.event_source_url = location.href;
     return result;
   };
+  window.getUTMs = window.getVerdefyTracking;
   window.getFbData = function () {
     return { fbp: cookie('_fbp'), fbc: cookie('_fbc') || (saved.fbclid ? 'fb.1.' + saved.saved_at + '.' + saved.fbclid : '') };
   };
