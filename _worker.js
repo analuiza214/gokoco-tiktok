@@ -5583,6 +5583,7 @@ var index_default = {
         const secret = String(env.CRON_SECRET || "");
         if (!secret || request2.headers.get("x-cron-secret") !== secret) return json3({ error: "N\xE3o autorizado." }, 401);
         const phase = url.searchParams.get("phase");
+        if (phase === "verdefy") return json3({ verdefy: await retryVerdefy(env, db) });
         if (phase === "recovery") return json3({ recovery: await processRecoveryQueue(env, db, queryPixGatewayStatus) });
         const payments = phase === "fulfillment" ? null : await reconcilePendingPayments(env, 2, true);
         await fulfillConfirmedPayment(env);

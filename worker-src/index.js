@@ -982,6 +982,7 @@ export default {
         const secret = String(env.CRON_SECRET || '');
         if (!secret || request.headers.get('x-cron-secret') !== secret) return json({ error: 'Não autorizado.' }, 401);
         const phase = url.searchParams.get('phase');
+        if (phase === 'verdefy') return json({verdefy:await retryVerdefy(env,db)});
         if (phase === 'recovery') return json({ recovery: await processRecoveryQueue(env, db, queryPixGatewayStatus) });
         const payments = phase === 'fulfillment' ? null : await reconcilePendingPayments(env, 2, true);
         await fulfillConfirmedPayment(env);

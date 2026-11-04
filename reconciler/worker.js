@@ -12,6 +12,8 @@ export default {
       if (!response.ok) throw new Error(`Reconciliação respondeu HTTP ${response.status}.`);
       return response.json();
     };
+    // Espelho independente: falhas de entrega/gateway n�o bloqueiam o painel.
+    await call('/api/process-purchase-queue?phase=verdefy').catch(error=>console.error('Verdefy sync failed',error.message));
     for (let batch = 0; batch < 5; batch++) {
       const result = await call('/api/admin/reconcile-payments');
       summary.checked += result.checked || 0;
