@@ -15,7 +15,7 @@ test('gateway must confirm paid and not refunded; strips invented product identi
  assert.equal(payload.amount,1000);assert.equal(payload.netAmount,null);assert.equal(payload.items[0].productId,'');assert.equal(payload.tracking.utm_id,'123');
 });
 test('independent state retries failure and does not resend accepted order',async()=>{
- let current=structuredClone(order),calls=0;
+ let current=structuredClone(order),calls=0;current.tracking._verdefy={state:'ineligible'};
  const db=async(e,t,q,method,body)=>{
   if(method!=='PATCH')return [structuredClone(current)];
   const expected=JSON.parse(new URLSearchParams(q).get('tracking').slice(3));

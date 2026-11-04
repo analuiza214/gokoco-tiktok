@@ -1038,7 +1038,7 @@ async function deliverVerdefy(env, db2, orderId, mirror = mirrorVerdefy) {
     const order = (await db2(env, "gokoco_orders", `?id=eq.${encodeURIComponent(orderId)}&status=eq.paid&select=*&limit=1`))?.[0];
     if (!order) return { state: "not_paid" };
     const prior = order.tracking?._verdefy || {};
-    if (["sent", "ineligible"].includes(prior.state)) return prior;
+    if (prior.state === "sent") return prior;
     if (Date.parse(prior.retry_at) > Date.now() || Date.parse(prior.lease_until) > Date.now()) return { state: "retry_pending" };
     const pending = { state: "sending", attempts: (Number(prior.attempts) || 0) + 1, lease_until: new Date(Date.now() + 12e4).toISOString() };
     const tracking = { ...order.tracking, _verdefy: pending };
@@ -1047,6 +1047,7 @@ async function deliverVerdefy(env, db2, orderId, mirror = mirrorVerdefy) {
     let result;
     try {
       result = await mirror(env, order);
+      if (result.state === "ineligible") result.retry_at = new Date(Date.now() + 864e5).toISOString();
     } catch {
       result = { state: "failed", retry_at: new Date(Date.now() + Math.min(36e5, 6e4 * 2 ** Math.min(pending.attempts, 6))).toISOString(), error: "Falha na confirma\xE7\xE3o ou envio ao Verdefy." };
     }

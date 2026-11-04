@@ -28,14 +28,14 @@ export async function deliverVerdefy(env, db, orderId, mirror = mirrorVerdefy) {
     const order=(await db(env,'gokoco_orders',`?id=eq.${encodeURIComponent(orderId)}&status=eq.paid&select=*&limit=1`))?.[0];
     if (!order) return {state:'not_paid'};
     const prior=order.tracking?._verdefy || {};
-    if (['sent','ineligible'].includes(prior.state)) return prior;
+    if (prior.state==='sent') return prior;
     if (Date.parse(prior.retry_at)>Date.now() || Date.parse(prior.lease_until)>Date.now()) return {state:'retry_pending'};
     const pending={state:'sending',attempts:(Number(prior.attempts)||0)+1,lease_until:new Date(Date.now()+120000).toISOString()};
     const tracking={...order.tracking,_verdefy:pending};
     const swap=async (before,after)=>db(env,'gokoco_orders',`?id=eq.${encodeURIComponent(order.id)}&status=eq.paid&tracking=eq.${encodeURIComponent(JSON.stringify(before||{}))}&select=*`,'PATCH',{tracking:after});
     if (!(await swap(order.tracking,tracking))?.[0]) continue;
     let result;
-    try { result=await mirror(env,order); }
+    try { result=await mirror(env,order); if(result.state==='ineligible')result.retry_at=new Date(Date.now()+86400000).toISOString(); }
     catch { result={state:'failed',retry_at:new Date(Date.now()+Math.min(3600000,60000*2**Math.min(pending.attempts,6))).toISOString(),error:'Falha na confirmação ou envio ao Verdefy.'}; }
     // Releitura evita sobrescrever a atualização de outro fluxo.
     for(let save=0;save<3;save++) {
