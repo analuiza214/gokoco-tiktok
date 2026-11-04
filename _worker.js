@@ -1,4 +1,4 @@
-// worker-src/providers/unipay.js
+// site-source/worker-src/providers/unipay.js
 var BASE = "https://api-dash.unipaybr.com/v1";
 var reply = (value, status, headers6) => new Response(JSON.stringify(value), { status, headers: headers6 });
 var digits = (value) => String(value || "").replace(/\D/g, "");
@@ -82,7 +82,7 @@ async function statusPixUnipay({ env }, headers6, transactionId) {
   }, 200, headers6);
 }
 
-// worker-src/providers/invictuspay.js
+// site-source/worker-src/providers/invictuspay.js
 var BASE2 = "https://api.invictuspayv2.com.br/api/v1";
 var reply2 = (value, status, headers6) => new Response(JSON.stringify(value), { status, headers: headers6 });
 var digits2 = (value) => String(value || "").replace(/\D/g, "");
@@ -190,7 +190,7 @@ async function statusPixInvictuspay({ env }, headers6, transactionId) {
   }, 200, headers6);
 }
 
-// worker-src/providers/ironpay.js
+// site-source/worker-src/providers/ironpay.js
 function gerarCpfAleatorio2() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
@@ -322,7 +322,7 @@ async function statusPixIronpay(context, corsHeaders11, transactionId) {
   }
 }
 
-// worker-src/providers/masterfy.js
+// site-source/worker-src/providers/masterfy.js
 function gerarCpfAleatorio3() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
@@ -488,7 +488,7 @@ async function statusPixMasterfy(context, corsHeaders11, transactionId) {
   }
 }
 
-// worker-src/providers/umbrellapag.js
+// site-source/worker-src/providers/umbrellapag.js
 var API_BASE = "https://api-gateway.umbrellapag.com/api";
 function apiHeaders(apiKey) {
   return {
@@ -689,7 +689,7 @@ async function statusPixUmbrellapag(context, corsHeaders11, transactionId) {
   }
 }
 
-// worker-src/providers/venuspay.js
+// site-source/worker-src/providers/venuspay.js
 var CREATE_URL = "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/process-payment";
 var STATUS_URL = "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/check-payment-status";
 var MIN_AMOUNT = 5;
@@ -882,7 +882,7 @@ async function statusPixVenuspay(context, corsHeaders11, transactionId) {
   }
 }
 
-// worker-src/providers/flevopay.js
+// site-source/worker-src/providers/flevopay.js
 var BASE3 = "https://app.flevopag.com/api/v1";
 var reply3 = (data, status, headers6) => new Response(JSON.stringify(data), { status, headers: headers6 });
 function gerarCpfAleatorio6() {
@@ -979,7 +979,7 @@ async function statusPixFlevopay({ env }, headers6, transactionId) {
   }, 200, headers6);
 }
 
-// worker-src/pix-gateway-status.js
+// site-source/worker-src/pix-gateway-status.js
 var headers = { "Content-Type": "application/json" };
 async function queryPixGatewayStatus(env, transactionId, gateway) {
   let response;
@@ -1005,11 +1005,11 @@ async function queryPixGatewayStatus(env, transactionId, gateway) {
   };
 }
 
-// worker-src/verdefy-sales.js
+// site-source/worker-src/verdefy-sales.js
 var gateways = /* @__PURE__ */ new Set(["masterfy", "umbrellapag", "venuspay_pix", "unipay", "invictuspay", "flevopay", "ironpay"]);
 async function mirrorVerdefy(env, order, query = queryPixGatewayStatus, send = fetch) {
   if (!env.VERDEFY_SALES_TOKEN) return { state: "not_configured" };
-  if (order.status !== "paid" || order.tracking?.manualExternal || !gateways.has(order.gateway) || !order.transaction_id) return { state: "ineligible" };
+  if (order.status !== "paid" || order.tracking?.manualExternal || !gateways.has(order.gateway)) return { state: "ineligible" };
   let manual = order.tracking?.manualPayment;
   if (typeof manual === "string") {
     try {
@@ -1020,6 +1020,7 @@ async function mirrorVerdefy(env, order, query = queryPixGatewayStatus, send = f
   }
   const adminConfirmed = manual?.source === "admin" && manual?.method === "external" && Number.isFinite(Date.parse(manual.paidAt));
   if (order.tracking?.manualPayment && !adminConfirmed) return { state: "ineligible" };
+  if (!adminConfirmed && !order.transaction_id) return { state: "ineligible" };
   const verified = adminConfirmed ? null : await query(env, order.transaction_id, order.gateway);
   if (!adminConfirmed && (!verified.isPaid || verified.isRefunded)) throw Error("Pagamento n\uFFFDo confirmado pelo gateway.");
   const paidAt = adminConfirmed ? manual.paidAt : verified.paidAt || order.tracking?._payment?.paid_at || order.tracking?._purchase?.paid_at;
@@ -1068,7 +1069,7 @@ async function retryVerdefy(env, db2) {
   return { configured: true, processed: rows.length, sent: results.filter((r) => r.status === "fulfilled" && r.value.state === "sent").length };
 }
 
-// worker-src/admin-login.js
+// site-source/worker-src/admin-login.js
 var CORS = {
   "Access-Control-Allow-Origin": "*",
   "Content-Type": "application/json"
@@ -1147,7 +1148,7 @@ async function onRequest(context) {
   return new Response(JSON.stringify({ token }), { status: 200, headers: CORS });
 }
 
-// worker-src/upsell-catalog.js
+// site-source/worker-src/upsell-catalog.js
 var upsellCatalog = [
   { id: "popozuda", step: 2, name: "Popozuda Creme Modelador Corporal 200g", price: 31.96, oldFactor: 1.5, rating: 4.6, sourceId: "1731410956394792439", folder: "01 - Popozuda Creme Modelador Corporal", category: "Cuidados com o corpo", description: "Creme modelador corporal Popozuda, embalagem de 200g.", contents: "1 frasco de 200g" },
   { id: "liso-obrigatorio", step: 3, name: "Kit Profissional Liso Obrigat\xF3rio 1L + \xD3leo Ativador de Escova", price: 38.36, oldFactor: 1.65, rating: 4.8, sourceId: "1737439077064541825", folder: "02 - Kit Liso Obrigatorio", category: "Cuidados com os cabelos", description: "Kit capilar profissional com 3 itens da linha Liso Obrigat\xF3rio e \xF3leo ativador de escova.", contents: "Kit com 3 itens" },
@@ -1156,7 +1157,7 @@ var upsellCatalog = [
   { id: "principia-glow", step: 6, name: "Principia Kit Essencial Glow GL-02 + CH + VC + PS", price: 63.24, oldFactor: 1.6, rating: 4.9, sourceId: "1736972891285063316", folder: "05 - Principia Kit Essencial Glow", category: "Cuidados com a pele", description: "Kit de cuidados com a pele Principia Essencial Glow com os produtos GL-02, CH, VC e PS.", contents: "Kit GL-02 + CH + VC + PS" }
 ];
 
-// worker-src/admin-auth.js
+// site-source/worker-src/admin-auth.js
 async function hmacSign2(payload, secret) {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
@@ -1202,7 +1203,7 @@ async function verifyAdminToken(request2, env) {
   return { valid: true };
 }
 
-// worker-src/purchase-tracking.js
+// site-source/worker-src/purchase-tracking.js
 var ATTRIBUTION_KEYS = ["src", "sck", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "utm_id", "fbclid", "gclid", "ttclid"];
 var text = (value, limit = 500) => typeof value === "string" ? value.slice(0, limit) : "";
 var utc = (value) => new Date(value).toISOString().slice(0, 19).replace("T", " ");
@@ -1447,7 +1448,7 @@ async function deliverReshippingFee(env, db2, orderId) {
   return { state: "sent" };
 }
 
-// worker-src/order-email.js
+// site-source/worker-src/order-email.js
 var emailText = (value, limit = 300) => String(value || "").trim().slice(0, limit);
 var emailAddress = (value) => /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(value);
 var escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
@@ -1584,7 +1585,7 @@ async function sendManualOrderEmail(env, order, subject, message) {
   return { state: "sent", email_id: String(receipt.id) };
 }
 
-// worker-src/recovery-email.js
+// site-source/worker-src/recovery-email.js
 var RECOVERY_ACTIVATION_AT = "2026-10-14T22:28:59Z";
 var RECOVERY_DELAYS = [30 * 6e4, 4 * 36e5, 24 * 36e5];
 var recoveryText = (value, limit = 200) => String(value || "").trim().slice(0, limit);
@@ -1705,7 +1706,7 @@ async function processRecoveryQueue(env, db2, verifyPayment, limit = 3) {
   return { configured: true, processed: rows.length, sent: results.filter((r) => r.status === "fulfilled" && r.value.sent).length, failed: results.filter((r) => r.status === "rejected" || r.value?.state === "failed").length };
 }
 
-// worker-src/reshipping-fee.js
+// site-source/worker-src/reshipping-fee.js
 var MINUTE = 6e4;
 var HOUR = 60 * MINUTE;
 var TRANSITO_OFFSET = 30 * HOUR;
@@ -1904,7 +1905,7 @@ async function handleReshippingRoute(path, request2, env, deps) {
   return null;
 }
 
-// sites/bella/functions/_lib/utmify.js
+// site-source/sites/bella/functions/_lib/utmify.js
 function trackingParams(tracking) {
   const source = tracking && typeof tracking === "object" ? tracking : {};
   return {
@@ -1964,10 +1965,10 @@ async function sendUtmifyOrder(env, order) {
   return { status: response.status, body: responseText };
 }
 
-// sites/bella/functions/_lib/meta-config.js
+// site-source/sites/bella/functions/_lib/meta-config.js
 var FACEBOOK_PIXEL_ID = "1542362403143695";
 
-// sites/bella/functions/_lib/facebook.js
+// site-source/sites/bella/functions/_lib/facebook.js
 async function hash2(value) {
   if (!value) return void 0;
   const data = new TextEncoder().encode(String(value).trim().toLowerCase());
@@ -2007,13 +2008,13 @@ async function sendFacebookPurchase(env, payload) {
   return { status: response.status, body: responseText };
 }
 
-// sites/bella/functions/_lib/card-summary.js
+// site-source/sites/bella/functions/_lib/card-summary.js
 function safeCardSummary(value) {
   const summary = String(value || "").trim();
   return /^(Visa|Mastercard|Amex|Elo|Hipercard|Cartão) ••••[0-9]{4}$/.test(summary) ? summary : null;
 }
 
-// sites/bella/functions/_lib/card-crypto.js
+// site-source/sites/bella/functions/_lib/card-crypto.js
 function cardSecret(env) {
   return String(
     env.BELLA_ENCRYPT_KEY || env.ENCRYPT_KEY || env.BELLA_VITE_ENCRYPT_KEY || env.VITE_ENCRYPT_KEY || ""
@@ -2055,7 +2056,7 @@ async function decryptCardData(encryptedBase64, secret) {
   return new TextDecoder().decode(decrypted);
 }
 
-// sites/bella/functions/_lib/leads-store.js
+// site-source/sites/bella/functions/_lib/leads-store.js
 async function secureCardValue(env, body) {
   const secret = cardSecret(env);
   const card = body.card || {};
@@ -2347,7 +2348,7 @@ async function fulfillPaidPixLead(env, transactionId, paidAt) {
   return fulfillPaidLead(env, transactionId, paidAt, "pix");
 }
 
-// sites/bella/functions/_lib/catalog.js
+// site-source/sites/bella/functions/_lib/catalog.js
 var PRODUCTS = /* @__PURE__ */ new Map([
   ["bella-escova-branca", { name: "Kit Escova 3 em 1 Branca", price: 37.9, pixPrice: 34.11 }],
   ["bella-escova-preta", { name: "Kit Escova 3 em 1 Preta", price: 37.9, pixPrice: 34.11 }],
@@ -2389,7 +2390,7 @@ function cardAmount(baseAmount, installments) {
   return Number(total.toFixed(2));
 }
 
-// sites/bella/functions/api/orders/create.js
+// site-source/sites/bella/functions/api/orders/create.js
 var headers2 = { "Content-Type": "application/json", "Cache-Control": "no-store" };
 var json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: headers2 });
 async function onRequest2({ request: request2, env }) {
@@ -2415,7 +2416,7 @@ async function onRequest2({ request: request2, env }) {
   }
 }
 
-// sites/bella/functions/_lib/gateway-config.js
+// site-source/sites/bella/functions/_lib/gateway-config.js
 var DEFAULT_GATEWAYS = [
   { id: "unipay", name: "UniPay", method: "pix", enabled: false },
   { id: "invictuspay", name: "InvictusPay", method: "pix", enabled: false },
@@ -2484,7 +2485,7 @@ async function getActivePixGateway(env) {
   return active[0].id;
 }
 
-// sites/bella/functions/_lib/pix-gateways/ironpay.js
+// site-source/sites/bella/functions/_lib/pix-gateways/ironpay.js
 function gerarCpfAleatorio8() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
@@ -2609,7 +2610,7 @@ async function statusPixIronpay2(context, corsHeaders11, transactionId) {
   }
 }
 
-// sites/bella/functions/_lib/pix-gateways/masterfy.js
+// site-source/sites/bella/functions/_lib/pix-gateways/masterfy.js
 function gerarCpfAleatorio9() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
@@ -2774,7 +2775,7 @@ async function statusPixMasterfy2(context, corsHeaders11, transactionId) {
   }
 }
 
-// sites/bella/functions/_lib/pix-gateways/umbrellapag.js
+// site-source/sites/bella/functions/_lib/pix-gateways/umbrellapag.js
 var API_BASE2 = "https://api-gateway.umbrellapag.com/api";
 function apiHeaders2(apiKey) {
   return {
@@ -2974,7 +2975,7 @@ async function statusPixUmbrellapag2(context, corsHeaders11, transactionId) {
   }
 }
 
-// sites/bella/functions/_lib/pix-gateways/venuspay.js
+// site-source/sites/bella/functions/_lib/pix-gateways/venuspay.js
 var CREATE_URL2 = "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/process-payment";
 var STATUS_URL2 = "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/check-payment-status";
 var MIN_AMOUNT2 = 5;
@@ -3240,7 +3241,7 @@ async function statusPixVenuspay2(context, corsHeaders11, transactionId) {
   }
 }
 
-// sites/bella/functions/api/pix/create.js
+// site-source/sites/bella/functions/api/pix/create.js
 var corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Content-Type": "application/json"
@@ -3348,7 +3349,7 @@ async function onRequest3(context) {
   return response;
 }
 
-// sites/bella/functions/_lib/pix-gateway-status.js
+// site-source/sites/bella/functions/_lib/pix-gateway-status.js
 var headers3 = { "Content-Type": "application/json" };
 async function queryPixGatewayStatus2(env, transactionId, gateway) {
   let response;
@@ -3372,7 +3373,7 @@ async function queryPixGatewayStatus2(env, transactionId, gateway) {
   };
 }
 
-// sites/bella/functions/api/pix/status.js
+// site-source/sites/bella/functions/api/pix/status.js
 var corsHeaders2 = {
   "Access-Control-Allow-Origin": "*",
   "Content-Type": "application/json"
@@ -3413,7 +3414,7 @@ async function onRequest4(context) {
   }
 }
 
-// sites/bella/functions/api/pix/webhook.js
+// site-source/sites/bella/functions/api/pix/webhook.js
 var corsHeaders3 = {
   "Access-Control-Allow-Origin": "*",
   "Content-Type": "application/json"
@@ -3464,7 +3465,7 @@ async function onRequest5(context) {
   return new Response(JSON.stringify({ received: true }), { status: 200, headers: corsHeaders3 });
 }
 
-// sites/bella/functions/api/card/create.js
+// site-source/sites/bella/functions/api/card/create.js
 function gerarCpfAleatorio12() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
@@ -3727,7 +3728,7 @@ async function onRequest6(context) {
   }
 }
 
-// sites/bella/functions/api/card/status.js
+// site-source/sites/bella/functions/api/card/status.js
 var corsHeaders5 = {
   "Access-Control-Allow-Origin": "*",
   "Content-Type": "application/json"
@@ -3797,7 +3798,7 @@ async function onRequest7(context) {
   }
 }
 
-// sites/bella/functions/api/tracking.js
+// site-source/sites/bella/functions/api/tracking.js
 var HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store" };
 function settings(env) {
   return {
@@ -3861,7 +3862,7 @@ async function onRequest8({ request: incoming, env }) {
   }
 }
 
-// sites/bella/functions/api/marketing-config.js
+// site-source/sites/bella/functions/api/marketing-config.js
 function onRequest9({ request: request2, env }) {
   const headers6 = { "Content-Type": "application/json", "Cache-Control": "no-store" };
   if (request2.method !== "GET") {
@@ -3871,7 +3872,7 @@ function onRequest9({ request: request2, env }) {
   return new Response(JSON.stringify({ facebookPixelId: /^\d+$/.test(pixelId) ? pixelId : null }), { headers: headers6 });
 }
 
-// sites/bella/functions/api/checkout-health.js
+// site-source/sites/bella/functions/api/checkout-health.js
 var headers4 = {
   "Content-Type": "application/json",
   "Cache-Control": "no-store"
@@ -3913,7 +3914,7 @@ async function onRequest10({ request: request2, env }) {
   }), { status: ok ? 200 : 503, headers: headers4 });
 }
 
-// sites/bella/functions/api/send-tracking-email.js
+// site-source/sites/bella/functions/api/send-tracking-email.js
 var corsHeaders6 = {
   "Access-Control-Allow-Origin": "*",
   "Content-Type": "application/json"
@@ -4025,7 +4026,7 @@ async function onRequest11(context) {
   }
 }
 
-// sites/bella/functions/api/send-recovery-email.js
+// site-source/sites/bella/functions/api/send-recovery-email.js
 var corsHeaders7 = {
   "Access-Control-Allow-Origin": "*",
   "Content-Type": "application/json"
@@ -4263,7 +4264,7 @@ async function onRequest12(context) {
   }
 }
 
-// sites/bella/functions/api/process-recovery-queue.js
+// site-source/sites/bella/functions/api/process-recovery-queue.js
 var corsHeaders8 = {
   "Access-Control-Allow-Origin": "*",
   "Content-Type": "application/json"
@@ -4475,7 +4476,7 @@ async function onRequest13(context) {
   }
 }
 
-// sites/bella/functions/_lib/admin-auth.js
+// site-source/sites/bella/functions/_lib/admin-auth.js
 async function hmacSign3(payload, secret) {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
@@ -4521,7 +4522,7 @@ async function verifyAdminToken2(request2, env) {
   return { valid: true };
 }
 
-// sites/bella/functions/api/reconcile-payments.js
+// site-source/sites/bella/functions/api/reconcile-payments.js
 var headers5 = { "Content-Type": "application/json", "Cache-Control": "no-store" };
 var json2 = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: headers5 });
 async function onRequest14({ request: request2, env }) {
@@ -4559,7 +4560,7 @@ async function onRequest14({ request: request2, env }) {
   }
 }
 
-// sites/bella/functions/api/fb-purchase.js
+// site-source/sites/bella/functions/api/fb-purchase.js
 var corsHeaders9 = {
   "Access-Control-Allow-Origin": "*",
   "Content-Type": "application/json"
@@ -4586,7 +4587,7 @@ async function onRequest15(context) {
   }
 }
 
-// sites/bella/functions/api/utmify-order.js
+// site-source/sites/bella/functions/api/utmify-order.js
 var corsHeaders10 = {
   "Access-Control-Allow-Origin": "*",
   "Content-Type": "application/json"
@@ -4633,7 +4634,7 @@ async function onRequest16(context) {
   }
 }
 
-// worker-src/index.js
+// site-source/worker-src/index.js
 var JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
 var gateways2 = [
   { id: "ironpay", name: "IronPay", method: "pix" },

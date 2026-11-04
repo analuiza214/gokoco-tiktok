@@ -36,7 +36,7 @@ test('admin confirmed payment mirrors independently without provider or Meta cal
  for(const encoded of [false,true]){
  const manual={source:'admin',method:'external',paidAt:'2026-11-04T20:10:00.046Z'};
  let payload;
- const result=await mirrorVerdefy(env,{...order,tracking:{...order.tracking,manualPayment:encoded?JSON.stringify(manual):manual}},()=>assert.fail('no provider confirmation invented'),async(url,req)=>{assert.match(url,/verdefy-sales/);payload=JSON.parse(req.body);return Response.json({ok:true});});
+ const result=await mirrorVerdefy(env,{...order,transaction_id:null,tracking:{...order.tracking,manualPayment:encoded?JSON.stringify(manual):manual}},()=>assert.fail('no provider confirmation invented'),async(url,req)=>{assert.match(url,/verdefy-sales/);payload=JSON.parse(req.body);return Response.json({ok:true});});
  assert.equal(result.state,'sent');assert.equal(payload.confirmedByProvider,false);assert.equal(payload.confirmationSource,'admin');assert.equal(payload.paidAt,manual.paidAt);assert.equal(payload.tracking.utm_id,'123');
  }
 });

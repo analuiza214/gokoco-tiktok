@@ -3,11 +3,12 @@ const gateways = new Set(['masterfy','umbrellapag','venuspay_pix','unipay','invi
 
 export async function mirrorVerdefy(env, order, query = queryPixGatewayStatus, send = fetch) {
   if (!env.VERDEFY_SALES_TOKEN) return {state:'not_configured'};
-  if (order.status !== 'paid' || order.tracking?.manualExternal || !gateways.has(order.gateway) || !order.transaction_id) return {state:'ineligible'};
+  if (order.status !== 'paid' || order.tracking?.manualExternal || !gateways.has(order.gateway)) return {state:'ineligible'};
   let manual=order.tracking?.manualPayment;
   if(typeof manual==='string'){try{manual=JSON.parse(manual);}catch{manual=null;}}
   const adminConfirmed=manual?.source==='admin'&&manual?.method==='external'&&Number.isFinite(Date.parse(manual.paidAt));
   if(order.tracking?.manualPayment&&!adminConfirmed)return {state:'ineligible'};
+  if(!adminConfirmed&&!order.transaction_id)return {state:'ineligible'};
   const verified=adminConfirmed?null:await query(env,order.transaction_id,order.gateway);
   if(!adminConfirmed&&(!verified.isPaid||verified.isRefunded))throw Error('Pagamento não confirmado pelo gateway.');
   const paidAt=adminConfirmed?manual.paidAt:(verified.paidAt||order.tracking?._payment?.paid_at||order.tracking?._purchase?.paid_at);
