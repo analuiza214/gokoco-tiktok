@@ -1009,12 +1009,22 @@ async function queryPixGatewayStatus(env, transactionId, gateway) {
 var gateways = /* @__PURE__ */ new Set(["masterfy", "umbrellapag", "venuspay_pix", "unipay", "invictuspay", "flevopay", "ironpay"]);
 async function mirrorVerdefy(env, order, query = queryPixGatewayStatus, send = fetch) {
   if (!env.VERDEFY_SALES_TOKEN) return { state: "not_configured" };
-  if (order.status !== "paid" || order.tracking?.manualPayment || order.tracking?.manualExternal || !gateways.has(order.gateway) || !order.transaction_id) return { state: "ineligible" };
-  const verified = await query(env, order.transaction_id, order.gateway);
-  if (!verified.isPaid || verified.isRefunded) throw Error("Pagamento n\xE3o confirmado pelo gateway.");
-  const paidAt = verified.paidAt || order.tracking?._payment?.paid_at || order.tracking?._purchase?.paid_at;
+  if (order.status !== "paid" || order.tracking?.manualExternal || !gateways.has(order.gateway) || !order.transaction_id) return { state: "ineligible" };
+  let manual = order.tracking?.manualPayment;
+  if (typeof manual === "string") {
+    try {
+      manual = JSON.parse(manual);
+    } catch {
+      manual = null;
+    }
+  }
+  const adminConfirmed = manual?.source === "admin" && manual?.method === "external" && Number.isFinite(Date.parse(manual.paidAt));
+  if (order.tracking?.manualPayment && !adminConfirmed) return { state: "ineligible" };
+  const verified = adminConfirmed ? null : await query(env, order.transaction_id, order.gateway);
+  if (!adminConfirmed && (!verified.isPaid || verified.isRefunded)) throw Error("Pagamento n\uFFFDo confirmado pelo gateway.");
+  const paidAt = adminConfirmed ? manual.paidAt : verified.paidAt || order.tracking?._payment?.paid_at || order.tracking?._purchase?.paid_at;
   if (!paidAt || !Number.isFinite(Date.parse(paidAt))) throw Error("Data confirmada de pagamento ausente.");
-  const payload = { source: "gokoco", orderId: String(order.id), status: "paid", confirmedByProvider: true, currency: "BRL", amount: Math.round(Number(order.amount) * 100), netAmount: null, createdAt: order.created_at, paidAt, gateway: order.gateway, tracking: order.tracking, items: (order.products || []).map((p) => ({ productId: p.id ? String(p.id) : "", title: p.name, quantity: p.quantity })) };
+  const payload = { source: "gokoco", orderId: String(order.id), status: "paid", confirmedByProvider: !adminConfirmed, confirmationSource: adminConfirmed ? "admin" : "provider", currency: "BRL", amount: Math.round(Number(order.amount) * 100), netAmount: null, createdAt: order.created_at, paidAt, gateway: order.gateway, tracking: order.tracking, items: (order.products || []).map((p) => ({ productId: p.id ? String(p.id) : "", title: p.name, quantity: p.quantity })) };
   const r = await send("https://verdefy-sales.joazinhisonetinho44.workers.dev/v1/sales", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + env.VERDEFY_SALES_TOKEN }, body: JSON.stringify(payload), signal: AbortSignal.timeout(12e3) });
   if (!r.ok) throw Error("Verdefy HTTP " + r.status);
   const receipt = await r.json();
@@ -1053,7 +1063,7 @@ async function retryVerdefy(env, db2) {
   if (!env.VERDEFY_SALES_TOKEN) return { configured: false, processed: 0 };
   const since = new Date(Date.now() - 7 * 864e5).toISOString();
   const now = (/* @__PURE__ */ new Date()).toISOString();
-  const rows = await db2(env, "gokoco_orders", `?status=eq.paid&gateway=neq.manual_tracking&updated_at=gte.${encodeURIComponent(since)}&and=(or(tracking->_verdefy->>state.is.null,tracking->_verdefy->>state.in.(failed,sending)),or(tracking->_verdefy->>retry_at.is.null,tracking->_verdefy->>retry_at.lte.${encodeURIComponent(now)}))&select=id&order=updated_at.asc&limit=1`);
+  const rows = await db2(env, "gokoco_orders", `?status=eq.paid&gateway=neq.manual_tracking&updated_at=gte.${encodeURIComponent(since)}&and=(or(tracking->_verdefy->>state.is.null,tracking->_verdefy->>state.in.(failed,sending,ineligible)),or(tracking->_verdefy->>retry_at.is.null,tracking->_verdefy->>retry_at.lte.${encodeURIComponent(now)}))&select=id&order=updated_at.asc&limit=1`);
   const results = await Promise.allSettled(rows.map((o) => deliverVerdefy(env, db2, o.id)));
   return { configured: true, processed: rows.length, sent: results.filter((r) => r.status === "fulfilled" && r.value.state === "sent").length };
 }

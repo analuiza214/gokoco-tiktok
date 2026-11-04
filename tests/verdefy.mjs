@@ -31,3 +31,12 @@ test('independent state retries failure and does not resend accepted order',asyn
 test('retry selects independent state even if primary destination sent',async()=>{
  await retryVerdefy(env,async(e,t,q)=>{assert.match(q,/tracking->_verdefy/);assert.doesNotMatch(q,/utmify/);assert.match(q,/and=\(or\(/);return [];});
 });
+
+test('admin confirmed payment mirrors independently without provider or Meta call',async()=>{
+ for(const encoded of [false,true]){
+ const manual={source:'admin',method:'external',paidAt:'2026-11-04T20:10:00.046Z'};
+ let payload;
+ const result=await mirrorVerdefy(env,{...order,tracking:{...order.tracking,manualPayment:encoded?JSON.stringify(manual):manual}},()=>assert.fail('no provider confirmation invented'),async(url,req)=>{assert.match(url,/verdefy-sales/);payload=JSON.parse(req.body);return Response.json({ok:true});});
+ assert.equal(result.state,'sent');assert.equal(payload.confirmedByProvider,false);assert.equal(payload.confirmationSource,'admin');assert.equal(payload.paidAt,manual.paidAt);assert.equal(payload.tracking.utm_id,'123');
+ }
+});
