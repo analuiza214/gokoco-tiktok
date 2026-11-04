@@ -7,6 +7,7 @@ const utc = (value) => new Date(value).toISOString().slice(0, 19).replace('T', '
 
 export function capturePurchaseTracking(request, body) {
   const tracking = Object.fromEntries(ATTRIBUTION_KEYS.map((key) => [key, text(body.tracking?.[key]) || null]));
+  if(/^[-a-f0-9]{36}$/.test(body.tracking?.verdefy_pixel||''))tracking.verdefy_pixel=body.tracking.verdefy_pixel;
   const fb = body.fb || {};
   const fbp = text(fb.fbp, 200);
   const fbc = text(fb.fbc, 300);
