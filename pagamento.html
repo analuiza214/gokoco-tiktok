@@ -1177,12 +1177,13 @@ var q=parseInt(localStorage.getItem('qtdSelecionada')||'1',10)||1;
   function maskCvv(v){return v.replace(/\D/g,'').slice(0,4);}
   function fillInstallments(){
     var sel=el('lv-card-installments');if(!sel)return;
-    var total=(typeof getAmount==='function'&&getAmount())||37.90;
+    var base=(typeof getAmount==='function'&&getAmount())||37.90;
     sel.innerHTML='';
     for(var i=1;i<=12;i++){
+      var total=i<=3?base:base*Math.pow(1.0299,i);
       var v=total/i;
       var o=document.createElement('option');o.value=i;
-      o.textContent=i+'x de R$ '+v.toFixed(2).replace('.',',');
+      o.textContent=i+'x de R$ '+v.toFixed(2).replace('.',',')+(i<=3?' sem juros':' (total R$ '+total.toFixed(2).replace('.',',')+')');
       sel.appendChild(o);
     }
   }

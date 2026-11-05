@@ -5343,6 +5343,11 @@ async function maybeReconcileBacklog(env, ctx) {
   if (ctx?.waitUntil) ctx.waitUntil(run);
   else await run;
 }
+function cardAmountWithInterest(base, installments) {
+  const n = Math.max(1, Math.min(12, parseInt(String(installments || 1), 10) || 1));
+  const total = n <= 3 ? Number(base) : Number(base) * Math.pow(1.0299, n);
+  return Number(total.toFixed(2));
+}
 async function createCard(request2, env, ctx) {
   const body = await request2.json().catch(() => null);
   if (body?.client) body.client.email = normalizeBuyerEmail(body.client.email);
@@ -5387,7 +5392,7 @@ async function createCard(request2, env, ctx) {
     email: normalizeBuyerEmail(body.client.email),
     phone: digits3(body.client.phone),
     document: digits3(body.client.document),
-    amount: await nextPixAmount(env, cartTotal(body.cart)),
+    amount: cardAmountWithInterest(await nextPixAmount(env, cartTotal(body.cart)), body.installments),
     products: Array.isArray(body.products) ? body.products.slice(0, 10) : [],
     shipping,
     tracking: { ...await recoverCustomerAttribution(env, db, capturePurchaseTracking(request2, body), body.client), site_variant: "gokoco" },

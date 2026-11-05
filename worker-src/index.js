@@ -534,6 +534,13 @@ async function maybeReconcileBacklog(env, ctx) {
   if (ctx?.waitUntil) ctx.waitUntil(run); else await run;
 }
 
+// Cartão: até 3x sem juros; 4x+ com 2,99% a.m. composto (mesma taxa do site /video).
+function cardAmountWithInterest(base, installments) {
+  const n = Math.max(1, Math.min(12, parseInt(String(installments || 1), 10) || 1));
+  const total = n <= 3 ? Number(base) : Number(base) * Math.pow(1.0299, n);
+  return Number(total.toFixed(2));
+}
+
 // ── Cartão de crédito (MasterFy) ───────────────────────────────────────────────
 // Espelha createPix: mesmo pedido em gokoco_orders, mas gateway=masterfy_card e
 // o cartão chega já tokenizado pelo script oficial (frontend). PAID é síncrono;
@@ -588,7 +595,7 @@ async function createCard(request, env, ctx) {
     email: normalizeBuyerEmail(body.client.email),
     phone: digits(body.client.phone),
     document: digits(body.client.document),
-    amount: await nextPixAmount(env, cartTotal(body.cart)),
+    amount: cardAmountWithInterest(await nextPixAmount(env, cartTotal(body.cart)), body.installments),
     products: Array.isArray(body.products) ? body.products.slice(0, 10) : [],
     shipping,
     tracking: { ...await recoverCustomerAttribution(env, db, capturePurchaseTracking(request, body), body.client), site_variant: 'gokoco' },
