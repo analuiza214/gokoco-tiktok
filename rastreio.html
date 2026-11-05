@@ -6,7 +6,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#111827">
-  <title>Rastrear pedido · GOKOCO</title>
+  <title>Rastreio de pedidos</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -38,7 +38,7 @@
   </style>
 </head>
 <body>
-  <header class="top"><span class="brand" aria-hidden="true">G</span> GOKOCO <span style="font-weight:500;opacity:.68;letter-spacing:0">· pedidos</span></header>
+  <header class="top"><span class="brand" aria-hidden="true">R</span> RASTREIO <span style="font-weight:500;opacity:.68;letter-spacing:0">· de pedidos</span></header>
   <main class="wrap">
     <a class="back" href="/">← Voltar à loja</a>
     <section class="intro"><h1>Acompanhe seu pedido</h1><p>Veja as atualizações do seu pedido em um só lugar.</p></section>
@@ -69,7 +69,7 @@
       function show(data){
         currentData=data;
         const shipping=data.shipping||{},events=Array.isArray(shipping.events)?shipping.events:[],status=shipping.status||'confirmed',stageRank={confirmed:0,preparing:1,shipped:3,out_for_delivery:5,delivered:6},currentRank=stageRank[status]??0,origin=Date.parse(shipping.created_at||data.createdAt),now=Date.now();
-        orderBox.innerHTML=data.manual?`<div class="order-head"><div class="tracking-order-heading"><div class="caption">CÓDIGO DE RASTREIO</div><div class="code">${escapeHtml(data.code)}</div></div><span class="status">Acompanhamento estimado</span></div>`:`<div class="order-head"><div class="tracking-order-heading"><div class="caption">PEDIDO</div><div class="code">${escapeHtml(data.code)}</div><div class="tracking-customer">${escapeHtml(data.buyerName||'Cliente')}</div></div><span class="status status-${escapeHtml(status)}">${escapeHtml(labels[status]||'Pedido em atualização')}</span></div><div class="order-products"><div class="products">${(data.products?.length?data.products:[{name:'Escova Modeladora GOKOCO',quantity:1,image:null}]).map(p=>`<div class="product">${p.image?`<img class="product-image" src="${escapeHtml(p.image)}" alt="${escapeHtml(p.name)}" loading="lazy">`:'<span class="product-icon">📦</span>'}<span>${escapeHtml(p.name)}<small>Quantidade: ${Number(p.quantity)||1}</small></span></div>`).join('')}</div>${data.destination?.city?`<div class="destination">Destino: <strong>${escapeHtml(data.destination.city)}${data.destination.state?', '+escapeHtml(data.destination.state):''}</strong></div>`:''}</div>`;
+        orderBox.innerHTML=data.manual?`<div class="order-head"><div class="tracking-order-heading"><div class="caption">CÓDIGO DE RASTREIO</div><div class="code">${escapeHtml(data.code)}</div></div><span class="status">Acompanhamento estimado</span></div>`:`<div class="order-head"><div class="tracking-order-heading"><div class="caption">PEDIDO</div><div class="code">${escapeHtml(data.code)}</div><div class="tracking-customer">${escapeHtml(data.buyerName||'Cliente')}</div></div><span class="status status-${escapeHtml(status)}">${escapeHtml(labels[status]||'Pedido em atualização')}</span></div><div class="order-products"><div class="products">${(data.products?.length?data.products:[{name:'Seu pedido',quantity:1,image:null}]).map(p=>`<div class="product">${p.image?`<img class="product-image" src="${escapeHtml(p.image)}" alt="${escapeHtml(p.name)}" loading="lazy">`:'<span class="product-icon">📦</span>'}<span>${escapeHtml(p.name)}<small>Quantidade: ${Number(p.quantity)||1}</small></span></div>`).join('')}</div>${data.destination?.city?`<div class="destination">Destino: <strong>${escapeHtml(data.destination.city)}${data.destination.state?', '+escapeHtml(data.destination.state):''}</strong></div>`:''}</div>`;
         const actual=[{status:'confirmed',at:shipping.created_at||data.createdAt,label:data.manual?'Código gerado':labels.confirmed,detail:data.manual?'Acompanhamento iniciado. As próximas etapas são estimativas.':details.confirmed},...events].filter((event,index,list)=>list.findIndex(item=>item.status===event.status)===index).sort((a,b)=>Date.parse(a.at)-Date.parse(b.at)).map(event=>({...event,kind:'actual'}));
         const actualStatuses=new Set(actual.map(event=>event.status));
         const HUBS={SP:'São Paulo, SP',RJ:'Rio de Janeiro, RJ',ES:'Vitória, ES',MG:'Belo Horizonte, MG',RS:'Porto Alegre, RS',SC:'Florianópolis, SC',PR:'Curitiba, PR',GO:'Goiânia, GO',DF:'Brasília, DF',MT:'Cuiabá, MT',MS:'Campo Grande, MS',TO:'Palmas, TO',BA:'Salvador, BA',SE:'Aracaju, SE',PE:'Recife, PE',PB:'João Pessoa, PB',AL:'Maceió, AL',RN:'Natal, RN',CE:'Fortaleza, CE',PI:'Teresina, PI',MA:'São Luís, MA',PA:'Belém, PA',AP:'Macapá, AP',AM:'Manaus, AM',RR:'Boa Vista, RR',AC:'Rio Branco, AC',RO:'Porto Velho, RO'};
