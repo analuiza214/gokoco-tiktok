@@ -1079,7 +1079,7 @@ async function retryVerdefy(env, db2) {
   if (!env.VERDEFY_SALES_TOKEN) return { configured: false, processed: 0 };
   const since = new Date(Date.now() - 7 * 864e5).toISOString();
   const now = (/* @__PURE__ */ new Date()).toISOString();
-  const rows = await db2(env, "gokoco_orders", `?status=eq.paid&gateway=neq.manual_tracking&updated_at=gte.${encodeURIComponent(since)}&and=(or(tracking->_verdefy->>state.is.null,tracking->_verdefy->>state.in.(failed,sending,ineligible)),or(tracking->_verdefy->>retry_at.is.null,tracking->_verdefy->>retry_at.lte.${encodeURIComponent(now)}))&select=id&order=updated_at.asc&limit=1`);
+  const rows = await db2(env, "gokoco_orders", `?status=eq.paid&gateway=neq.manual_tracking&and=(or(tracking->_verdefy->>state.is.null,tracking->_verdefy->>state.in.(failed,sending,ineligible)),or(tracking->_verdefy->>retry_at.is.null,tracking->_verdefy->>retry_at.lte.${encodeURIComponent(now)}))&select=id&order=updated_at.asc&limit=3`);
   const results = await Promise.allSettled(rows.map((o) => deliverVerdefy(env, db2, o.id)));
   return { configured: true, processed: rows.length, sent: results.filter((r) => r.status === "fulfilled" && r.value.state === "sent").length };
 }

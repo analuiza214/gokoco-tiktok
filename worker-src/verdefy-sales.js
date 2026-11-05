@@ -10,7 +10,7 @@ export async function mirrorVerdefy(env, order, query = queryPixGatewayStatus, s
   if(order.tracking?.manualPayment&&!adminConfirmed)return {state:'ineligible'};
   if(!adminConfirmed&&!order.transaction_id)return {state:'ineligible'};
   const verified=adminConfirmed?null:await query(env,order.transaction_id,order.gateway);
-  if(!adminConfirmed&&(!verified.isPaid||verified.isRefunded))throw Error('Pagamento não confirmado pelo gateway.');
+  if(!adminConfirmed&&(!verified.isPaid||verified.isRefunded))throw Error('Pagamento nï¿½o confirmado pelo gateway.');
   const paidAt=adminConfirmed?manual.paidAt:(verified.paidAt||order.tracking?._payment?.paid_at||order.tracking?._purchase?.paid_at);
   if (!paidAt || !Number.isFinite(Date.parse(paidAt))) throw Error('Data confirmada de pagamento ausente.');
   const payload = {source:'gokoco',orderId:String(order.id),status:'paid',confirmedByProvider:!adminConfirmed,confirmationSource:adminConfirmed?'admin':'provider',currency:'BRL',amount:Math.round(Number(order.amount)*100),netAmount:null,createdAt:order.created_at,paidAt,gateway:order.gateway,tracking:order.tracking,items:(order.products||[]).map(p=>({productId:p.id?String(p.id):'',title:p.name,quantity:p.quantity}))};
@@ -53,7 +53,7 @@ export async function retryVerdefy(env,db) {
   if(!env.VERDEFY_SALES_TOKEN)return {configured:false,processed:0};
   const since=new Date(Date.now()-7*86400000).toISOString();
   const now=new Date().toISOString();
-  const rows=await db(env,'gokoco_orders',`?status=eq.paid&gateway=neq.manual_tracking&updated_at=gte.${encodeURIComponent(since)}&and=(or(tracking->_verdefy->>state.is.null,tracking->_verdefy->>state.in.(failed,sending,ineligible)),or(tracking->_verdefy->>retry_at.is.null,tracking->_verdefy->>retry_at.lte.${encodeURIComponent(now)}))&select=id&order=updated_at.asc&limit=1`);
+  const rows=await db(env,'gokoco_orders',`?status=eq.paid&gateway=neq.manual_tracking&and=(or(tracking->_verdefy->>state.is.null,tracking->_verdefy->>state.in.(failed,sending,ineligible)),or(tracking->_verdefy->>retry_at.is.null,tracking->_verdefy->>retry_at.lte.${encodeURIComponent(now)}))&select=id&order=updated_at.asc&limit=3`);
   const results=await Promise.allSettled(rows.map(o=>deliverVerdefy(env,db,o.id)));
   return {configured:true,processed:rows.length,sent:results.filter(r=>r.status==='fulfilled'&&r.value.state==='sent').length};
 }

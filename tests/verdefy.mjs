@@ -29,7 +29,7 @@ test('independent state retries failure and does not resend accepted order',asyn
  assert.equal((await deliverVerdefy(env,db,order.id,()=>assert.fail())).state,'sent');assert.equal(calls,1);
 });
 test('retry selects independent state even if primary destination sent',async()=>{
- await retryVerdefy(env,async(e,t,q)=>{assert.match(q,/tracking->_verdefy/);assert.doesNotMatch(q,/utmify/);assert.match(q,/and=\(or\(/);return [];});
+ await retryVerdefy(env,async(e,t,q)=>{assert.match(q,/tracking->_verdefy/);assert.doesNotMatch(q,/utmify/);assert.match(q,/and=\(or\(/);assert.doesNotMatch(q,/updated_at=gte/);assert.match(q,/limit=3/);return [];});
 });
 
 test('admin confirmed payment mirrors independently without provider or Meta call',async()=>{
