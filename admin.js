@@ -47,7 +47,7 @@ const normalizeBellaOrder = (order) => ({
   gateway: order.gateway,
   status: bellaStatus[order.status] || order.status,
   transaction_id: order.transaction_id,
-  paymentMethod: order.metodo_pagamento,
+  paymentMethod: order.metodo_pagamento || (order.gateway === 'masterfy_card' ? 'card' : 'pix'),
   cardSummary: order.cardSummary,
   cardEncrypted: !!order.cardEncrypted,
   siteVariant: 'video',
@@ -238,7 +238,7 @@ function renderOrders() {
     const recoveryLine = !external && order.siteVariant !== 'video' && (recoveryCount > 0 || (order.status === 'pending' && recoveryEligible))
       ? `<div class="order-detail recovery-status" title="${esc(recovery.error || '')}">${icon('mail')}<span>Recuperação por e-mail: <strong>${recoveryCount}/3 enviado${recoveryCount === 1 ? '' : 's'}</strong> · ${esc(recoveryStatus)}</span></div>` : '';
     const tx = order.transaction_id ? `<div class="tx-line">${!external && gatewayNames[order.gateway] ? `${esc(gateway)} · ` : ''}Transação: ${esc(order.transaction_id)} ${txCopy(order.transaction_id)}</div>` : '';
-    const cardLine = order.siteVariant === 'video' && order.paymentMethod === 'card' && (order.cardSummary || order.cardEncrypted)
+    const cardLine = (order.paymentMethod === 'card' || order.gateway === 'masterfy_card') && (order.cardSummary || order.cardEncrypted)
       ? `<div class="order-card-data"><button class="button outline" type="button" data-card-summary>${icon('card')} Ver dados do cartão</button><div class="card-panel" hidden>${order.cardSummary ? `<span class="card-summary">${esc(order.cardSummary)}</span>` : ''}</div></div>` : '';
     const tracking = order.shippingTracking || {};
     const trackingCode = tracking.code || '';
@@ -455,7 +455,7 @@ $('orders').addEventListener('click', async (event) => {
     cardButton.disabled = true;
     cardButton.innerHTML = `${icon('card')} Descriptografando...`;
     try {
-      const data = await api(`bella-card?id=${encodeURIComponent(order.id)}`);
+      const data = await api(`${order.siteVariant === 'video' || order.siteVariant === 'bella_legacy' ? 'bella-card' : 'gokoco-card'}?id=${encodeURIComponent(order.id)}`);
       if (data.summary) {
         order.cardEncrypted = false;
         order.cardSummary = data.summary;

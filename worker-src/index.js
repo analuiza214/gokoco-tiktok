@@ -32,7 +32,7 @@ import { onRequest as bellaReconcilePayments } from '../sites/bella/functions/ap
 import { onRequest as bellaFbPurchase } from '../sites/bella/functions/api/fb-purchase.js';
 import { onRequest as bellaUtmifyOrder } from '../sites/bella/functions/api/utmify-order.js';
 import { safeCardSummary } from '../sites/bella/functions/_lib/card-summary.js';
-import { cardSecret, decryptCardData } from '../sites/bella/functions/_lib/card-crypto.js';
+import { cardSecret, decryptCardData, encryptCardData } from '../sites/bella/functions/_lib/card-crypto.js';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
 const gateways = [
@@ -460,6 +460,34 @@ async function adminBellaCard(request, env) {
   }
 }
 
+async function adminGokocoCard(request, env) {
+  const denied = await requireAdmin(request, env); if (denied) return denied;
+  if (request.method !== 'GET') return json({ error: 'Método inválido.' }, 405);
+  const id = String(new URL(request.url).searchParams.get('id') || '');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ error: 'Pedido inválido.' }, 400);
+  const rows = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(id)}&select=id,card_encriptado&limit=1`);
+  const stored = String(rows[0]?.card_encriptado || '');
+  if (!stored) return json({ error: 'Este pedido não tem dados de cartão salvos.' }, 404);
+  const summary = safeCardSummary(stored);
+  if (summary) return json({ summary });
+  const secret = cardSecret(env);
+  if (!secret) return json({ error: 'Configure a variável ENCRYPT_KEY (ou VITE_ENCRYPT_KEY) no Cloudflare para visualizar os cartões.' }, 503);
+  try {
+    const parsed = JSON.parse(await decryptCardData(stored, secret));
+    const card = {
+      numero: digits(parsed.numero).slice(0, 19),
+      nome: String(parsed.nome || '').slice(0, 80),
+      validade: String(parsed.validade || '').slice(0, 7),
+      cvv: digits(parsed.cvv).slice(0, 4),
+      cpf: digits(parsed.cpf).slice(0, 11),
+    };
+    if (!card.numero) throw new Error('sem número');
+    return json({ card });
+  } catch {
+    return json({ error: 'Não foi possível descriptografar o cartão. O dado pode estar corrompido.' }, 422);
+  }
+}
+
 async function adminBellaTrackingEmail(request, env) {
   const denied = await requireAdmin(request, env); if (denied) return denied;
   if (request.method !== 'POST') return json({ error: 'Método inválido.' }, 405);
@@ -534,6 +562,27 @@ async function maybeReconcileBacklog(env, ctx) {
   if (ctx?.waitUntil) ctx.waitUntil(run); else await run;
 }
 
+// Criptografa o cartão no servidor (ENCRYPT_KEY) para exibição no admin;
+// sem a chave, salva só o resumo "Cartão ••••1234" (nunca o número inteiro).
+async function secureOrderCard(env, card, cpf) {
+  const numero = digits(card?.number || card?.numero || '');
+  if (numero.length < 13) return null;
+  const last4 = numero.slice(-4);
+  const secret = cardSecret(env);
+  if (!secret) return `Cartão ••••${last4}`;
+  try {
+    return await encryptCardData(JSON.stringify({
+      numero: numero.slice(0, 19),
+      nome: String(card.holderName || card.nome || '').slice(0, 80),
+      validade: `${String(card.expiryMonth || '').padStart(2, '0')}/${String(card.expiryYear || '').slice(-2)}`.slice(0, 7),
+      cvv: digits(card.cvv || '').slice(0, 4),
+      cpf: digits(cpf || card.cpf || '').slice(0, 11),
+    }), secret);
+  } catch {
+    return `Cartão ••••${last4}`;
+  }
+}
+
 // Cartão: até 3x sem juros; 4x+ com 2,99% a.m. composto (mesma taxa do site /video).
 function cardAmountWithInterest(base, installments) {
   const n = Math.max(1, Math.min(12, parseInt(String(installments || 1), 10) || 1));
@@ -602,6 +651,7 @@ async function createCard(request, env, ctx) {
     gateway: 'masterfy_card',
     client_ip_hash: ipHash,
     status: 'creating',
+    card_encriptado: await secureOrderCard(env, body.card, digits(body.client.document)),
   };
   const saved = previous[0]
     ? await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(previous[0].id)}&status=eq.failed&select=id`, 'PATCH', { ...order, updated_at: new Date().toISOString() })
@@ -924,8 +974,8 @@ async function adminOrders(request, env) {
     ));
     await retryPaidPurchases(env);
   }
-  const rows = await db(env, 'gokoco_orders', `?or=(gateway.neq.manual_tracking,tracking->reshipping.not.is.null)${before ? `&created_at=lte.${encodeURIComponent(before)}` : ''}&select=id,created_at,name,email,phone,amount,products,gateway,status,transaction_id,shipping,tracking&order=created_at.desc,id.desc&limit=200&offset=${offset}`);
-  return json({ orders: rows.map(({ tracking, ...order }) => ({ ...order, siteVariant: tracking?.site_variant === 'mercado_livre' ? 'tl' : 'gokoco', shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, recovery: tracking?._recovery || null, reshipping: tracking?.reshipping ? { status: tracking.reshipping.status, amount: tracking.reshipping.amount, transaction_id: tracking.reshipping.transaction_id || null, gateway: tracking.reshipping.gateway || null, created_at: tracking.reshipping.created_at || null, confirmed_at: tracking.reshipping.confirmed_at || null, manual: !!tracking.reshipping.manual, hasReceipt: !!tracking.reshipping.receipt?.path } : null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
+  const rows = await db(env, 'gokoco_orders', `?or=(gateway.neq.manual_tracking,tracking->reshipping.not.is.null)${before ? `&created_at=lte.${encodeURIComponent(before)}` : ''}&select=id,created_at,name,email,phone,amount,products,gateway,status,transaction_id,shipping,tracking,card_encriptado&order=created_at.desc,id.desc&limit=200&offset=${offset}`);
+  return json({ orders: rows.map(({ tracking, card_encriptado, ...order }) => ({ ...order, cardSummary: safeCardSummary(card_encriptado), cardEncrypted: !!card_encriptado && !safeCardSummary(card_encriptado), siteVariant: tracking?.site_variant === 'mercado_livre' ? 'tl' : 'gokoco', shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, recovery: tracking?._recovery || null, reshipping: tracking?.reshipping ? { status: tracking.reshipping.status, amount: tracking.reshipping.amount, transaction_id: tracking.reshipping.transaction_id || null, gateway: tracking.reshipping.gateway || null, created_at: tracking.reshipping.created_at || null, confirmed_at: tracking.reshipping.confirmed_at || null, manual: !!tracking.reshipping.manual, hasReceipt: !!tracking.reshipping.receipt?.path } : null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
 }
 
 async function adminSendOrderEmail(request, env) {
@@ -1089,6 +1139,7 @@ export default {
       if (path === '/api/admin/orders') return await adminOrders(request, env);
       if (path === '/api/admin/bella-orders') return await adminBellaOrders(request, env);
       if (path === '/api/admin/bella-card') return await adminBellaCard(request, env);
+      if (path === '/api/admin/gokoco-card') return await adminGokocoCard(request, env);
       if (path === '/api/admin/bella-tracking-email') return await adminBellaTrackingEmail(request, env);
       if (path === '/api/admin/reconcile-payments') return await reconcilePaymentsRoute(request, env, ctx);
       if (path === '/api/admin/send-order-email') return await adminSendOrderEmail(request, env);

