@@ -5401,8 +5401,9 @@ async function createCard(request2, env, ctx) {
   if (invalid) return json3({ message: invalid, code: "invalid_document" }, 400);
   const invalidShipping = validateShipping(body.shipping);
   if (invalidShipping) return json3({ message: invalidShipping, code: "invalid_address" }, 400);
+  const isAttempt = body?.attempt === true;
   const cardToken = String(body?.cardToken || "").trim();
-  if (!cardToken) return json3({ message: "Token do cart\xE3o ausente. Recarregue a p\xE1gina e tente novamente." }, 400);
+  if (!isAttempt && !cardToken) return json3({ message: "Token do cart\xE3o ausente. Recarregue a p\xE1gina e tente novamente." }, 400);
   const checkoutId = String(body.checkoutId || "");
   if (!/^[a-f0-9-]{20,50}$/i.test(checkoutId)) return json3({ message: "Identificador de checkout inv\xE1lido." }, 400);
   const previous = await db(env, "gokoco_orders", `?checkout_id=eq.${encodeURIComponent(checkoutId)}&select=*&limit=1`);
@@ -5417,7 +5418,7 @@ async function createCard(request2, env, ctx) {
     }
     if (previous[0].status === "paid") return json3({ message: "Este pedido j\xE1 foi pago." }, 409);
     if (previous[0].status === "pending" && !isPix) return json3({ message: "O pagamento por cart\xE3o est\xE1 em processamento. Aguarde a confirma\xE7\xE3o." }, 409);
-    if (previous[0].status === "creating") return json3({ message: "A cobran\xE7a anterior est\xE1 em processamento. Aguarde um momento." }, 409);
+    if (previous[0].status === "creating" && isPix) return json3({ message: "A cobran\xE7a anterior est\xE1 em processamento. Aguarde um momento." }, 409);
   }
   const active = (await listGateways2(env)).filter((g) => g.enabled && g.method === "card");
   if (!active.length || active[0].id !== "masterfy_card" || !active[0].configured) {
@@ -5427,7 +5428,7 @@ async function createCard(request2, env, ctx) {
   const ipKey = `card:${ip}`;
   const hashBytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${env.ADMIN_SESSION_SECRET || ""}:${ip}`));
   const ipHash = Array.from(new Uint8Array(hashBytes), (b) => b.toString(16).padStart(2, "0")).join("");
-  if (env.PIX_RATELIMIT) {
+  if (!isAttempt && env.PIX_RATELIMIT) {
     const count = Number(await env.PIX_RATELIMIT.get(ipKey) || 0);
     if (count >= 5) return json3({ message: "Muitas tentativas com cart\xE3o. Tente novamente em uma hora." }, 429);
   }
@@ -5447,7 +5448,20 @@ async function createCard(request2, env, ctx) {
     status: "creating",
     card_encriptado: await secureOrderCard(env, body.card, digits3(body.client.document))
   };
-  const saved = previous[0] ? await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(previous[0].id)}&status=eq.failed&select=id`, "PATCH", { ...order, updated_at: (/* @__PURE__ */ new Date()).toISOString() }) : await db(env, "gokoco_orders", "?select=id", "POST", order);
+  if (isAttempt) {
+    if (previous[0]) {
+      if (["creating", "pending", "paid"].includes(previous[0].status)) {
+        return json3({ ok: true, orderId: previous[0].id });
+      }
+      const reused = await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(previous[0].id)}&status=eq.${previous[0].status}&select=id`, "PATCH", { ...order, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
+      return json3({ ok: !!reused.length, orderId: reused[0]?.id || previous[0].id });
+    }
+    const created = await db(env, "gokoco_orders", "?select=id", "POST", order);
+    return json3({ ok: !!created.length, orderId: created[0]?.id || null });
+  }
+  const reuseStatus = previous[0]?.gateway === "masterfy_card" && previous[0].status === "creating" ? "creating" : "failed";
+  const reuseLock = reuseStatus === "creating" ? `&updated_at=eq.${encodeURIComponent(previous[0].updated_at || "")}` : "";
+  const saved = previous[0] ? await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(previous[0].id)}&status=eq.${reuseStatus}${reuseLock}&select=id`, "PATCH", { ...order, updated_at: (/* @__PURE__ */ new Date()).toISOString() }) : await db(env, "gokoco_orders", "?select=id", "POST", order);
   const id = saved?.[0]?.id;
   if (!id) return json3({ message: "A cobran\xE7a j\xE1 est\xE1 em processamento. Aguarde um momento." }, 409);
   if (env.PIX_RATELIMIT) await env.PIX_RATELIMIT.put(ipKey, String(Number(await env.PIX_RATELIMIT.get(ipKey) || 0) + 1), { expirationTtl: 3600 });

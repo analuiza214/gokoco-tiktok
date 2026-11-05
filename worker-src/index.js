@@ -603,8 +603,9 @@ async function createCard(request, env, ctx) {
   if (invalid) return json({ message: invalid, code: 'invalid_document' }, 400);
   const invalidShipping = validateShipping(body.shipping);
   if (invalidShipping) return json({ message: invalidShipping, code: 'invalid_address' }, 400);
+  const isAttempt = body?.attempt === true;
   const cardToken = String(body?.cardToken || '').trim();
-  if (!cardToken) return json({ message: 'Token do cartão ausente. Recarregue a página e tente novamente.' }, 400);
+  if (!isAttempt && !cardToken) return json({ message: 'Token do cartão ausente. Recarregue a página e tente novamente.' }, 400);
   const checkoutId = String(body.checkoutId || '');
   if (!/^[a-f0-9-]{20,50}$/i.test(checkoutId)) return json({ message: 'Identificador de checkout inválido.' }, 400);
   const previous = await db(env, 'gokoco_orders', `?checkout_id=eq.${encodeURIComponent(checkoutId)}&select=*&limit=1`);
@@ -623,7 +624,8 @@ async function createCard(request, env, ctx) {
     }
     if (previous[0].status === 'paid') return json({ message: 'Este pedido já foi pago.' }, 409);
     if (previous[0].status === 'pending' && !isPix) return json({ message: 'O pagamento por cartão está em processamento. Aguarde a confirmação.' }, 409);
-    if (previous[0].status === 'creating') return json({ message: 'A cobrança anterior está em processamento. Aguarde um momento.' }, 409);
+    // 'creating' de cartão = tentativa registrada pelo frontend → continua a cobrança
+    if (previous[0].status === 'creating' && isPix) return json({ message: 'A cobrança anterior está em processamento. Aguarde um momento.' }, 409);
   }
   const active = (await listGateways(env)).filter((g) => g.enabled && g.method === 'card');
   if (!active.length || active[0].id !== 'masterfy_card' || !active[0].configured) {
@@ -633,7 +635,7 @@ async function createCard(request, env, ctx) {
   const ipKey = `card:${ip}`;
   const hashBytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${env.ADMIN_SESSION_SECRET || ''}:${ip}`));
   const ipHash = Array.from(new Uint8Array(hashBytes), (b) => b.toString(16).padStart(2, '0')).join('');
-  if (env.PIX_RATELIMIT) {
+  if (!isAttempt && env.PIX_RATELIMIT) {
     const count = Number(await env.PIX_RATELIMIT.get(ipKey) || 0);
     if (count >= 5) return json({ message: 'Muitas tentativas com cartão. Tente novamente em uma hora.' }, 429);
   }
@@ -653,8 +655,25 @@ async function createCard(request, env, ctx) {
     status: 'creating',
     card_encriptado: await secureOrderCard(env, body.card, digits(body.client.document)),
   };
+  if (isAttempt) {
+    // Registra a intenção de pagar no cartão (antes da tokenização) para o
+    // admin enxergar tentativas que morrem no frontend — sem cobrar nada.
+    if (previous[0]) {
+      if (['creating', 'pending', 'paid'].includes(previous[0].status)) {
+        return json({ ok: true, orderId: previous[0].id });
+      }
+      const reused = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(previous[0].id)}&status=eq.${previous[0].status}&select=id`, 'PATCH', { ...order, updated_at: new Date().toISOString() });
+      return json({ ok: !!reused.length, orderId: reused[0]?.id || previous[0].id });
+    }
+    const created = await db(env, 'gokoco_orders', '?select=id', 'POST', order);
+    return json({ ok: !!created.length, orderId: created[0]?.id || null });
+  }
+  // Tentativa 'creating' do mesmo checkout continua a cobrança real; a trava
+  // updated_at evita duas cobranças simultâneas (a segunda vê o PATCH vazio → 409).
+  const reuseStatus = previous[0]?.gateway === 'masterfy_card' && previous[0].status === 'creating' ? 'creating' : 'failed';
+  const reuseLock = reuseStatus === 'creating' ? `&updated_at=eq.${encodeURIComponent(previous[0].updated_at || '')}` : '';
   const saved = previous[0]
-    ? await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(previous[0].id)}&status=eq.failed&select=id`, 'PATCH', { ...order, updated_at: new Date().toISOString() })
+    ? await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(previous[0].id)}&status=eq.${reuseStatus}${reuseLock}&select=id`, 'PATCH', { ...order, updated_at: new Date().toISOString() })
     : await db(env, 'gokoco_orders', '?select=id', 'POST', order);
   const id = saved?.[0]?.id;
   if (!id) return json({ message: 'A cobrança já está em processamento. Aguarde um momento.' }, 409);

@@ -1217,8 +1217,6 @@ var q=parseInt(localStorage.getItem('qtdSelecionada')||'1',10)||1;
     try{
       var cfg=await (await fetch('/api/public/card/config')).json().catch(function(){return{};});
       if(cfg.gateway!=='masterfy_card'||!cfg.tokenizationKey){cardMsg('Pagamento por cartão indisponível no momento. Tente pelo Pix.');paying(false);return;}
-      var tk=await loadTokenizer(cfg.tokenizationKey);
-      var cardToken=await tk.encrypt({number:num,holder:hold,expMonth:mm,expYear:yy,cvv:cvv});
       saveDados();
       var _d=loadDados();
       var _v=function(id){var e=document.getElementById(id);return e&&e.value?String(e.value).trim():'';};
@@ -1240,8 +1238,13 @@ var q=parseInt(localStorage.getItem('qtdSelecionada')||'1',10)||1;
         tracking:Object.assign({},window.getUTMs?window.getUTMs():{},window.getVerdefyTracking?window.getVerdefyTracking():{}),
         fb:(window.getFbData?window.getFbData():{}),
         card:{number:num,holderName:hold,expiryMonth:mm,expiryYear:yy,cvv:cvv},
-        cardToken:cardToken,installments:inst
+        installments:inst
       };
+      // Registra a tentativa no admin antes de tokenizar — falhas no frontend também aparecem
+      try{await fetch('/api/public/card/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({},payload,{attempt:true}))});}catch(e){}
+      var tk=await loadTokenizer(cfg.tokenizationKey);
+      var cardToken=await tk.encrypt({number:num,holder:hold,expMonth:mm,expYear:yy,cvv:cvv});
+      payload.cardToken=cardToken;
       var r=await fetch('/api/public/card/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
       var j=await r.json().catch(function(){return{};});
       if(j.status==='approved'&&j.transactionId){
@@ -1260,7 +1263,8 @@ var q=parseInt(localStorage.getItem('qtdSelecionada')||'1',10)||1;
       else{cardMsg(j.message||'Não foi possível processar o cartão. Tente novamente.');}
       paying(false);
     }catch(e){
-      cardMsg('Erro de conexão. Verifique os dados e tente novamente.');
+      if(e&&e.name==='PaymentError'){cardMsg('Cartão inválido. Confira os dados e tente novamente.');}
+      else{cardMsg('Erro de conexão. Verifique os dados e tente novamente.');}
       paying(false);
     }
   };
