@@ -6,7 +6,16 @@ async function metaReadiness(env, send = fetch) {
   try {
     const r = await send("https://graph.facebook.com/v25.0/" + pixel + "?fields=id", { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(12e3) });
     const d = await r.json();
-    return { configured: true, pixel, readAccess: r.ok && String(d.id) === pixel, reason: r.ok && String(d.id) === pixel ? "pixel_read_verified" : "meta_rejected", metaCode: Number(d.error?.code) || null, purchaseTested: false };
+    let tokenRecognized = null;
+    if (!r.ok) {
+      try {
+        const identity = await send("https://graph.facebook.com/v25.0/me?fields=id", { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(12e3) });
+        const identityBody = await identity.json();
+        tokenRecognized = identity.ok && !!identityBody.id;
+      } catch {
+      }
+    }
+    return { configured: true, pixel, tokenRecognized, readAccess: r.ok && String(d.id) === pixel, reason: r.ok && String(d.id) === pixel ? "pixel_read_verified" : "meta_rejected", metaCode: Number(d.error?.code) || null, purchaseTested: false };
   } catch {
     return { configured: true, pixel, readAccess: false, reason: "unavailable", purchaseTested: false };
   }
