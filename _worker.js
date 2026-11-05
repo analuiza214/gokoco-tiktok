@@ -1127,55 +1127,97 @@ async function queryPixGatewayStatus(env, transactionId, gateway) {
 
 // worker-src/verdefy-sales.js
 var gateways = /* @__PURE__ */ new Set(["masterfy", "umbrellapag", "venuspay_pix", "unipay", "invictuspay", "flevopay", "ironpay"]);
-async function mirrorVerdefy(env, order, query = queryPixGatewayStatus, send = fetch) {
-  if (!env.VERDEFY_SALES_TOKEN) return { state: "not_configured" };
-  if (order.status !== "paid" || order.tracking?.manualExternal || !gateways.has(order.gateway)) return { state: "ineligible" };
-  let manual = order.tracking?.manualPayment;
-  if (typeof manual === "string") {
-    try {
-      manual = JSON.parse(manual);
-    } catch {
-      manual = null;
-    }
+var TRACKING_KEYS = ["utm_id", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "verdefy_pixel"];
+var STATE = { paid: "_verdefy", pending: "_verdefy_pending", expired: "_verdefy_expired", refunded: "_verdefy_refund" };
+var STATUS_FILTER = { paid: "&status=eq.paid", pending: "", expired: "&status=eq.expired", refunded: "&status=eq.refunded" };
+var PENDING_WINDOW_MS = 48 * 36e5;
+function verdefySource(env) {
+  const source = String(env.VERDEFY_SALES_SOURCE || "gokoco").trim();
+  return /^[\w-]{1,60}$/.test(source) ? source : null;
+}
+function trackingPayload(tracking = {}) {
+  const browser = tracking._browser || {};
+  return { ...Object.fromEntries(TRACKING_KEYS.filter((k) => tracking[k]).map((k) => [k, String(tracking[k]).slice(0, 300)])), _browser: { fbp: browser.fbp || null, fbc: browser.fbc || null, ip: browser.ip || null, user_agent: browser.user_agent || null, source_url: browser.source_url || null } };
+}
+async function mirrorVerdefy(env, order, kind = "paid", opts = {}, query = queryPixGatewayStatus, send = fetch) {
+  if (typeof kind === "function") {
+    send = opts;
+    query = kind;
+    kind = "paid";
+    opts = {};
   }
-  const adminConfirmed = manual?.source === "admin" && manual?.method === "external" && Number.isFinite(Date.parse(manual.paidAt));
-  if (order.tracking?.manualPayment && !adminConfirmed) return { state: "ineligible" };
-  if (!adminConfirmed && !order.transaction_id) return { state: "ineligible" };
-  const verified = adminConfirmed ? null : await query(env, order.transaction_id, order.gateway);
-  if (!adminConfirmed && (!verified.isPaid || verified.isRefunded)) throw Error("Pagamento n\uFFFDo confirmado pelo gateway.");
-  const paidAt = adminConfirmed ? manual.paidAt : verified.paidAt || order.tracking?._payment?.paid_at || order.tracking?._purchase?.paid_at;
-  if (!paidAt || !Number.isFinite(Date.parse(paidAt))) throw Error("Data confirmada de pagamento ausente.");
-  const payload = { source: "gokoco", orderId: String(order.id), status: "paid", confirmedByProvider: !adminConfirmed, confirmationSource: adminConfirmed ? "admin" : "provider", currency: "BRL", amount: Math.round(Number(order.amount) * 100), netAmount: null, createdAt: order.created_at, paidAt, gateway: order.gateway, tracking: order.tracking, items: (order.products || []).map((p) => ({ productId: p.id ? String(p.id) : "", title: p.name, quantity: p.quantity })) };
+  if (!env.VERDEFY_SALES_TOKEN) return { state: "not_configured" };
+  const source = verdefySource(env);
+  if (!source) throw Error("VERDEFY_SALES_SOURCE inv\xE1lido.");
+  if (order.tracking?.manualExternal || !gateways.has(order.gateway)) return { state: "ineligible" };
+  const common = { source, orderId: String(order.id), currency: "BRL", amount: Math.round(Number(order.amount) * 100), netAmount: null, gateway: order.gateway, eventId: "pix_" + order.id, tracking: trackingPayload(order.tracking), items: (order.products || []).map((p) => ({ productId: p.id ? String(p.id) : "", title: p.name, quantity: p.quantity })) };
+  const pixAt = opts.pixAt || order.tracking?._verdefy_pending?.pix_at || order.created_at;
+  let payload;
+  if (kind === "pending") {
+    if (!order.transaction_id || !order.pix_code || order.tracking?.manualPayment || !Number.isFinite(Date.parse(pixAt))) return { state: "ineligible" };
+    payload = { ...common, status: "pending", confirmedByProvider: true, createdAt: pixAt };
+  } else if (kind === "expired") {
+    if (order.status !== "expired" || !order.transaction_id || order.tracking?.manualPayment) return { state: "ineligible" };
+    payload = { ...common, status: "expired", confirmedByProvider: true, createdAt: pixAt };
+  } else if (kind === "refunded") {
+    if (order.status !== "refunded" || !order.transaction_id || order.tracking?.manualPayment) return { state: "ineligible" };
+    const verified = await query(env, order.transaction_id, order.gateway);
+    if (!verified.isRefunded) throw Error("Estorno n\xE3o confirmado pelo gateway.");
+    const paidAt = order.tracking?._payment?.paid_at || order.tracking?._purchase?.paid_at || verified.paidAt || null;
+    const refundedAt = verified.refundedAt || verified.refunded_at || null;
+    payload = { ...common, status: "refunded", confirmedByProvider: true, createdAt: order.created_at, paidAt: Number.isFinite(Date.parse(paidAt)) ? paidAt : null, refundedAt: Number.isFinite(Date.parse(refundedAt)) ? refundedAt : null };
+  } else {
+    if (order.status !== "paid") return { state: "ineligible" };
+    let manual = order.tracking?.manualPayment;
+    if (typeof manual === "string") {
+      try {
+        manual = JSON.parse(manual);
+      } catch {
+        manual = null;
+      }
+    }
+    const adminConfirmed = manual?.source === "admin" && manual?.method === "external" && Number.isFinite(Date.parse(manual.paidAt));
+    if (order.tracking?.manualPayment && !adminConfirmed) return { state: "ineligible" };
+    if (!adminConfirmed && !order.transaction_id) return { state: "ineligible" };
+    const verified = adminConfirmed ? null : await query(env, order.transaction_id, order.gateway);
+    if (!adminConfirmed && (!verified.isPaid || verified.isRefunded)) throw Error("Pagamento n\xE3o confirmado pelo gateway.");
+    const paidAt = adminConfirmed ? manual.paidAt : verified.paidAt || order.tracking?._payment?.paid_at || order.tracking?._purchase?.paid_at;
+    if (!paidAt || !Number.isFinite(Date.parse(paidAt))) throw Error("Data confirmada de pagamento ausente.");
+    payload = { ...common, status: "paid", confirmedByProvider: !adminConfirmed, confirmationSource: adminConfirmed ? "admin" : "provider", createdAt: order.created_at, paidAt };
+  }
   const r = await send("https://verdefy-sales.joazinhisonetinho44.workers.dev/v1/sales", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + env.VERDEFY_SALES_TOKEN }, body: JSON.stringify(payload), signal: AbortSignal.timeout(12e3) });
   if (!r.ok) throw Error("Verdefy HTTP " + r.status);
   const receipt = await r.json();
   if (receipt.ok !== true) throw Error("Recebimento n\xE3o confirmado.");
-  return { state: "sent", sent_at: (/* @__PURE__ */ new Date()).toISOString() };
+  return { state: "sent", sent_at: (/* @__PURE__ */ new Date()).toISOString(), ...kind === "pending" ? { pix_at: pixAt } : {}, ...receipt.state ? { verdefy_state: String(receipt.state).slice(0, 40) } : {}, ...receipt.capi ? { capi: String(receipt.capi).slice(0, 40) } : {} };
 }
-async function deliverVerdefy(env, db2, orderId, mirror = mirrorVerdefy) {
+async function deliverVerdefy(env, db2, orderId, mirror = mirrorVerdefy, kind = "paid", opts = {}) {
   if (!env.VERDEFY_SALES_TOKEN) return { state: "not_configured" };
+  const key = STATE[kind], filter = STATUS_FILTER[kind];
+  if (!key) throw Error("Etapa Verdefy inv\xE1lida.");
+  const missing = kind === "paid" ? "not_paid" : "status_changed";
   for (let attempt = 0; attempt < 3; attempt++) {
-    const order = (await db2(env, "gokoco_orders", `?id=eq.${encodeURIComponent(orderId)}&status=eq.paid&select=*&limit=1`))?.[0];
-    if (!order) return { state: "not_paid" };
-    const prior = order.tracking?._verdefy || {};
+    const order = (await db2(env, "gokoco_orders", `?id=eq.${encodeURIComponent(orderId)}${filter}&select=*&limit=1`))?.[0];
+    if (!order) return { state: missing };
+    const prior = order.tracking?.[key] || {};
     if (prior.state === "sent") return prior;
     if (Date.parse(prior.retry_at) > Date.now() || Date.parse(prior.lease_until) > Date.now()) return { state: "retry_pending" };
-    const pending = { state: "sending", attempts: (Number(prior.attempts) || 0) + 1, lease_until: new Date(Date.now() + 12e4).toISOString() };
-    const tracking = { ...order.tracking, _verdefy: pending };
-    const swap = async (before, after) => db2(env, "gokoco_orders", `?id=eq.${encodeURIComponent(order.id)}&status=eq.paid&tracking=eq.${encodeURIComponent(JSON.stringify(before || {}))}&select=*`, "PATCH", { tracking: after });
+    const pending = { state: "sending", attempts: (Number(prior.attempts) || 0) + 1, lease_until: new Date(Date.now() + 12e4).toISOString(), ...opts.pixAt || prior.pix_at ? { pix_at: opts.pixAt || prior.pix_at } : {} };
+    const tracking = { ...order.tracking, [key]: pending };
+    const swap = async (before, after) => db2(env, "gokoco_orders", `?id=eq.${encodeURIComponent(order.id)}${filter}&tracking=eq.${encodeURIComponent(JSON.stringify(before || {}))}&select=*`, "PATCH", { tracking: after });
     if (!(await swap(order.tracking, tracking))?.[0]) continue;
     let result;
     try {
-      result = await mirror(env, order);
+      result = await mirror(env, order, kind, { pixAt: pending.pix_at });
       if (result.state === "ineligible") result.retry_at = new Date(Date.now() + 864e5).toISOString();
     } catch {
-      result = { state: "failed", retry_at: new Date(Date.now() + Math.min(36e5, 6e4 * 2 ** Math.min(pending.attempts, 6))).toISOString(), error: "Falha na confirma\xE7\xE3o ou envio ao Verdefy." };
+      result = { state: "failed", retry_at: new Date(Date.now() + Math.min(36e5, 6e4 * 2 ** Math.min(pending.attempts, 6))).toISOString(), error: "Falha na confirma\xE7\xE3o ou envio ao Verdefy.", ...pending.pix_at ? { pix_at: pending.pix_at } : {} };
     }
     for (let save = 0; save < 3; save++) {
-      const latest = (await db2(env, "gokoco_orders", `?id=eq.${encodeURIComponent(order.id)}&status=eq.paid&select=*&limit=1`))?.[0];
-      if (!latest) return { state: "not_paid" };
-      if (latest.tracking?._verdefy?.lease_until !== pending.lease_until) return { state: "busy" };
-      if ((await swap(latest.tracking, { ...latest.tracking, _verdefy: { ...result, attempts: pending.attempts } }))?.[0]) return result;
+      const latest = (await db2(env, "gokoco_orders", `?id=eq.${encodeURIComponent(order.id)}${filter}&select=*&limit=1`))?.[0];
+      if (!latest) return { state: missing };
+      if (latest.tracking?.[key]?.lease_until !== pending.lease_until) return { state: "busy" };
+      if ((await swap(latest.tracking, { ...latest.tracking, [key]: { ...result, attempts: pending.attempts } }))?.[0]) return result;
     }
     return { state: "busy" };
   }
@@ -1183,11 +1225,25 @@ async function deliverVerdefy(env, db2, orderId, mirror = mirrorVerdefy) {
 }
 async function retryVerdefy(env, db2) {
   if (!env.VERDEFY_SALES_TOKEN) return { configured: false, processed: 0 };
-  const since = new Date(Date.now() - 7 * 864e5).toISOString();
-  const now = (/* @__PURE__ */ new Date()).toISOString();
-  const rows = await db2(env, "gokoco_orders", `?status=eq.paid&gateway=neq.manual_tracking&and=(or(tracking->_verdefy->>state.is.null,tracking->_verdefy->>state.in.(failed,sending,ineligible)),or(tracking->_verdefy->>retry_at.is.null,tracking->_verdefy->>retry_at.lte.${encodeURIComponent(now)}))&select=id&order=updated_at.asc&limit=3`);
-  const results = await Promise.allSettled(rows.map((o) => deliverVerdefy(env, db2, o.id)));
-  return { configured: true, processed: rows.length, sent: results.filter((r) => r.status === "fulfilled" && r.value.state === "sent").length };
+  const now = encodeURIComponent((/* @__PURE__ */ new Date()).toISOString());
+  const due = (key, states) => `and=(or(tracking->${key}->>state.is.null,tracking->${key}->>state.in.(${states})),or(tracking->${key}->>retry_at.is.null,tracking->${key}->>retry_at.lte.${now}))`;
+  const pix = [...gateways].join(",");
+  const batches = [
+    ["paid", `?status=eq.paid&gateway=neq.manual_tracking&${due("_verdefy", "failed,sending,ineligible")}&select=id&order=updated_at.asc&limit=3`],
+    // Pix gerados recentes: a loja informa no momento da geracao; a fila cobre falhas. Historico antigo nao e reconstruido.
+    ["pending", `?transaction_id=not.is.null&pix_code=not.is.null&gateway=in.(${pix})&created_at=gte.${encodeURIComponent(new Date(Date.now() - PENDING_WINDOW_MS).toISOString())}&${due("_verdefy_pending", "failed,sending")}&select=id&order=created_at.asc&limit=3`],
+    ["expired", `?status=eq.expired&tracking->_verdefy_pending->>state=eq.sent&${due("_verdefy_expired", "failed,sending")}&select=id&order=updated_at.asc&limit=2`],
+    ["refunded", `?status=eq.refunded&gateway=in.(${pix})&${due("_verdefy_refund", "failed,sending")}&select=id&order=updated_at.asc&limit=1`]
+  ];
+  const summary = { configured: true, processed: 0, sent: 0 };
+  for (const [kind, query] of batches) {
+    const rows = await db2(env, "gokoco_orders", query).catch(() => []);
+    const results = await Promise.allSettled(rows.map((o) => deliverVerdefy(env, db2, o.id, mirrorVerdefy, kind)));
+    summary.processed += rows.length;
+    summary.sent += results.filter((r) => r.status === "fulfilled" && r.value.state === "sent").length;
+    summary[kind] = rows.length;
+  }
+  return summary;
 }
 
 // worker-src/admin-login.js
@@ -2223,13 +2279,13 @@ async function supabaseRequest(env, path, options = {}) {
   if (!response.ok) throw new Error(`Supabase respondeu ${response.status}: ${await response.text()}`);
   return response;
 }
-var TRACKING_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "src", "sck", "gclid", "fbclid", "ttclid", "fbc", "fbp"];
+var TRACKING_KEYS2 = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "src", "sck", "gclid", "fbclid", "ttclid", "fbc", "fbp"];
 function trackingValues(tracking) {
   const source = tracking && typeof tracking === "object" ? tracking : {};
-  return Object.fromEntries(TRACKING_KEYS.map((key) => [key, source[key] || null]));
+  return Object.fromEntries(TRACKING_KEYS2.map((key) => [key, source[key] || null]));
 }
 function hasAttribution(tracking) {
-  return TRACKING_KEYS.some((key) => Boolean(tracking?.[key]));
+  return TRACKING_KEYS2.some((key) => Boolean(tracking?.[key]));
 }
 async function previousCustomerTracking(env, body) {
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1e3).toISOString();
@@ -5098,17 +5154,23 @@ async function createPix(request2, env, ctx, siteVariant = "gokoco") {
     return json3({ message: providerMessage }, result.status || 502);
   }
   const qr = payment.qrCodeBase64 || payment.qrCodeImage || null;
+  const pixAt = (/* @__PURE__ */ new Date()).toISOString();
   await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(id)}`, "PATCH", {
     status: "pending",
     transaction_id: String(payment.transactionId),
     pix_code: payment.pixCode,
     qr_code: qr,
-    updated_at: (/* @__PURE__ */ new Date()).toISOString()
+    updated_at: pixAt
   });
   if (purchaseDestination(env) === "utmify") {
     const send = deliverPendingPurchase(env, db, id).catch((error) => console.error("[purchase/pending]", id, error?.message || error));
     if (ctx?.waitUntil) ctx.waitUntil(send);
     else await send;
+  }
+  if (env.VERDEFY_SALES_TOKEN) {
+    const mirror = deliverVerdefy(env, db, id, void 0, "pending", { pixAt }).catch(() => console.error("[verdefy] Pix sync pending."));
+    if (ctx?.waitUntil) ctx.waitUntil(mirror);
+    else await mirror;
   }
   if (env.PIX_RATELIMIT) {
     const count = Number(await env.PIX_RATELIMIT.get(ipKey) || 0);
