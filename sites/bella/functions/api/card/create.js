@@ -38,10 +38,19 @@ export async function onRequest(context) {
 
   const gateways = await listGateways(env);
   const venuspay = gateways.find((g) => g.id === "venuspay");
-  if (venuspay && !venuspay.enabled) {
+  const useMasterfy = gateways.find((g) => g.id === "masterfy_card")?.enabled === true;
+
+  if (!useMasterfy && venuspay && !venuspay.enabled) {
     return new Response(
       JSON.stringify({ error: "Pagamento por cartão temporariamente indisponível." }),
       { status: 503, headers: corsHeaders }
+    );
+  }
+
+  if (useMasterfy && !env.MASTERFY_API_KEY) {
+    return new Response(
+      JSON.stringify({ error: "Gateway de pagamento não configurado." }),
+      { status: 500, headers: corsHeaders }
     );
   }
 
@@ -49,7 +58,7 @@ export async function onRequest(context) {
   const secretKey = env.VENUS_PAY_SECRET_KEY;
   const productId = env.VENUS_PAY_PRODUCT_ID || null;
 
-  if (!secretKey) {
+  if (!useMasterfy && !secretKey) {
     return new Response(
       JSON.stringify({ error: "Gateway de pagamento não configurado." }),
       { status: 500, headers: corsHeaders }
@@ -80,7 +89,7 @@ export async function onRequest(context) {
     orderId,
   } = body;
 
-  if (!name || !card?.number || !orderId) {
+  if (!name || !orderId || (useMasterfy ? !body.cardToken : !card?.number)) {
     return new Response(
       JSON.stringify({ error: "Campos obrigatórios: amount, name, card e orderId." }),
       { status: 400, headers: corsHeaders }
@@ -105,6 +114,11 @@ export async function onRequest(context) {
   }
   if (!order || order.metodo_pagamento !== "card" || order.status !== "checkout_iniciado") {
     return new Response(JSON.stringify({ error: "Pedido inválido ou já processado." }), { status: 409, headers: corsHeaders });
+  }
+
+  if (useMasterfy) {
+    const clientIp = request.headers.get("cf-connecting-ip") || "";
+    return processCardMasterfy(env, corsHeaders, order, body, { cpfFinal, phoneFinal, numParcelas, clientIp });
   }
 
   // ── Validade do cartão ───────────────────────────────────────────────────────
@@ -320,5 +334,89 @@ export async function onRequest(context) {
       JSON.stringify({ status: "error", error: "Erro de comunicação com o gateway." }),
       { status: 200, headers: corsHeaders }
     );
+  }
+}
+
+
+// -- MasterFy Cartao -----------------------------------------------------------
+// Recebe o cardToken gerado no frontend pelo script oficial MasterFy.
+// POST https://api.masterfypagamentos.com/v1/payment (method=CREDIT_CARD).
+async function processCardMasterfy(env, corsHeaders, order, body, { cpfFinal, phoneFinal, numParcelas, clientIp }) {
+  const gw = 'masterfy_card';
+  const amountDecimal = cardAmount(order.valor, numParcelas);
+  const amountInCents = Math.round(amountDecimal * 100);
+  const hasAddress = body.address && body.address.street && body.address.city;
+  const siteUrl = (env.BELLA_SITE_URL || env.SITE_URL || '').trim();
+
+  const payload = {
+    amount: amountInCents,
+    currency: 'BRL',
+    method: 'CREDIT_CARD',
+    description: String(order.produtos || body.productName || 'Pedido').slice(0, 255),
+    externalRef: order.id || body.orderId || undefined,
+    ...(siteUrl ? { notificationUrl: siteUrl.replace(/\/$/, '') + '/api/pix/webhook' } : {}),
+    ...(clientIp ? { ip: clientIp.slice(0, 45) } : {}),
+    payer: {
+      name: String(body.name),
+      taxId: cpfFinal,
+      email: body.email ? String(body.email) : 'cliente@email.com',
+      phone: phoneFinal || '11999999999',
+    },
+    card: { token: String(body.cardToken), installments: numParcelas, chargeInterest: false },
+    items: [{ name: String(order.produtos || 'Pedido').slice(0, 256), quantity: 1, price: amountInCents, type: hasAddress ? 'PHYSICAL' : 'DIGITAL' }],
+    ...(hasAddress ? { delivery: { fee: 0, address: {
+      street: String(body.address.street), number: String(body.address.number || 'S/N'),
+      complement: String(body.address.complement || ''), district: String(body.address.neighborhood || ''),
+      city: String(body.address.city), state: String(body.address.state || '').toUpperCase().slice(0, 2),
+      zipCode: String(body.address.zipCode || '').replace(/\D/g, ''), country: 'BR',
+    } } } : {}),
+  };
+
+  try {
+    const res = await fetch('https://api.masterfypagamentos.com/v1/payment', {
+      method: 'POST',
+      signal: AbortSignal.timeout(20000),
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + env.MASTERFY_API_KEY },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => null);
+
+    if (!res.ok || !data) {
+      console.error('[masterfy_card]', res.status, JSON.stringify(data).slice(0, 500));
+      await updateLeadById(env, body.orderId, { status: 'cartao_recusado', gateway: gw, card_erro: 'Erro ao processar cartao no gateway.' });
+      return new Response(JSON.stringify({ status: 'error', error: 'Erro ao processar cartao. Tente novamente.' }), { status: 200, headers: corsHeaders });
+    }
+
+    const transactionId = data.id || null;
+    const rawStatus = String(data.status || '').toUpperCase();
+    const isPaid = rawStatus === 'PAID';
+    const isRefused = ['REFUSED', 'CHARGEDBACK', 'MED', 'REFUNDED'].includes(rawStatus);
+
+    console.log(JSON.stringify({ event: 'MASTERFY_CARD_RESPONSE', httpStatus: res.status, transactionId, rawStatus, amount: amountDecimal, installments: numParcelas }));
+
+    if (!transactionId) {
+      await updateLeadById(env, body.orderId, { status: 'cartao_recusado', gateway: gw, card_erro: 'Resposta invalida do gateway.' });
+      return new Response(JSON.stringify({ status: 'error', error: 'Erro ao processar cartao. Tente novamente.' }), { status: 200, headers: corsHeaders });
+    }
+
+    if (isRefused) {
+      await updateLeadById(env, body.orderId, { status: 'cartao_recusado', gateway: gw, transaction_id: transactionId, card_erro: 'Cartao recusado (' + rawStatus + ').' });
+      return new Response(JSON.stringify({ status: 'declined', transactionId, error: 'Pagamento recusado pelo emissor.' }), { status: 200, headers: corsHeaders });
+    }
+
+    if (isPaid) {
+      try {
+        const linked = await updateLeadById(env, body.orderId, { status: 'cartao_processando', gateway: gw, transaction_id: transactionId, cpf: cpfFinal, valor: amountDecimal });
+        if (linked) await fulfillPaidLead(env, transactionId, new Date().toISOString(), 'credit_card');
+      } catch (e) { console.error('[masterfy_card] fulfillment:', e?.message); }
+      return new Response(JSON.stringify({ transactionId, status: 'approved', rawStatus: rawStatus.toLowerCase(), amount: amountDecimal, installments: numParcelas }), { status: 200, headers: corsHeaders });
+    }
+
+    await updateLeadById(env, body.orderId, { status: 'cartao_processando', gateway: gw, transaction_id: transactionId, cpf: cpfFinal, valor: amountDecimal });
+    return new Response(JSON.stringify({ transactionId, status: 'pending', rawStatus: rawStatus.toLowerCase(), amount: amountDecimal, installments: numParcelas }), { status: 200, headers: corsHeaders });
+  } catch (err) {
+    console.error('[masterfy_card]', err?.message || err);
+    await updateLeadById(env, body.orderId, { status: 'cartao_recusado', gateway: gw, card_erro: 'Erro de comunicacao com o gateway.' }).catch(() => {});
+    return new Response(JSON.stringify({ status: 'error', error: 'Erro de comunicacao com o gateway.' }), { status: 200, headers: corsHeaders });
   }
 }

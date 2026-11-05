@@ -7,6 +7,7 @@ const DEFAULT_GATEWAYS = [
   { id: "masterfy", name: "MasterFy", method: "pix", enabled: false },
   { id: "umbrellapag", name: "UmbrellaPag", method: "pix", enabled: false },
   { id: "venuspay", name: "Venus Pay", method: "card", enabled: true },
+  { id: "masterfy_card", name: "MasterFy Cartão", method: "card", enabled: false },
   { id: "venuspay_pix", name: "Venus Pay", method: "pix", enabled: false },
   { id: "flevopay", name: "FlevoPay", method: "pix", enabled: false },
 ];
@@ -48,6 +49,9 @@ export function gatewayConfigured(env, id) {
   // Cartão e PIX da Venus Pay usam a mesma credencial
   if (id === "venuspay" || id === "venuspay_pix") {
     return !!String(env.VENUS_PAY_SECRET_KEY || "").trim();
+  }
+  if (id === "masterfy_card") {
+    return !!(String(env.MASTERFY_API_KEY || "").trim() && String(env.MASTERFY_TOKENIZATION_KEY || "").trim());
   }
   return false;
 }

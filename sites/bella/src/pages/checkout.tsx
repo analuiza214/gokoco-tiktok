@@ -1,5 +1,29 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
+// Tokenização MasterFy — o script é ES module; carregamos sob demanda no card flow.
+declare global { interface Window { MasterFy?: any } }
+let masterfyTokenizing: Promise<any> | null = null;
+function loadMasterfyTokenizer(key: string): Promise<any> {
+  if (!masterfyTokenizing) {
+    masterfyTokenizing = (async () => {
+      if (!window.MasterFy) {
+        await new Promise<void>((resolve, reject) => {
+          const s = document.createElement("script");
+          s.type = "module";
+          s.src = "https://api.masterfypagamentos.com/v1/scripts";
+          s.onload = () => resolve();
+          s.onerror = () => reject(new Error("Falha ao carregar tokenizador."));
+          document.head.appendChild(s);
+        });
+      }
+      const tk = window.MasterFy;
+      if (!tk) throw new Error("Tokenizador indisponível.");
+      await tk.init(key);
+      return tk;
+    })();
+  }
+  return masterfyTokenizing;
+}
 import { useCart } from "@/hooks/use-cart";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -428,6 +452,24 @@ export default function Checkout() {
         const [mm, yy] = card.validade.split("/");
         const cardDigits = card.numero.replace(/\s/g, "");
 
+        // Gateway de cartão ativo (Venus Pay usa dados crus; MasterFy usa token)
+        let cardToken: string | undefined;
+        try {
+          const cfg = await (await fetch(import.meta.env.BASE_URL + "api/card/config")).json();
+          if (cfg.gateway === "masterfy_card" && cfg.tokenizationKey) {
+            const tk = await loadMasterfyTokenizer(cfg.tokenizationKey);
+            cardToken = await tk.encrypt({
+              number: cardDigits,
+              holder: card.nome,
+              expMonth: String(mm).padStart(2, "0"),
+              expYear: `20${yy}`,
+              cvv: card.cvv,
+            });
+          }
+        } catch (e: any) {
+          throw new Error(e?.message === "Falha ao carregar tokenizador." || e?.name === "PaymentError" ? "Cartão inválido. Confira os dados e tente novamente." : "Não foi possível validar o cartão. Tente novamente.");
+        }
+
         // Total a cobrar no cartão: com juros a partir de 6x (o mesmo que o cliente viu na tela)
         const cardTotal = Number(parcelaInfo(parcelas, total).totalComJuros.toFixed(2));
 
@@ -438,14 +480,17 @@ export default function Checkout() {
             ...checkoutData,
             orderId,
             amount: cardTotal,
-            card: {
-              number: cardDigits,
-              holderName: card.nome,
-              expiryMonth: mm,
-              expiryYear: `20${yy}`,
-              cvv: card.cvv,
-              cpf: card.cpf.replace(/\D/g, ""),
-            },
+            card: cardToken
+              ? { cpf: card.cpf.replace(/\D/g, "") }
+              : {
+                  number: cardDigits,
+                  holderName: card.nome,
+                  expiryMonth: mm,
+                  expiryYear: `20${yy}`,
+                  cvv: card.cvv,
+                  cpf: card.cpf.replace(/\D/g, ""),
+                },
+            ...(cardToken ? { cardToken } : {}),
             installments: parcelas,
             tracking: effectiveTracking,
             ga_client_id: getGaClientId(),

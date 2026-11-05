@@ -21,6 +21,7 @@ import { onRequest as bellaPixStatus } from '../sites/bella/functions/api/pix/st
 import { onRequest as bellaPixWebhook } from '../sites/bella/functions/api/pix/webhook.js';
 import { onRequest as bellaCardCreate } from '../sites/bella/functions/api/card/create.js';
 import { onRequest as bellaCardStatus } from '../sites/bella/functions/api/card/status.js';
+import { onRequest as bellaCardConfig } from '../sites/bella/functions/api/card/config.js';
 import { onRequest as bellaTracking } from '../sites/bella/functions/api/tracking.js';
 import { onRequest as bellaMarketingConfig } from '../sites/bella/functions/api/marketing-config.js';
 import { onRequest as bellaCheckoutHealth } from '../sites/bella/functions/api/checkout-health.js';
@@ -43,6 +44,7 @@ const gateways = [
   { id: 'invictuspay', name: 'InvictusPay', method: 'pix' },
   { id: 'flevopay', name: 'FlevoPay', method: 'pix' },
   { id: 'venuspay', name: 'Venus Pay Cartão', method: 'card' },
+  { id: 'masterfy_card', name: 'MasterFy Cartão', method: 'card' },
 ];
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
 const digits = (value) => String(value || '').replace(/\D/g, '');
@@ -112,6 +114,7 @@ function configured(env, id) {
   if (id === 'masterfy') return !!env.MASTERFY_API_KEY;
   if (id === 'umbrellapag') return !!env.UMBRELLAPAG_API_KEY;
   if (id === 'venuspay_pix' || id === 'venuspay') return !!env.VENUS_PAY_SECRET_KEY;
+  if (id === 'masterfy_card') return !!(env.MASTERFY_API_KEY && env.MASTERFY_TOKENIZATION_KEY);
   if (id === 'unipay') return !!(env.UNIPAY_PUBLIC_KEY?.trim() && env.UNIPAY_SECRET_KEY?.trim());
   if (id === 'invictuspay') return !!String(env.INVICTUSPAY_API_KEY || '').trim();
   if (id === 'flevopay') return !!env.FLEVOPAY_API_KEY;
@@ -353,6 +356,7 @@ const bellaRoutes = {
   '/api/pix/webhook': bellaPixWebhook,
   '/api/card/create': bellaCardCreate,
   '/api/card/status': bellaCardStatus,
+  '/api/card/config': bellaCardConfig,
   '/api/tracking': bellaTracking,
   '/api/marketing-config': bellaMarketingConfig,
   '/api/checkout-health': bellaCheckoutHealth,
@@ -778,7 +782,8 @@ async function adminGateways(request, env) {
   if (!gateways.some((g) => g.id === id) || typeof enabled !== 'boolean') return json({ error: 'Gateway inválido.' }, 400);
   if (enabled && !configured(env, id)) return json({ error: 'Configure a chave deste gateway no Cloudflare antes de ativá-lo.' }, 400);
   // Só um gateway PIX fica ativo por vez; o gateway de cartão é independente.
-  if (enabled && gateways.find((g) => g.id === id)?.method === 'pix') await db(env, 'gokoco_gateways', '?enabled=eq.true&id=neq.venuspay', 'PATCH', { enabled: false, updated_at: new Date().toISOString() });
+  const gwMethod = gateways.find((g) => g.id === id)?.method;
+  if (enabled && gwMethod) await db(env, 'gokoco_gateways', `?enabled=eq.true&id=neq.${id}`, 'PATCH', { enabled: false, updated_at: new Date().toISOString() });
   await db(env, 'gokoco_gateways', '?on_conflict=id', 'POST', { id, enabled, updated_at: new Date().toISOString() });
   return json({ gateways: await listGateways(env) });
 }

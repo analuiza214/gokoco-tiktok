@@ -1,4 +1,4 @@
-// site-source/worker-src/meta-readiness.js
+// worker-src/meta-readiness.js
 async function metaReadiness(env, send = fetch) {
   const pixel = String(env.FB_PIXEL_ID || "1542362403143695").trim(), token = String(env.FB_ACCESS_TOKEN || "").trim();
   if (!token) return { configured: false, readAccess: false, reason: "missing_token" };
@@ -21,7 +21,7 @@ async function metaReadiness(env, send = fetch) {
   }
 }
 
-// site-source/worker-src/providers/unipay.js
+// worker-src/providers/unipay.js
 var BASE = "https://api-dash.unipaybr.com/v1";
 var reply = (value, status, headers6) => new Response(JSON.stringify(value), { status, headers: headers6 });
 var digits = (value) => String(value || "").replace(/\D/g, "");
@@ -105,7 +105,7 @@ async function statusPixUnipay({ env }, headers6, transactionId) {
   }, 200, headers6);
 }
 
-// site-source/worker-src/providers/invictuspay.js
+// worker-src/providers/invictuspay.js
 var BASE2 = "https://api.invictuspayv2.com.br/api/v1";
 var reply2 = (value, status, headers6) => new Response(JSON.stringify(value), { status, headers: headers6 });
 var digits2 = (value) => String(value || "").replace(/\D/g, "");
@@ -213,7 +213,7 @@ async function statusPixInvictuspay({ env }, headers6, transactionId) {
   }, 200, headers6);
 }
 
-// site-source/worker-src/providers/ironpay.js
+// worker-src/providers/ironpay.js
 function gerarCpfAleatorio2() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
@@ -223,17 +223,17 @@ function gerarCpfAleatorio2() {
   d.push(sum * 10 % 11 % 10);
   return d.join("");
 }
-async function createPixIronpay(context, corsHeaders11, body) {
+async function createPixIronpay(context, corsHeaders12, body) {
   const { env } = context;
   const apiToken = env.IRONPAY_API_TOKEN;
   const offerHash = env.IRONPAY_OFFER_HASH;
   const productHash = env.IRONPAY_PRODUCT_HASH;
   if (!apiToken || !offerHash || !productHash) {
-    return new Response(JSON.stringify({ error: "Gateway de pagamento nao configurado." }), { status: 500, headers: corsHeaders11 });
+    return new Response(JSON.stringify({ error: "Gateway de pagamento nao configurado." }), { status: 500, headers: corsHeaders12 });
   }
   const { amount, name, document, productName, email, phone, address } = body;
   if (!amount || !name) {
-    return new Response(JSON.stringify({ error: "Campos obrigatorios: amount, name." }), { status: 400, headers: corsHeaders11 });
+    return new Response(JSON.stringify({ error: "Campos obrigatorios: amount, name." }), { status: 400, headers: corsHeaders12 });
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
   const payerDocument = [11, 14].includes(cpfDigits.length) ? cpfDigits : gerarCpfAleatorio2();
@@ -283,18 +283,18 @@ async function createPixIronpay(context, corsHeaders11, body) {
     );
     const data = await res.json();
     if (!res.ok) {
-      return new Response(JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: data }), { status: 502, headers: corsHeaders11 });
+      return new Response(JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: data }), { status: 502, headers: corsHeaders12 });
     }
     const transactionId = data.hash || data.transaction_hash;
     if (!transactionId) {
-      return new Response(JSON.stringify({ error: "Resposta invalida do gateway: hash ausente.", rawResponse: data }), { status: 502, headers: corsHeaders11 });
+      return new Response(JSON.stringify({ error: "Resposta invalida do gateway: hash ausente.", rawResponse: data }), { status: 502, headers: corsHeaders12 });
     }
     const pix = data.pix || {};
     const pixCode = pix.pix_qr_code || pix.qr_code || pix.code || pix.copy_paste || null;
     const qrCodeBase64 = pix.qr_code_base64 || pix.base64 || null;
     const qrCodeImage = pixCode ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}` : pix.pix_url || null;
     if (!pixCode) {
-      return new Response(JSON.stringify({ error: "QR Code PIX nao gerado.", rawResponse: data }), { status: 502, headers: corsHeaders11 });
+      return new Response(JSON.stringify({ error: "QR Code PIX nao gerado.", rawResponse: data }), { status: 502, headers: corsHeaders12 });
     }
     return new Response(
       JSON.stringify({
@@ -305,17 +305,17 @@ async function createPixIronpay(context, corsHeaders11, body) {
         qrCodeBase64: qrCodeBase64 || null,
         qrCodeImage: qrCodeImage || null
       }),
-      { status: 200, headers: corsHeaders11 }
+      { status: 200, headers: corsHeaders12 }
     );
   } catch {
-    return new Response(JSON.stringify({ error: "Erro de comunicacao com o gateway." }), { status: 502, headers: corsHeaders11 });
+    return new Response(JSON.stringify({ error: "Erro de comunicacao com o gateway." }), { status: 502, headers: corsHeaders12 });
   }
 }
-async function statusPixIronpay(context, corsHeaders11, transactionId) {
+async function statusPixIronpay(context, corsHeaders12, transactionId) {
   const { env } = context;
   const apiToken = env.IRONPAY_API_TOKEN;
   if (!apiToken) {
-    return new Response(JSON.stringify({ error: "Gateway nao configurado" }), { status: 500, headers: corsHeaders11 });
+    return new Response(JSON.stringify({ error: "Gateway nao configurado" }), { status: 500, headers: corsHeaders12 });
   }
   try {
     const res = await fetch(
@@ -324,7 +324,7 @@ async function statusPixIronpay(context, corsHeaders11, transactionId) {
     );
     const data = await res.json();
     if (!res.ok) {
-      return new Response(JSON.stringify({ error: "Erro ao consultar gateway.", upstreamStatus: res.status }), { status: 502, headers: corsHeaders11 });
+      return new Response(JSON.stringify({ error: "Erro ao consultar gateway.", upstreamStatus: res.status }), { status: 502, headers: corsHeaders12 });
     }
     const rawStatus = (data.payment_status || data.status || "").toUpperCase();
     const isPaid = rawStatus === "PAID";
@@ -338,14 +338,14 @@ async function statusPixIronpay(context, corsHeaders11, transactionId) {
         isExpired,
         payedAt: data.paid_at || null
       }),
-      { status: 200, headers: corsHeaders11 }
+      { status: 200, headers: corsHeaders12 }
     );
   } catch {
-    return new Response(JSON.stringify({ error: "Erro ao consultar status do pagamento." }), { status: 502, headers: corsHeaders11 });
+    return new Response(JSON.stringify({ error: "Erro ao consultar status do pagamento." }), { status: 502, headers: corsHeaders12 });
   }
 }
 
-// site-source/worker-src/providers/masterfy.js
+// worker-src/providers/masterfy.js
 function gerarCpfAleatorio3() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
@@ -355,20 +355,20 @@ function gerarCpfAleatorio3() {
   d.push(s2 * 10 % 11 % 10);
   return d.join("");
 }
-async function createPixMasterfy(context, corsHeaders11, body) {
+async function createPixMasterfy(context, corsHeaders12, body) {
   const { env } = context;
   const apiKey = env.MASTERFY_API_KEY;
   if (!apiKey) {
     return new Response(
       JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado. Configure MASTERFY_API_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders11 }
+      { status: 500, headers: corsHeaders12 }
     );
   }
   const { amount, name, email, phone, productName, address, document } = body;
   if (!amount || !name) {
     return new Response(
       JSON.stringify({ error: "Campos obrigat\xF3rios: amount, name." }),
-      { status: 400, headers: corsHeaders11 }
+      { status: 400, headers: corsHeaders12 }
     );
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
@@ -425,21 +425,21 @@ async function createPixMasterfy(context, corsHeaders11, body) {
     if (!res.ok) {
       return new Response(
         JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: data }),
-        { status: 502, headers: corsHeaders11 }
+        { status: 502, headers: corsHeaders12 }
       );
     }
     const transactionId = data.id;
     if (!transactionId) {
       return new Response(
         JSON.stringify({ error: "Resposta inv\xE1lida do gateway: id ausente.", rawResponse: data }),
-        { status: 502, headers: corsHeaders11 }
+        { status: 502, headers: corsHeaders12 }
       );
     }
     const pixCode = data.data && data.data.copypaste || null;
     if (!pixCode) {
       return new Response(
         JSON.stringify({ error: "QR Code PIX n\xE3o gerado.", rawResponse: data }),
-        { status: 502, headers: corsHeaders11 }
+        { status: 502, headers: corsHeaders12 }
       );
     }
     const qrCodeImage = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`;
@@ -452,22 +452,22 @@ async function createPixMasterfy(context, corsHeaders11, body) {
         qrCodeBase64: null,
         qrCodeImage
       }),
-      { status: 200, headers: corsHeaders11 }
+      { status: 200, headers: corsHeaders12 }
     );
   } catch {
     return new Response(
       JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway." }),
-      { status: 502, headers: corsHeaders11 }
+      { status: 502, headers: corsHeaders12 }
     );
   }
 }
-async function statusPixMasterfy(context, corsHeaders11, transactionId) {
+async function statusPixMasterfy(context, corsHeaders12, transactionId) {
   const { env } = context;
   const apiKey = env.MASTERFY_API_KEY;
   if (!apiKey) {
     return new Response(
       JSON.stringify({ error: "Gateway n\xE3o configurado. Configure MASTERFY_API_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders11 }
+      { status: 500, headers: corsHeaders12 }
     );
   }
   try {
@@ -486,7 +486,7 @@ async function statusPixMasterfy(context, corsHeaders11, transactionId) {
     if (!res.ok) {
       return new Response(
         JSON.stringify({ error: "Erro ao consultar gateway.", upstreamStatus: res.status }),
-        { status: 502, headers: corsHeaders11 }
+        { status: 502, headers: corsHeaders12 }
       );
     }
     const rawStatus = (data.status || "").toUpperCase();
@@ -501,17 +501,17 @@ async function statusPixMasterfy(context, corsHeaders11, transactionId) {
         isExpired,
         payedAt: data.paidAt || null
       }),
-      { status: 200, headers: corsHeaders11 }
+      { status: 200, headers: corsHeaders12 }
     );
   } catch {
     return new Response(
       JSON.stringify({ error: "Erro ao consultar status do pagamento." }),
-      { status: 502, headers: corsHeaders11 }
+      { status: 502, headers: corsHeaders12 }
     );
   }
 }
 
-// site-source/worker-src/providers/umbrellapag.js
+// worker-src/providers/umbrellapag.js
 var API_BASE = "https://api-gateway.umbrellapag.com/api";
 function apiHeaders(apiKey) {
   return {
@@ -557,20 +557,20 @@ function extractPixCode(data) {
   }
   return null;
 }
-async function createPixUmbrellapag(context, corsHeaders11, body) {
+async function createPixUmbrellapag(context, corsHeaders12, body) {
   const { request: request2, env } = context;
   const apiKey = env.UMBRELLAPAG_API_KEY;
   if (!apiKey) {
     return new Response(
       JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado. Configure UMBRELLAPAG_API_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders11 }
+      { status: 500, headers: corsHeaders12 }
     );
   }
   const { amount, name, email, phone, productName, address, document } = body;
   if (!amount || !name) {
     return new Response(
       JSON.stringify({ error: "Campos obrigat\xF3rios: amount, name." }),
-      { status: 400, headers: corsHeaders11 }
+      { status: 400, headers: corsHeaders12 }
     );
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
@@ -628,21 +628,21 @@ async function createPixUmbrellapag(context, corsHeaders11, body) {
     if (!res.ok) {
       return new Response(
         JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: json4 }),
-        { status: 502, headers: corsHeaders11 }
+        { status: 502, headers: corsHeaders12 }
       );
     }
     const transactionId = data.id;
     if (!transactionId) {
       return new Response(
         JSON.stringify({ error: "Resposta inv\xE1lida do gateway: id ausente.", rawResponse: json4 }),
-        { status: 502, headers: corsHeaders11 }
+        { status: 502, headers: corsHeaders12 }
       );
     }
     const pixCode = extractPixCode(data);
     if (!pixCode) {
       return new Response(
         JSON.stringify({ error: "QR Code PIX n\xE3o gerado.", rawResponse: json4 }),
-        { status: 502, headers: corsHeaders11 }
+        { status: 502, headers: corsHeaders12 }
       );
     }
     const qrCodeImage = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`;
@@ -655,22 +655,22 @@ async function createPixUmbrellapag(context, corsHeaders11, body) {
         qrCodeBase64: null,
         qrCodeImage
       }),
-      { status: 200, headers: corsHeaders11 }
+      { status: 200, headers: corsHeaders12 }
     );
   } catch {
     return new Response(
       JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway." }),
-      { status: 502, headers: corsHeaders11 }
+      { status: 502, headers: corsHeaders12 }
     );
   }
 }
-async function statusPixUmbrellapag(context, corsHeaders11, transactionId) {
+async function statusPixUmbrellapag(context, corsHeaders12, transactionId) {
   const { env } = context;
   const apiKey = env.UMBRELLAPAG_API_KEY;
   if (!apiKey) {
     return new Response(
       JSON.stringify({ error: "Gateway n\xE3o configurado. Configure UMBRELLAPAG_API_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders11 }
+      { status: 500, headers: corsHeaders12 }
     );
   }
   try {
@@ -687,7 +687,7 @@ async function statusPixUmbrellapag(context, corsHeaders11, transactionId) {
     if (!res.ok) {
       return new Response(
         JSON.stringify({ error: "Erro ao consultar gateway.", details: json4 }),
-        { status: 502, headers: corsHeaders11 }
+        { status: 502, headers: corsHeaders12 }
       );
     }
     const rawStatus = String(data.status || "").toUpperCase();
@@ -702,17 +702,17 @@ async function statusPixUmbrellapag(context, corsHeaders11, transactionId) {
         isExpired,
         payedAt: data.paidAt || null
       }),
-      { status: 200, headers: corsHeaders11 }
+      { status: 200, headers: corsHeaders12 }
     );
   } catch {
     return new Response(
       JSON.stringify({ error: "Erro ao consultar status do pagamento." }),
-      { status: 502, headers: corsHeaders11 }
+      { status: 502, headers: corsHeaders12 }
     );
   }
 }
 
-// site-source/worker-src/providers/venuspay.js
+// worker-src/providers/venuspay.js
 var CREATE_URL = "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/process-payment";
 var STATUS_URL = "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/check-payment-status";
 var MIN_AMOUNT = 5;
@@ -749,27 +749,27 @@ function extractQrImage(data) {
   }
   return null;
 }
-async function createPixVenuspay(context, corsHeaders11, body) {
+async function createPixVenuspay(context, corsHeaders12, body) {
   const { env } = context;
   const secretKey = env.VENUS_PAY_SECRET_KEY;
   if (!secretKey) {
     return new Response(
       JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado. Configure VENUS_PAY_SECRET_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders11 }
+      { status: 500, headers: corsHeaders12 }
     );
   }
   const { amount, name, email, phone, productName, address, document } = body;
   if (!amount || !name) {
     return new Response(
       JSON.stringify({ error: "Campos obrigat\xF3rios: amount, name." }),
-      { status: 400, headers: corsHeaders11 }
+      { status: 400, headers: corsHeaders12 }
     );
   }
   const amountDecimal = Number(Number(amount).toFixed(2));
   if (amountDecimal < MIN_AMOUNT || amountDecimal > MAX_AMOUNT) {
     return new Response(
       JSON.stringify({ error: `A VenusPay aceita PIX de R$ ${MIN_AMOUNT},00 at\xE9 R$ ${MAX_AMOUNT.toLocaleString("pt-BR")},00.` }),
-      { status: 400, headers: corsHeaders11 }
+      { status: 400, headers: corsHeaders12 }
     );
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
@@ -826,21 +826,21 @@ async function createPixVenuspay(context, corsHeaders11, body) {
           error: Array.isArray(data.error?.message) ? data.error.message.join(", ") : typeof data.error === "string" ? data.error : Array.isArray(data.message) ? data.message.join(", ") : typeof data.message === "string" ? data.message : "Erro ao gerar PIX. Confira seus dados e tente novamente.",
           details: data
         }),
-        { status: 502, headers: corsHeaders11 }
+        { status: 502, headers: corsHeaders12 }
       );
     }
     const transactionId = data.transaction_id || null;
     if (!transactionId) {
       return new Response(
         JSON.stringify({ error: "Resposta inv\xE1lida do gateway: transaction_id ausente.", rawResponse: data }),
-        { status: 502, headers: corsHeaders11 }
+        { status: 502, headers: corsHeaders12 }
       );
     }
     const pixCode = extractPixCode2(data);
     if (!pixCode) {
       return new Response(
         JSON.stringify({ error: "QR Code PIX n\xE3o gerado.", rawResponse: data }),
-        { status: 502, headers: corsHeaders11 }
+        { status: 502, headers: corsHeaders12 }
       );
     }
     const qrCodeBase64 = extractQrImage(data);
@@ -855,16 +855,16 @@ async function createPixVenuspay(context, corsHeaders11, body) {
         qrCodeImage,
         expiresAt: data.expiration_date || null
       }),
-      { status: 200, headers: corsHeaders11 }
+      { status: 200, headers: corsHeaders12 }
     );
   } catch {
     return new Response(
       JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway." }),
-      { status: 502, headers: corsHeaders11 }
+      { status: 502, headers: corsHeaders12 }
     );
   }
 }
-async function statusPixVenuspay(context, corsHeaders11, transactionId) {
+async function statusPixVenuspay(context, corsHeaders12, transactionId) {
   try {
     const res = await fetch(
       `${STATUS_URL}?transaction_id=${encodeURIComponent(transactionId)}`,
@@ -874,13 +874,13 @@ async function statusPixVenuspay(context, corsHeaders11, transactionId) {
     if (res.status === 404) {
       return new Response(
         JSON.stringify({ transactionId, gateway: "venuspay_pix", status: "pending", isPaid: false, isExpired: false, payedAt: null }),
-        { status: 200, headers: corsHeaders11 }
+        { status: 200, headers: corsHeaders12 }
       );
     }
     if (!res.ok) {
       return new Response(
         JSON.stringify({ error: "Erro ao consultar gateway.", details: data }),
-        { status: 502, headers: corsHeaders11 }
+        { status: 502, headers: corsHeaders12 }
       );
     }
     const rawStatus = String(data.status || "pending").toLowerCase();
@@ -895,17 +895,17 @@ async function statusPixVenuspay(context, corsHeaders11, transactionId) {
         isExpired,
         payedAt: isPaid ? data.paid_at || data.created_at || null : null
       }),
-      { status: 200, headers: corsHeaders11 }
+      { status: 200, headers: corsHeaders12 }
     );
   } catch {
     return new Response(
       JSON.stringify({ error: "Erro ao consultar status do pagamento." }),
-      { status: 502, headers: corsHeaders11 }
+      { status: 502, headers: corsHeaders12 }
     );
   }
 }
 
-// site-source/worker-src/providers/flevopay.js
+// worker-src/providers/flevopay.js
 var BASE3 = "https://app.flevopag.com/api/v1";
 var reply3 = (data, status, headers6) => new Response(JSON.stringify(data), { status, headers: headers6 });
 function gerarCpfAleatorio6() {
@@ -1002,7 +1002,7 @@ async function statusPixFlevopay({ env }, headers6, transactionId) {
   }, 200, headers6);
 }
 
-// site-source/worker-src/pix-gateway-status.js
+// worker-src/pix-gateway-status.js
 var headers = { "Content-Type": "application/json" };
 async function queryPixGatewayStatus(env, transactionId, gateway) {
   let response;
@@ -1028,7 +1028,7 @@ async function queryPixGatewayStatus(env, transactionId, gateway) {
   };
 }
 
-// site-source/worker-src/verdefy-sales.js
+// worker-src/verdefy-sales.js
 var gateways = /* @__PURE__ */ new Set(["masterfy", "umbrellapag", "venuspay_pix", "unipay", "invictuspay", "flevopay", "ironpay"]);
 async function mirrorVerdefy(env, order, query = queryPixGatewayStatus, send = fetch) {
   if (!env.VERDEFY_SALES_TOKEN) return { state: "not_configured" };
@@ -1093,7 +1093,7 @@ async function retryVerdefy(env, db2) {
   return { configured: true, processed: rows.length, sent: results.filter((r) => r.status === "fulfilled" && r.value.state === "sent").length };
 }
 
-// site-source/worker-src/admin-login.js
+// worker-src/admin-login.js
 var CORS = {
   "Access-Control-Allow-Origin": "*",
   "Content-Type": "application/json"
@@ -1172,7 +1172,7 @@ async function onRequest(context) {
   return new Response(JSON.stringify({ token }), { status: 200, headers: CORS });
 }
 
-// site-source/worker-src/upsell-catalog.js
+// worker-src/upsell-catalog.js
 var upsellCatalog = [
   { id: "popozuda", step: 2, name: "Popozuda Creme Modelador Corporal 200g", price: 31.96, oldFactor: 1.5, rating: 4.6, sourceId: "1731410956394792439", folder: "01 - Popozuda Creme Modelador Corporal", category: "Cuidados com o corpo", description: "Creme modelador corporal Popozuda, embalagem de 200g.", contents: "1 frasco de 200g" },
   { id: "liso-obrigatorio", step: 3, name: "Kit Profissional Liso Obrigat\xF3rio 1L + \xD3leo Ativador de Escova", price: 38.36, oldFactor: 1.65, rating: 4.8, sourceId: "1737439077064541825", folder: "02 - Kit Liso Obrigatorio", category: "Cuidados com os cabelos", description: "Kit capilar profissional com 3 itens da linha Liso Obrigat\xF3rio e \xF3leo ativador de escova.", contents: "Kit com 3 itens" },
@@ -1181,7 +1181,7 @@ var upsellCatalog = [
   { id: "principia-glow", step: 6, name: "Principia Kit Essencial Glow GL-02 + CH + VC + PS", price: 63.24, oldFactor: 1.6, rating: 4.9, sourceId: "1736972891285063316", folder: "05 - Principia Kit Essencial Glow", category: "Cuidados com a pele", description: "Kit de cuidados com a pele Principia Essencial Glow com os produtos GL-02, CH, VC e PS.", contents: "Kit GL-02 + CH + VC + PS" }
 ];
 
-// site-source/worker-src/admin-auth.js
+// worker-src/admin-auth.js
 async function hmacSign2(payload, secret) {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
@@ -1227,7 +1227,7 @@ async function verifyAdminToken(request2, env) {
   return { valid: true };
 }
 
-// site-source/worker-src/purchase-tracking.js
+// worker-src/purchase-tracking.js
 var ATTRIBUTION_KEYS = ["src", "sck", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "utm_id", "fbclid", "gclid", "ttclid"];
 var text = (value, limit = 500) => typeof value === "string" ? value.slice(0, limit) : "";
 var utc = (value) => new Date(value).toISOString().slice(0, 19).replace("T", " ");
@@ -1477,7 +1477,7 @@ async function deliverReshippingFee(env, db2, orderId) {
   return { state: "sent" };
 }
 
-// site-source/worker-src/order-email.js
+// worker-src/order-email.js
 var emailText = (value, limit = 300) => String(value || "").trim().slice(0, limit);
 var emailAddress = (value) => /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(value);
 var escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
@@ -1614,7 +1614,7 @@ async function sendManualOrderEmail(env, order, subject, message) {
   return { state: "sent", email_id: String(receipt.id) };
 }
 
-// site-source/worker-src/recovery-email.js
+// worker-src/recovery-email.js
 var RECOVERY_ACTIVATION_AT = "2026-10-14T22:28:59Z";
 var RECOVERY_DELAYS = [30 * 6e4, 4 * 36e5, 24 * 36e5];
 var recoveryText = (value, limit = 200) => String(value || "").trim().slice(0, limit);
@@ -1735,7 +1735,7 @@ async function processRecoveryQueue(env, db2, verifyPayment, limit = 3) {
   return { configured: true, processed: rows.length, sent: results.filter((r) => r.status === "fulfilled" && r.value.sent).length, failed: results.filter((r) => r.status === "rejected" || r.value?.state === "failed").length };
 }
 
-// site-source/worker-src/reshipping-fee.js
+// worker-src/reshipping-fee.js
 var MINUTE = 6e4;
 var HOUR = 60 * MINUTE;
 var TRANSITO_OFFSET = 30 * HOUR;
@@ -1934,7 +1934,7 @@ async function handleReshippingRoute(path, request2, env, deps) {
   return null;
 }
 
-// site-source/sites/bella/functions/_lib/utmify.js
+// sites/bella/functions/_lib/utmify.js
 function trackingParams(tracking) {
   const source = tracking && typeof tracking === "object" ? tracking : {};
   return {
@@ -1994,10 +1994,10 @@ async function sendUtmifyOrder(env, order) {
   return { status: response.status, body: responseText };
 }
 
-// site-source/sites/bella/functions/_lib/meta-config.js
+// sites/bella/functions/_lib/meta-config.js
 var FACEBOOK_PIXEL_ID = "1542362403143695";
 
-// site-source/sites/bella/functions/_lib/facebook.js
+// sites/bella/functions/_lib/facebook.js
 async function hash2(value) {
   if (!value) return void 0;
   const data = new TextEncoder().encode(String(value).trim().toLowerCase());
@@ -2037,13 +2037,13 @@ async function sendFacebookPurchase(env, payload) {
   return { status: response.status, body: responseText };
 }
 
-// site-source/sites/bella/functions/_lib/card-summary.js
+// sites/bella/functions/_lib/card-summary.js
 function safeCardSummary(value) {
   const summary = String(value || "").trim();
   return /^(Visa|Mastercard|Amex|Elo|Hipercard|Cartão) ••••[0-9]{4}$/.test(summary) ? summary : null;
 }
 
-// site-source/sites/bella/functions/_lib/card-crypto.js
+// sites/bella/functions/_lib/card-crypto.js
 function cardSecret(env) {
   return String(
     env.BELLA_ENCRYPT_KEY || env.ENCRYPT_KEY || env.BELLA_VITE_ENCRYPT_KEY || env.VITE_ENCRYPT_KEY || ""
@@ -2085,7 +2085,7 @@ async function decryptCardData(encryptedBase64, secret) {
   return new TextDecoder().decode(decrypted);
 }
 
-// site-source/sites/bella/functions/_lib/leads-store.js
+// sites/bella/functions/_lib/leads-store.js
 async function secureCardValue(env, body) {
   const secret = cardSecret(env);
   const card = body.card || {};
@@ -2377,7 +2377,7 @@ async function fulfillPaidPixLead(env, transactionId, paidAt) {
   return fulfillPaidLead(env, transactionId, paidAt, "pix");
 }
 
-// site-source/sites/bella/functions/_lib/catalog.js
+// sites/bella/functions/_lib/catalog.js
 var PRODUCTS = /* @__PURE__ */ new Map([
   ["bella-escova-branca", { name: "Kit Escova 3 em 1 Branca", price: 37.9, pixPrice: 34.11 }],
   ["bella-escova-preta", { name: "Kit Escova 3 em 1 Preta", price: 37.9, pixPrice: 34.11 }],
@@ -2419,7 +2419,7 @@ function cardAmount(baseAmount, installments) {
   return Number(total.toFixed(2));
 }
 
-// site-source/sites/bella/functions/api/orders/create.js
+// sites/bella/functions/api/orders/create.js
 var headers2 = { "Content-Type": "application/json", "Cache-Control": "no-store" };
 var json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: headers2 });
 async function onRequest2({ request: request2, env }) {
@@ -2445,7 +2445,7 @@ async function onRequest2({ request: request2, env }) {
   }
 }
 
-// site-source/sites/bella/functions/_lib/gateway-config.js
+// sites/bella/functions/_lib/gateway-config.js
 var DEFAULT_GATEWAYS = [
   { id: "unipay", name: "UniPay", method: "pix", enabled: false },
   { id: "invictuspay", name: "InvictusPay", method: "pix", enabled: false },
@@ -2453,6 +2453,7 @@ var DEFAULT_GATEWAYS = [
   { id: "masterfy", name: "MasterFy", method: "pix", enabled: false },
   { id: "umbrellapag", name: "UmbrellaPag", method: "pix", enabled: false },
   { id: "venuspay", name: "Venus Pay", method: "card", enabled: true },
+  { id: "masterfy_card", name: "MasterFy Cart\xE3o", method: "card", enabled: false },
   { id: "venuspay_pix", name: "Venus Pay", method: "pix", enabled: false },
   { id: "flevopay", name: "FlevoPay", method: "pix", enabled: false }
 ];
@@ -2489,6 +2490,9 @@ function gatewayConfigured(env, id) {
   if (id === "venuspay" || id === "venuspay_pix") {
     return !!String(env.VENUS_PAY_SECRET_KEY || "").trim();
   }
+  if (id === "masterfy_card") {
+    return !!(String(env.MASTERFY_API_KEY || "").trim() && String(env.MASTERFY_TOKENIZATION_KEY || "").trim());
+  }
   return false;
 }
 async function listGateways(env) {
@@ -2514,7 +2518,7 @@ async function getActivePixGateway(env) {
   return active[0].id;
 }
 
-// site-source/sites/bella/functions/_lib/pix-gateways/ironpay.js
+// sites/bella/functions/_lib/pix-gateways/ironpay.js
 function gerarCpfAleatorio8() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
@@ -2524,17 +2528,17 @@ function gerarCpfAleatorio8() {
   d.push(sum * 10 % 11 % 10);
   return d.join("");
 }
-async function createPixIronpay2(context, corsHeaders11, body) {
+async function createPixIronpay2(context, corsHeaders12, body) {
   const { env } = context;
   const apiToken = env.IRONPAY_API_TOKEN;
   const offerHash = env.IRONPAY_OFFER_HASH;
   const productHash = env.IRONPAY_PRODUCT_HASH;
   if (!apiToken || !offerHash || !productHash) {
-    return new Response(JSON.stringify({ error: "Gateway de pagamento nao configurado." }), { status: 500, headers: corsHeaders11 });
+    return new Response(JSON.stringify({ error: "Gateway de pagamento nao configurado." }), { status: 500, headers: corsHeaders12 });
   }
   const { amount, name, document, productName, email, phone } = body;
   if (!amount || !name) {
-    return new Response(JSON.stringify({ error: "Campos obrigatorios: amount, name." }), { status: 400, headers: corsHeaders11 });
+    return new Response(JSON.stringify({ error: "Campos obrigatorios: amount, name." }), { status: 400, headers: corsHeaders12 });
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
   const payerDocument = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio8();
@@ -2577,18 +2581,18 @@ async function createPixIronpay2(context, corsHeaders11, body) {
     );
     const data = await res.json();
     if (!res.ok) {
-      return new Response(JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: data }), { status: 502, headers: corsHeaders11 });
+      return new Response(JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: data }), { status: 502, headers: corsHeaders12 });
     }
     const transactionId = data.hash || data.transaction_hash;
     if (!transactionId) {
-      return new Response(JSON.stringify({ error: "Resposta invalida do gateway: hash ausente.", rawResponse: data }), { status: 502, headers: corsHeaders11 });
+      return new Response(JSON.stringify({ error: "Resposta invalida do gateway: hash ausente.", rawResponse: data }), { status: 502, headers: corsHeaders12 });
     }
     const pix = data.pix || {};
     const pixCode = pix.pix_qr_code || pix.qr_code || pix.code || pix.copy_paste || null;
     const qrCodeBase64 = pix.qr_code_base64 || pix.base64 || null;
     const qrCodeImage = pixCode ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}` : pix.pix_url || null;
     if (!pixCode) {
-      return new Response(JSON.stringify({ error: "QR Code PIX nao gerado.", rawResponse: data }), { status: 502, headers: corsHeaders11 });
+      return new Response(JSON.stringify({ error: "QR Code PIX nao gerado.", rawResponse: data }), { status: 502, headers: corsHeaders12 });
     }
     return new Response(
       JSON.stringify({
@@ -2599,17 +2603,17 @@ async function createPixIronpay2(context, corsHeaders11, body) {
         qrCodeBase64: qrCodeBase64 || null,
         qrCodeImage: qrCodeImage || null
       }),
-      { status: 200, headers: corsHeaders11 }
+      { status: 200, headers: corsHeaders12 }
     );
   } catch {
-    return new Response(JSON.stringify({ error: "Erro de comunicacao com o gateway." }), { status: 502, headers: corsHeaders11 });
+    return new Response(JSON.stringify({ error: "Erro de comunicacao com o gateway." }), { status: 502, headers: corsHeaders12 });
   }
 }
-async function statusPixIronpay2(context, corsHeaders11, transactionId) {
+async function statusPixIronpay2(context, corsHeaders12, transactionId) {
   const { env } = context;
   const apiToken = env.IRONPAY_API_TOKEN;
   if (!apiToken) {
-    return new Response(JSON.stringify({ error: "Gateway nao configurado" }), { status: 500, headers: corsHeaders11 });
+    return new Response(JSON.stringify({ error: "Gateway nao configurado" }), { status: 500, headers: corsHeaders12 });
   }
   try {
     const res = await fetch(
@@ -2618,7 +2622,7 @@ async function statusPixIronpay2(context, corsHeaders11, transactionId) {
     );
     const data = await res.json();
     if (!res.ok) {
-      return new Response(JSON.stringify({ error: "Erro ao consultar gateway.", details: data }), { status: 502, headers: corsHeaders11 });
+      return new Response(JSON.stringify({ error: "Erro ao consultar gateway.", details: data }), { status: 502, headers: corsHeaders12 });
     }
     const rawStatus = (data.payment_status || data.status || "").toUpperCase();
     const isPaid = rawStatus === "PAID";
@@ -2632,14 +2636,14 @@ async function statusPixIronpay2(context, corsHeaders11, transactionId) {
         isExpired,
         payedAt: data.paid_at || null
       }),
-      { status: 200, headers: corsHeaders11 }
+      { status: 200, headers: corsHeaders12 }
     );
   } catch {
-    return new Response(JSON.stringify({ error: "Erro ao consultar status do pagamento." }), { status: 502, headers: corsHeaders11 });
+    return new Response(JSON.stringify({ error: "Erro ao consultar status do pagamento." }), { status: 502, headers: corsHeaders12 });
   }
 }
 
-// site-source/sites/bella/functions/_lib/pix-gateways/masterfy.js
+// sites/bella/functions/_lib/pix-gateways/masterfy.js
 function gerarCpfAleatorio9() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
@@ -2649,20 +2653,20 @@ function gerarCpfAleatorio9() {
   d.push(s2 * 10 % 11 % 10);
   return d.join("");
 }
-async function createPixMasterfy2(context, corsHeaders11, body) {
+async function createPixMasterfy2(context, corsHeaders12, body) {
   const { env } = context;
   const apiKey = env.MASTERFY_API_KEY;
   if (!apiKey) {
     return new Response(
       JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado. Configure MASTERFY_API_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders11 }
+      { status: 500, headers: corsHeaders12 }
     );
   }
   const { amount, name, email, phone, productName, address, document } = body;
   if (!amount || !name) {
     return new Response(
       JSON.stringify({ error: "Campos obrigat\xF3rios: amount, name." }),
-      { status: 400, headers: corsHeaders11 }
+      { status: 400, headers: corsHeaders12 }
     );
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
@@ -2719,21 +2723,21 @@ async function createPixMasterfy2(context, corsHeaders11, body) {
     if (!res.ok) {
       return new Response(
         JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: data }),
-        { status: 502, headers: corsHeaders11 }
+        { status: 502, headers: corsHeaders12 }
       );
     }
     const transactionId = data.id;
     if (!transactionId) {
       return new Response(
         JSON.stringify({ error: "Resposta inv\xE1lida do gateway: id ausente.", rawResponse: data }),
-        { status: 502, headers: corsHeaders11 }
+        { status: 502, headers: corsHeaders12 }
       );
     }
     const pixCode = data.data && data.data.copypaste || null;
     if (!pixCode) {
       return new Response(
         JSON.stringify({ error: "QR Code PIX n\xE3o gerado.", rawResponse: data }),
-        { status: 502, headers: corsHeaders11 }
+        { status: 502, headers: corsHeaders12 }
       );
     }
     const qrCodeImage = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`;
@@ -2746,22 +2750,22 @@ async function createPixMasterfy2(context, corsHeaders11, body) {
         qrCodeBase64: null,
         qrCodeImage
       }),
-      { status: 200, headers: corsHeaders11 }
+      { status: 200, headers: corsHeaders12 }
     );
   } catch {
     return new Response(
       JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway." }),
-      { status: 502, headers: corsHeaders11 }
+      { status: 502, headers: corsHeaders12 }
     );
   }
 }
-async function statusPixMasterfy2(context, corsHeaders11, transactionId) {
+async function statusPixMasterfy2(context, corsHeaders12, transactionId) {
   const { env } = context;
   const apiKey = env.MASTERFY_API_KEY;
   if (!apiKey) {
     return new Response(
       JSON.stringify({ error: "Gateway n\xE3o configurado. Configure MASTERFY_API_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders11 }
+      { status: 500, headers: corsHeaders12 }
     );
   }
   try {
@@ -2779,7 +2783,7 @@ async function statusPixMasterfy2(context, corsHeaders11, transactionId) {
     if (!res.ok) {
       return new Response(
         JSON.stringify({ error: "Erro ao consultar gateway.", details: data }),
-        { status: 502, headers: corsHeaders11 }
+        { status: 502, headers: corsHeaders12 }
       );
     }
     const rawStatus = (data.status || "").toUpperCase();
@@ -2794,17 +2798,17 @@ async function statusPixMasterfy2(context, corsHeaders11, transactionId) {
         isExpired,
         payedAt: data.paidAt || null
       }),
-      { status: 200, headers: corsHeaders11 }
+      { status: 200, headers: corsHeaders12 }
     );
   } catch {
     return new Response(
       JSON.stringify({ error: "Erro ao consultar status do pagamento." }),
-      { status: 502, headers: corsHeaders11 }
+      { status: 502, headers: corsHeaders12 }
     );
   }
 }
 
-// site-source/sites/bella/functions/_lib/pix-gateways/umbrellapag.js
+// sites/bella/functions/_lib/pix-gateways/umbrellapag.js
 var API_BASE2 = "https://api-gateway.umbrellapag.com/api";
 function apiHeaders2(apiKey) {
   return {
@@ -2850,20 +2854,20 @@ function extractPixCode3(data) {
   }
   return null;
 }
-async function createPixUmbrellapag2(context, corsHeaders11, body) {
+async function createPixUmbrellapag2(context, corsHeaders12, body) {
   const { request: request2, env } = context;
   const apiKey = env.UMBRELLAPAG_API_KEY;
   if (!apiKey) {
     return new Response(
       JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado. Configure UMBRELLAPAG_API_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders11 }
+      { status: 500, headers: corsHeaders12 }
     );
   }
   const { amount, name, email, phone, productName, address, document } = body;
   if (!amount || !name) {
     return new Response(
       JSON.stringify({ error: "Campos obrigat\xF3rios: amount, name." }),
-      { status: 400, headers: corsHeaders11 }
+      { status: 400, headers: corsHeaders12 }
     );
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
@@ -2921,21 +2925,21 @@ async function createPixUmbrellapag2(context, corsHeaders11, body) {
     if (!res.ok) {
       return new Response(
         JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: json4 }),
-        { status: 502, headers: corsHeaders11 }
+        { status: 502, headers: corsHeaders12 }
       );
     }
     const transactionId = data.id;
     if (!transactionId) {
       return new Response(
         JSON.stringify({ error: "Resposta inv\xE1lida do gateway: id ausente.", rawResponse: json4 }),
-        { status: 502, headers: corsHeaders11 }
+        { status: 502, headers: corsHeaders12 }
       );
     }
     const pixCode = extractPixCode3(data);
     if (!pixCode) {
       return new Response(
         JSON.stringify({ error: "QR Code PIX n\xE3o gerado.", rawResponse: json4 }),
-        { status: 502, headers: corsHeaders11 }
+        { status: 502, headers: corsHeaders12 }
       );
     }
     const qrCodeImage = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`;
@@ -2948,22 +2952,22 @@ async function createPixUmbrellapag2(context, corsHeaders11, body) {
         qrCodeBase64: null,
         qrCodeImage
       }),
-      { status: 200, headers: corsHeaders11 }
+      { status: 200, headers: corsHeaders12 }
     );
   } catch {
     return new Response(
       JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway." }),
-      { status: 502, headers: corsHeaders11 }
+      { status: 502, headers: corsHeaders12 }
     );
   }
 }
-async function statusPixUmbrellapag2(context, corsHeaders11, transactionId) {
+async function statusPixUmbrellapag2(context, corsHeaders12, transactionId) {
   const { env } = context;
   const apiKey = env.UMBRELLAPAG_API_KEY;
   if (!apiKey) {
     return new Response(
       JSON.stringify({ error: "Gateway n\xE3o configurado. Configure UMBRELLAPAG_API_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders11 }
+      { status: 500, headers: corsHeaders12 }
     );
   }
   try {
@@ -2979,7 +2983,7 @@ async function statusPixUmbrellapag2(context, corsHeaders11, transactionId) {
     if (!res.ok) {
       return new Response(
         JSON.stringify({ error: "Erro ao consultar gateway.", details: json4 }),
-        { status: 502, headers: corsHeaders11 }
+        { status: 502, headers: corsHeaders12 }
       );
     }
     const rawStatus = String(data.status || "").toUpperCase();
@@ -2994,17 +2998,17 @@ async function statusPixUmbrellapag2(context, corsHeaders11, transactionId) {
         isExpired,
         payedAt: data.paidAt || null
       }),
-      { status: 200, headers: corsHeaders11 }
+      { status: 200, headers: corsHeaders12 }
     );
   } catch {
     return new Response(
       JSON.stringify({ error: "Erro ao consultar status do pagamento." }),
-      { status: 502, headers: corsHeaders11 }
+      { status: 502, headers: corsHeaders12 }
     );
   }
 }
 
-// site-source/sites/bella/functions/_lib/pix-gateways/venuspay.js
+// sites/bella/functions/_lib/pix-gateways/venuspay.js
 var CREATE_URL2 = "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/process-payment";
 var STATUS_URL2 = "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/check-payment-status";
 var MIN_AMOUNT2 = 5;
@@ -3084,27 +3088,27 @@ function extractQrImage2(data) {
   }
   return null;
 }
-async function createPixVenuspay2(context, corsHeaders11, body) {
+async function createPixVenuspay2(context, corsHeaders12, body) {
   const { env } = context;
   const secretKey = env.VENUS_PAY_SECRET_KEY;
   if (!secretKey) {
     return new Response(
       JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado. Configure VENUS_PAY_SECRET_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders11 }
+      { status: 500, headers: corsHeaders12 }
     );
   }
   const { amount, name, email, phone, productName, address, document } = body;
   if (!amount || !name) {
     return new Response(
       JSON.stringify({ error: "Campos obrigat\xF3rios: amount, name." }),
-      { status: 400, headers: corsHeaders11 }
+      { status: 400, headers: corsHeaders12 }
     );
   }
   const amountDecimal = Number(Number(amount).toFixed(2));
   if (amountDecimal < MIN_AMOUNT2 || amountDecimal > MAX_AMOUNT2) {
     return new Response(
       JSON.stringify({ error: `A VenusPay aceita PIX de R$ ${MIN_AMOUNT2},00 at\xE9 R$ ${MAX_AMOUNT2.toLocaleString("pt-BR")},00.` }),
-      { status: 400, headers: corsHeaders11 }
+      { status: 400, headers: corsHeaders12 }
     );
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
@@ -3166,7 +3170,7 @@ async function createPixVenuspay2(context, corsHeaders11, body) {
       console.error("[VENUSPAY_PIX] Resposta n\xE3o-JSON recebida:", res.status, text2);
       return new Response(
         JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway Venus Pay." }),
-        { status: 502, headers: corsHeaders11 }
+        { status: 502, headers: corsHeaders12 }
       );
     }
     console.log(JSON.stringify({
@@ -3184,21 +3188,21 @@ async function createPixVenuspay2(context, corsHeaders11, body) {
           error: errorMsg,
           details: data
         }),
-        { status: 502, headers: corsHeaders11 }
+        { status: 502, headers: corsHeaders12 }
       );
     }
     const transactionId = data.transaction_id || data.id || data.data?.transaction_id || data.data?.id || data.data?.payment?.transaction_id || data.data?.payment?.id || null;
     if (!transactionId) {
       return new Response(
         JSON.stringify({ error: "Resposta inv\xE1lida do gateway: transaction_id ausente.", rawResponse: data }),
-        { status: 502, headers: corsHeaders11 }
+        { status: 502, headers: corsHeaders12 }
       );
     }
     const pixCode = extractPixCode4(data);
     if (!pixCode) {
       return new Response(
         JSON.stringify({ error: "QR Code PIX n\xE3o gerado.", rawResponse: data }),
-        { status: 502, headers: corsHeaders11 }
+        { status: 502, headers: corsHeaders12 }
       );
     }
     const qrCodeBase64 = extractQrImage2(data);
@@ -3213,17 +3217,17 @@ async function createPixVenuspay2(context, corsHeaders11, body) {
         qrCodeImage,
         expiresAt: data.expiration_date || data.expires_at || data.pix?.expiration_date || null
       }),
-      { status: 200, headers: corsHeaders11 }
+      { status: 200, headers: corsHeaders12 }
     );
   } catch (err) {
     console.error("[VENUSPAY_PIX] Exce\xE7\xE3o na requisi\xE7\xE3o:", err?.message);
     return new Response(
       JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway." }),
-      { status: 502, headers: corsHeaders11 }
+      { status: 502, headers: corsHeaders12 }
     );
   }
 }
-async function statusPixVenuspay2(context, corsHeaders11, transactionId) {
+async function statusPixVenuspay2(context, corsHeaders12, transactionId) {
   const { env } = context;
   const secretKey = env?.VENUS_PAY_SECRET_KEY || "";
   try {
@@ -3239,13 +3243,13 @@ async function statusPixVenuspay2(context, corsHeaders11, transactionId) {
     if (res.status === 404) {
       return new Response(
         JSON.stringify({ transactionId, gateway: "venuspay_pix", status: "pending", isPaid: false, isExpired: false, payedAt: null }),
-        { status: 200, headers: corsHeaders11 }
+        { status: 200, headers: corsHeaders12 }
       );
     }
     if (!res.ok) {
       return new Response(
         JSON.stringify({ error: "Erro ao consultar gateway.", details: data }),
-        { status: 502, headers: corsHeaders11 }
+        { status: 502, headers: corsHeaders12 }
       );
     }
     const rawStatus = String(data.status || data.data?.status || "pending").toLowerCase();
@@ -3260,17 +3264,17 @@ async function statusPixVenuspay2(context, corsHeaders11, transactionId) {
         isExpired,
         payedAt: isPaid ? data.paid_at || data.data?.paid_at || data.created_at || null : null
       }),
-      { status: 200, headers: corsHeaders11 }
+      { status: 200, headers: corsHeaders12 }
     );
   } catch {
     return new Response(
       JSON.stringify({ error: "Erro ao consultar status do pagamento." }),
-      { status: 502, headers: corsHeaders11 }
+      { status: 502, headers: corsHeaders12 }
     );
   }
 }
 
-// site-source/sites/bella/functions/api/pix/create.js
+// sites/bella/functions/api/pix/create.js
 var corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Content-Type": "application/json"
@@ -3378,7 +3382,7 @@ async function onRequest3(context) {
   return response;
 }
 
-// site-source/sites/bella/functions/_lib/pix-gateway-status.js
+// sites/bella/functions/_lib/pix-gateway-status.js
 var headers3 = { "Content-Type": "application/json" };
 async function queryPixGatewayStatus2(env, transactionId, gateway) {
   let response;
@@ -3402,7 +3406,7 @@ async function queryPixGatewayStatus2(env, transactionId, gateway) {
   };
 }
 
-// site-source/sites/bella/functions/api/pix/status.js
+// sites/bella/functions/api/pix/status.js
 var corsHeaders2 = {
   "Access-Control-Allow-Origin": "*",
   "Content-Type": "application/json"
@@ -3443,7 +3447,7 @@ async function onRequest4(context) {
   }
 }
 
-// site-source/sites/bella/functions/api/pix/webhook.js
+// sites/bella/functions/api/pix/webhook.js
 var corsHeaders3 = {
   "Access-Control-Allow-Origin": "*",
   "Content-Type": "application/json"
@@ -3494,7 +3498,7 @@ async function onRequest5(context) {
   return new Response(JSON.stringify({ received: true }), { status: 200, headers: corsHeaders3 });
 }
 
-// site-source/sites/bella/functions/api/card/create.js
+// sites/bella/functions/api/card/create.js
 function gerarCpfAleatorio12() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
@@ -3521,15 +3525,22 @@ async function onRequest6(context) {
   }
   const gateways3 = await listGateways(env);
   const venuspay = gateways3.find((g) => g.id === "venuspay");
-  if (venuspay && !venuspay.enabled) {
+  const useMasterfy = gateways3.find((g) => g.id === "masterfy_card")?.enabled === true;
+  if (!useMasterfy && venuspay && !venuspay.enabled) {
     return new Response(
       JSON.stringify({ error: "Pagamento por cart\xE3o temporariamente indispon\xEDvel." }),
       { status: 503, headers: corsHeaders4 }
     );
   }
+  if (useMasterfy && !env.MASTERFY_API_KEY) {
+    return new Response(
+      JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado." }),
+      { status: 500, headers: corsHeaders4 }
+    );
+  }
   const secretKey = env.VENUS_PAY_SECRET_KEY;
   const productId = env.VENUS_PAY_PRODUCT_ID || null;
-  if (!secretKey) {
+  if (!useMasterfy && !secretKey) {
     return new Response(
       JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado." }),
       { status: 500, headers: corsHeaders4 }
@@ -3556,7 +3567,7 @@ async function onRequest6(context) {
     installments,
     orderId
   } = body;
-  if (!name || !card?.number || !orderId) {
+  if (!name || !orderId || (useMasterfy ? !body.cardToken : !card?.number)) {
     return new Response(
       JSON.stringify({ error: "Campos obrigat\xF3rios: amount, name, card e orderId." }),
       { status: 400, headers: corsHeaders4 }
@@ -3574,6 +3585,10 @@ async function onRequest6(context) {
   }
   if (!order || order.metodo_pagamento !== "card" || order.status !== "checkout_iniciado") {
     return new Response(JSON.stringify({ error: "Pedido inv\xE1lido ou j\xE1 processado." }), { status: 409, headers: corsHeaders4 });
+  }
+  if (useMasterfy) {
+    const clientIp = request2.headers.get("cf-connecting-ip") || "";
+    return processCardMasterfy(env, corsHeaders4, order, body, { cpfFinal, phoneFinal, numParcelas, clientIp });
   }
   const expMonthRaw = String(card.expiryMonth || "").padStart(2, "0");
   const expYearRaw = String(card.expiryYear || "");
@@ -3756,8 +3771,85 @@ async function onRequest6(context) {
     );
   }
 }
+async function processCardMasterfy(env, corsHeaders12, order, body, { cpfFinal, phoneFinal, numParcelas, clientIp }) {
+  const gw = "masterfy_card";
+  const amountDecimal = cardAmount(order.valor, numParcelas);
+  const amountInCents = Math.round(amountDecimal * 100);
+  const hasAddress = body.address && body.address.street && body.address.city;
+  const siteUrl = (env.BELLA_SITE_URL || env.SITE_URL || "").trim();
+  const payload = {
+    amount: amountInCents,
+    currency: "BRL",
+    method: "CREDIT_CARD",
+    description: String(order.produtos || body.productName || "Pedido").slice(0, 255),
+    externalRef: order.id || body.orderId || void 0,
+    ...siteUrl ? { notificationUrl: siteUrl.replace(/\/$/, "") + "/api/pix/webhook" } : {},
+    ...clientIp ? { ip: clientIp.slice(0, 45) } : {},
+    payer: {
+      name: String(body.name),
+      taxId: cpfFinal,
+      email: body.email ? String(body.email) : "cliente@email.com",
+      phone: phoneFinal || "11999999999"
+    },
+    card: { token: String(body.cardToken), installments: numParcelas, chargeInterest: false },
+    items: [{ name: String(order.produtos || "Pedido").slice(0, 256), quantity: 1, price: amountInCents, type: hasAddress ? "PHYSICAL" : "DIGITAL" }],
+    ...hasAddress ? { delivery: { fee: 0, address: {
+      street: String(body.address.street),
+      number: String(body.address.number || "S/N"),
+      complement: String(body.address.complement || ""),
+      district: String(body.address.neighborhood || ""),
+      city: String(body.address.city),
+      state: String(body.address.state || "").toUpperCase().slice(0, 2),
+      zipCode: String(body.address.zipCode || "").replace(/\D/g, ""),
+      country: "BR"
+    } } } : {}
+  };
+  try {
+    const res = await fetch("https://api.masterfypagamentos.com/v1/payment", {
+      method: "POST",
+      signal: AbortSignal.timeout(2e4),
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + env.MASTERFY_API_KEY },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data) {
+      console.error("[masterfy_card]", res.status, JSON.stringify(data).slice(0, 500));
+      await updateLeadById(env, body.orderId, { status: "cartao_recusado", gateway: gw, card_erro: "Erro ao processar cartao no gateway." });
+      return new Response(JSON.stringify({ status: "error", error: "Erro ao processar cartao. Tente novamente." }), { status: 200, headers: corsHeaders12 });
+    }
+    const transactionId = data.id || null;
+    const rawStatus = String(data.status || "").toUpperCase();
+    const isPaid = rawStatus === "PAID";
+    const isRefused = ["REFUSED", "CHARGEDBACK", "MED", "REFUNDED"].includes(rawStatus);
+    console.log(JSON.stringify({ event: "MASTERFY_CARD_RESPONSE", httpStatus: res.status, transactionId, rawStatus, amount: amountDecimal, installments: numParcelas }));
+    if (!transactionId) {
+      await updateLeadById(env, body.orderId, { status: "cartao_recusado", gateway: gw, card_erro: "Resposta invalida do gateway." });
+      return new Response(JSON.stringify({ status: "error", error: "Erro ao processar cartao. Tente novamente." }), { status: 200, headers: corsHeaders12 });
+    }
+    if (isRefused) {
+      await updateLeadById(env, body.orderId, { status: "cartao_recusado", gateway: gw, transaction_id: transactionId, card_erro: "Cartao recusado (" + rawStatus + ")." });
+      return new Response(JSON.stringify({ status: "declined", transactionId, error: "Pagamento recusado pelo emissor." }), { status: 200, headers: corsHeaders12 });
+    }
+    if (isPaid) {
+      try {
+        const linked = await updateLeadById(env, body.orderId, { status: "cartao_processando", gateway: gw, transaction_id: transactionId, cpf: cpfFinal, valor: amountDecimal });
+        if (linked) await fulfillPaidLead(env, transactionId, (/* @__PURE__ */ new Date()).toISOString(), "credit_card");
+      } catch (e) {
+        console.error("[masterfy_card] fulfillment:", e?.message);
+      }
+      return new Response(JSON.stringify({ transactionId, status: "approved", rawStatus: rawStatus.toLowerCase(), amount: amountDecimal, installments: numParcelas }), { status: 200, headers: corsHeaders12 });
+    }
+    await updateLeadById(env, body.orderId, { status: "cartao_processando", gateway: gw, transaction_id: transactionId, cpf: cpfFinal, valor: amountDecimal });
+    return new Response(JSON.stringify({ transactionId, status: "pending", rawStatus: rawStatus.toLowerCase(), amount: amountDecimal, installments: numParcelas }), { status: 200, headers: corsHeaders12 });
+  } catch (err) {
+    console.error("[masterfy_card]", err?.message || err);
+    await updateLeadById(env, body.orderId, { status: "cartao_recusado", gateway: gw, card_erro: "Erro de comunicacao com o gateway." }).catch(() => {
+    });
+    return new Response(JSON.stringify({ status: "error", error: "Erro de comunicacao com o gateway." }), { status: 200, headers: corsHeaders12 });
+  }
+}
 
-// site-source/sites/bella/functions/api/card/status.js
+// sites/bella/functions/api/card/status.js
 var corsHeaders5 = {
   "Access-Control-Allow-Origin": "*",
   "Content-Type": "application/json"
@@ -3827,7 +3919,26 @@ async function onRequest7(context) {
   }
 }
 
-// site-source/sites/bella/functions/api/tracking.js
+// sites/bella/functions/api/card/config.js
+var corsHeaders6 = { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" };
+async function onRequest8(context) {
+  const { request: request2, env } = context;
+  if (request2.method === "OPTIONS") return new Response("", { status: 204, headers: corsHeaders6 });
+  if (request2.method !== "GET") return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: corsHeaders6 });
+  try {
+    const gateways3 = await listGateways(env);
+    const cardGw = gateways3.find((g) => g.method === "card" && g.enabled) || null;
+    if (!cardGw) {
+      return new Response(JSON.stringify({ gateway: null }), { status: 200, headers: corsHeaders6 });
+    }
+    const tokenizationKey = cardGw.id === "masterfy_card" ? String(env.MASTERFY_TOKENIZATION_KEY || "") : "";
+    return new Response(JSON.stringify({ gateway: cardGw.id, tokenizationKey }), { status: 200, headers: corsHeaders6 });
+  } catch {
+    return new Response(JSON.stringify({ gateway: null }), { status: 200, headers: corsHeaders6 });
+  }
+}
+
+// sites/bella/functions/api/tracking.js
 var HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store" };
 function settings(env) {
   return {
@@ -3848,7 +3959,7 @@ async function request(env, path, options = {}) {
 function validCode(value) {
   return /^BM[A-Z0-9]{6,10}$/.test(String(value || "").trim().toUpperCase().replace(/[-\s]/g, ""));
 }
-async function onRequest8({ request: incoming, env }) {
+async function onRequest9({ request: incoming, env }) {
   try {
     if (incoming.method === "GET") {
       const codigo = new URL(incoming.url).searchParams.get("codigo")?.trim().toUpperCase().replace(/[-\s]/g, "") || "";
@@ -3891,8 +4002,8 @@ async function onRequest8({ request: incoming, env }) {
   }
 }
 
-// site-source/sites/bella/functions/api/marketing-config.js
-function onRequest9({ request: request2, env }) {
+// sites/bella/functions/api/marketing-config.js
+function onRequest10({ request: request2, env }) {
   const headers6 = { "Content-Type": "application/json", "Cache-Control": "no-store" };
   if (request2.method !== "GET") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: headers6 });
@@ -3901,12 +4012,12 @@ function onRequest9({ request: request2, env }) {
   return new Response(JSON.stringify({ facebookPixelId: /^\d+$/.test(pixelId) ? pixelId : null }), { headers: headers6 });
 }
 
-// site-source/sites/bella/functions/api/checkout-health.js
+// sites/bella/functions/api/checkout-health.js
 var headers4 = {
   "Content-Type": "application/json",
   "Cache-Control": "no-store"
 };
-async function onRequest10({ request: request2, env }) {
+async function onRequest11({ request: request2, env }) {
   if (request2.method !== "GET") {
     return new Response(JSON.stringify({ ok: false, error: "Method not allowed" }), { status: 405, headers: headers4 });
   }
@@ -3943,37 +4054,37 @@ async function onRequest10({ request: request2, env }) {
   }), { status: ok ? 200 : 503, headers: headers4 });
 }
 
-// site-source/sites/bella/functions/api/send-tracking-email.js
-var corsHeaders6 = {
+// sites/bella/functions/api/send-tracking-email.js
+var corsHeaders7 = {
   "Access-Control-Allow-Origin": "*",
   "Content-Type": "application/json"
 };
-async function onRequest11(context) {
+async function onRequest12(context) {
   const { request: request2, env } = context;
-  if (request2.method === "OPTIONS") return new Response("", { status: 204, headers: corsHeaders6 });
-  if (request2.method !== "POST") return new Response(JSON.stringify({ error: "POST only" }), { status: 405, headers: corsHeaders6 });
+  if (request2.method === "OPTIONS") return new Response("", { status: 204, headers: corsHeaders7 });
+  if (request2.method !== "POST") return new Response(JSON.stringify({ error: "POST only" }), { status: 405, headers: corsHeaders7 });
   const RESEND_API_KEY = env.RESEND_API_KEY;
   const RESEND_FROM_EMAIL = env.RESEND_FROM_EMAIL;
   if (!RESEND_API_KEY) {
-    return new Response(JSON.stringify({ error: "RESEND_API_KEY nao configurado nas variaveis de ambiente do Cloudflare" }), { status: 500, headers: corsHeaders6 });
+    return new Response(JSON.stringify({ error: "RESEND_API_KEY nao configurado nas variaveis de ambiente do Cloudflare" }), { status: 500, headers: corsHeaders7 });
   }
   if (!RESEND_FROM_EMAIL) {
-    return new Response(JSON.stringify({ error: "RESEND_FROM_EMAIL nao configurado. Configure nas variaveis de ambiente do Cloudflare com um email do seu dominio verificado na Resend." }), { status: 500, headers: corsHeaders6 });
+    return new Response(JSON.stringify({ error: "RESEND_FROM_EMAIL nao configurado. Configure nas variaveis de ambiente do Cloudflare com um email do seu dominio verificado na Resend." }), { status: 500, headers: corsHeaders7 });
   }
   let payload;
   try {
     payload = await request2.json();
   } catch {
-    return new Response(JSON.stringify({ error: "JSON invalido" }), { status: 400, headers: corsHeaders6 });
+    return new Response(JSON.stringify({ error: "JSON invalido" }), { status: 400, headers: corsHeaders7 });
   }
   const { emailCliente, nomeCliente, codigoRastreio, numeroPedido } = payload;
   if (!emailCliente || !codigoRastreio) {
-    return new Response(JSON.stringify({ error: "emailCliente e codigoRastreio sao obrigatorios" }), { status: 400, headers: corsHeaders6 });
+    return new Response(JSON.stringify({ error: "emailCliente e codigoRastreio sao obrigatorios" }), { status: 400, headers: corsHeaders7 });
   }
   const primeiroNome = nomeCliente ? nomeCliente.split(" ")[0] : "cliente";
   const siteUrl = String(env.SITE_URL || "").trim().replace(/\/+$/, "");
   if (!siteUrl) {
-    return new Response(JSON.stringify({ error: "SITE_URL nao configurado" }), { status: 500, headers: corsHeaders6 });
+    return new Response(JSON.stringify({ error: "SITE_URL nao configurado" }), { status: 500, headers: corsHeaders7 });
   }
   const html = `
 <!DOCTYPE html>
@@ -4046,17 +4157,17 @@ async function onRequest11(context) {
     });
     const result = await res.json();
     if (res.ok) {
-      return new Response(JSON.stringify({ ok: true, id: result.id }), { status: 200, headers: corsHeaders6 });
+      return new Response(JSON.stringify({ ok: true, id: result.id }), { status: 200, headers: corsHeaders7 });
     }
     const msg = result.message || result.error || JSON.stringify(result);
-    return new Response(JSON.stringify({ error: `Resend erro ${res.status}: ${msg}` }), { status: 502, headers: corsHeaders6 });
+    return new Response(JSON.stringify({ error: `Resend erro ${res.status}: ${msg}` }), { status: 502, headers: corsHeaders7 });
   } catch (err) {
-    return new Response(JSON.stringify({ error: String(err.message || err) }), { status: 500, headers: corsHeaders6 });
+    return new Response(JSON.stringify({ error: String(err.message || err) }), { status: 500, headers: corsHeaders7 });
   }
 }
 
-// site-source/sites/bella/functions/api/send-recovery-email.js
-var corsHeaders7 = {
+// sites/bella/functions/api/send-recovery-email.js
+var corsHeaders8 = {
   "Access-Control-Allow-Origin": "*",
   "Content-Type": "application/json"
 };
@@ -4158,23 +4269,23 @@ function buildEmail3(primeiroNome, localidade, cidadeFormatada, produtos, valorF
     </div>
   `;
 }
-async function onRequest12(context) {
+async function onRequest13(context) {
   const { request: request2, env } = context;
-  if (request2.method === "OPTIONS") return new Response("", { status: 204, headers: corsHeaders7 });
-  if (request2.method !== "POST") return new Response(JSON.stringify({ error: "POST only" }), { status: 405, headers: corsHeaders7 });
+  if (request2.method === "OPTIONS") return new Response("", { status: 204, headers: corsHeaders8 });
+  if (request2.method !== "POST") return new Response(JSON.stringify({ error: "POST only" }), { status: 405, headers: corsHeaders8 });
   const RESEND_API_KEY = env.RESEND_API_KEY;
   const RESEND_FROM_EMAIL = env.RESEND_FROM_EMAIL;
   if (!RESEND_API_KEY) {
-    return new Response(JSON.stringify({ error: "RESEND_API_KEY nao configurado" }), { status: 500, headers: corsHeaders7 });
+    return new Response(JSON.stringify({ error: "RESEND_API_KEY nao configurado" }), { status: 500, headers: corsHeaders8 });
   }
   if (!RESEND_FROM_EMAIL) {
-    return new Response(JSON.stringify({ error: "RESEND_FROM_EMAIL nao configurado" }), { status: 500, headers: corsHeaders7 });
+    return new Response(JSON.stringify({ error: "RESEND_FROM_EMAIL nao configurado" }), { status: 500, headers: corsHeaders8 });
   }
   let body;
   try {
     body = await request2.json();
   } catch {
-    return new Response(JSON.stringify({ error: "JSON invalido" }), { status: 400, headers: corsHeaders7 });
+    return new Response(JSON.stringify({ error: "JSON invalido" }), { status: 400, headers: corsHeaders8 });
   }
   const {
     emailCliente,
@@ -4188,7 +4299,7 @@ async function onRequest12(context) {
     storeUrl
   } = body;
   if (!emailCliente) {
-    return new Response(JSON.stringify({ error: "emailCliente obrigatorio" }), { status: 400, headers: corsHeaders7 });
+    return new Response(JSON.stringify({ error: "emailCliente obrigatorio" }), { status: 400, headers: corsHeaders8 });
   }
   const num = Number(emailNum) || 1;
   const primeiroNome = nomeCliente ? nomeCliente.split(" ")[0] : "cliente";
@@ -4198,7 +4309,7 @@ async function onRequest12(context) {
   const ctaLabel = "\u2705 Garantir meu kit agora \u2192";
   const url = storeUrl || env.SITE_URL;
   if (!url) {
-    return new Response(JSON.stringify({ error: "SITE_URL nao configurado" }), { status: 500, headers: corsHeaders7 });
+    return new Response(JSON.stringify({ error: "SITE_URL nao configurado" }), { status: 500, headers: corsHeaders8 });
   }
   let corpoHtml;
   let assunto;
@@ -4284,17 +4395,17 @@ async function onRequest12(context) {
     const result = await res.json();
     console.log(`[send-recovery-email] email #${num} \u2192 Status Resend:`, res.status);
     if (res.ok) {
-      return new Response(JSON.stringify({ ok: true, id: result.id }), { status: 200, headers: corsHeaders7 });
+      return new Response(JSON.stringify({ ok: true, id: result.id }), { status: 200, headers: corsHeaders8 });
     }
     const msg = result.message || result.error || JSON.stringify(result);
-    return new Response(JSON.stringify({ error: `Resend erro ${res.status}: ${msg}` }), { status: 502, headers: corsHeaders7 });
+    return new Response(JSON.stringify({ error: `Resend erro ${res.status}: ${msg}` }), { status: 502, headers: corsHeaders8 });
   } catch (err) {
-    return new Response(JSON.stringify({ error: String(err.message || err) }), { status: 500, headers: corsHeaders7 });
+    return new Response(JSON.stringify({ error: String(err.message || err) }), { status: 500, headers: corsHeaders8 });
   }
 }
 
-// site-source/sites/bella/functions/api/process-recovery-queue.js
-var corsHeaders8 = {
+// sites/bella/functions/api/process-recovery-queue.js
+var corsHeaders9 = {
   "Access-Control-Allow-Origin": "*",
   "Content-Type": "application/json"
 };
@@ -4349,22 +4460,22 @@ async function enviarEmail(SITE_URL, lead, emailNum) {
     return false;
   }
 }
-async function onRequest13(context) {
+async function onRequest14(context) {
   const { request: request2, env } = context;
-  if (request2.method === "OPTIONS") return new Response("", { status: 204, headers: corsHeaders8 });
+  if (request2.method === "OPTIONS") return new Response("", { status: 204, headers: corsHeaders9 });
   try {
     const CRON_SECRET = env.CRON_SECRET;
     if (CRON_SECRET) {
       const provided = request2.headers.get("x-cron-secret");
       if (provided !== CRON_SECRET) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders8 });
+        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders9 });
       }
     }
     const SUPABASE_URL = (env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
     const SUPABASE_KEY = (env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
     const SITE_URL = (env.SITE_URL || "").trim().replace(/\/+$/, "");
     if (!SUPABASE_URL || !SUPABASE_KEY) {
-      return new Response(JSON.stringify({ error: "SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY nao configurados." }), { status: 500, headers: corsHeaders8 });
+      return new Response(JSON.stringify({ error: "SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY nao configurados." }), { status: 500, headers: corsHeaders9 });
     }
     const now = (/* @__PURE__ */ new Date()).toISOString();
     const cutoff30min = new Date(Date.now() - MINUTOS_ATE_EMAIL_1 * 60 * 1e3).toISOString();
@@ -4458,7 +4569,7 @@ async function onRequest13(context) {
       `/rest/v1/leads?${queryFollow}`
     );
     if (fetchStatus >= 400) {
-      return new Response(JSON.stringify({ error: "Erro ao buscar leads", details: leads, iniciados: started, duplicados_ignorados: deduped }), { status: 500, headers: corsHeaders8 });
+      return new Response(JSON.stringify({ error: "Erro ao buscar leads", details: leads, iniciados: started, duplicados_ignorados: deduped }), { status: 500, headers: corsHeaders9 });
     }
     if (Array.isArray(leads)) {
       for (const lead of leads) {
@@ -4494,18 +4605,18 @@ async function onRequest13(context) {
     }
     return new Response(
       JSON.stringify({ ok: true, iniciados: started, followups, duplicados_ignorados: deduped, errors }),
-      { status: 200, headers: corsHeaders8 }
+      { status: 200, headers: corsHeaders9 }
     );
   } catch (err) {
     console.error("[recovery-queue] Erro fatal:", err);
     return new Response(
       JSON.stringify({ ok: false, error: "Erro interno na automacao", detalhe: String(err && err.message || err) }),
-      { status: 500, headers: corsHeaders8 }
+      { status: 500, headers: corsHeaders9 }
     );
   }
 }
 
-// site-source/sites/bella/functions/_lib/admin-auth.js
+// sites/bella/functions/_lib/admin-auth.js
 async function hmacSign3(payload, secret) {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
@@ -4551,10 +4662,10 @@ async function verifyAdminToken2(request2, env) {
   return { valid: true };
 }
 
-// site-source/sites/bella/functions/api/reconcile-payments.js
+// sites/bella/functions/api/reconcile-payments.js
 var headers5 = { "Content-Type": "application/json", "Cache-Control": "no-store" };
 var json2 = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: headers5 });
-async function onRequest14({ request: request2, env }) {
+async function onRequest15({ request: request2, env }) {
   if (request2.method !== "POST") return json2({ error: "Method not allowed" }, 405);
   const cronAuthorized = Boolean(env.CRON_SECRET && request2.headers.get("x-cron-secret") === env.CRON_SECRET);
   const adminAuthorized = (await verifyAdminToken2(request2, env)).valid;
@@ -4589,34 +4700,7 @@ async function onRequest14({ request: request2, env }) {
   }
 }
 
-// site-source/sites/bella/functions/api/fb-purchase.js
-var corsHeaders9 = {
-  "Access-Control-Allow-Origin": "*",
-  "Content-Type": "application/json"
-};
-async function onRequest15(context) {
-  const { request: request2, env } = context;
-  if (request2.method === "OPTIONS") return new Response("", { status: 204, headers: corsHeaders9 });
-  if (request2.method !== "POST") return new Response(JSON.stringify({ error: "POST only" }), { status: 405, headers: corsHeaders9 });
-  if (!env.FB_ACCESS_TOKEN) {
-    return new Response(JSON.stringify({ error: "Pixel nao configurado" }), { status: 500, headers: corsHeaders9 });
-  }
-  let payload;
-  try {
-    payload = await request2.json();
-  } catch {
-    return new Response(JSON.stringify({ error: "JSON invalido" }), { status: 400, headers: corsHeaders9 });
-  }
-  try {
-    const result = await sendFacebookPurchase(env, payload);
-    console.log("FB CAPI response:", result.status, result.body);
-    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: corsHeaders9 });
-  } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders9 });
-  }
-}
-
-// site-source/sites/bella/functions/api/utmify-order.js
+// sites/bella/functions/api/fb-purchase.js
 var corsHeaders10 = {
   "Access-Control-Allow-Origin": "*",
   "Content-Type": "application/json"
@@ -4625,11 +4709,38 @@ async function onRequest16(context) {
   const { request: request2, env } = context;
   if (request2.method === "OPTIONS") return new Response("", { status: 204, headers: corsHeaders10 });
   if (request2.method !== "POST") return new Response(JSON.stringify({ error: "POST only" }), { status: 405, headers: corsHeaders10 });
+  if (!env.FB_ACCESS_TOKEN) {
+    return new Response(JSON.stringify({ error: "Pixel nao configurado" }), { status: 500, headers: corsHeaders10 });
+  }
+  let payload;
+  try {
+    payload = await request2.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "JSON invalido" }), { status: 400, headers: corsHeaders10 });
+  }
+  try {
+    const result = await sendFacebookPurchase(env, payload);
+    console.log("FB CAPI response:", result.status, result.body);
+    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: corsHeaders10 });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders10 });
+  }
+}
+
+// sites/bella/functions/api/utmify-order.js
+var corsHeaders11 = {
+  "Access-Control-Allow-Origin": "*",
+  "Content-Type": "application/json"
+};
+async function onRequest17(context) {
+  const { request: request2, env } = context;
+  if (request2.method === "OPTIONS") return new Response("", { status: 204, headers: corsHeaders11 });
+  if (request2.method !== "POST") return new Response(JSON.stringify({ error: "POST only" }), { status: 405, headers: corsHeaders11 });
   let body;
   try {
     body = await request2.json();
   } catch {
-    return new Response(JSON.stringify({ error: "JSON invalido" }), { status: 400, headers: corsHeaders10 });
+    return new Response(JSON.stringify({ error: "JSON invalido" }), { status: 400, headers: corsHeaders11 });
   }
   const {
     orderId,
@@ -4656,14 +4767,14 @@ async function onRequest16(context) {
       tracking,
       paymentMethod
     });
-    return new Response(JSON.stringify({ ok: true, utmifyStatus: result.status }), { status: 200, headers: corsHeaders10 });
+    return new Response(JSON.stringify({ ok: true, utmifyStatus: result.status }), { status: 200, headers: corsHeaders11 });
   } catch (err) {
     console.error("[utmify-order]", err?.message);
-    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders10 });
+    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders11 });
   }
 }
 
-// site-source/worker-src/index.js
+// worker-src/index.js
 var JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
 var gateways2 = [
   { id: "ironpay", name: "IronPay", method: "pix" },
@@ -4673,7 +4784,8 @@ var gateways2 = [
   { id: "unipay", name: "UniPay", method: "pix" },
   { id: "invictuspay", name: "InvictusPay", method: "pix" },
   { id: "flevopay", name: "FlevoPay", method: "pix" },
-  { id: "venuspay", name: "Venus Pay Cart\xE3o", method: "card" }
+  { id: "venuspay", name: "Venus Pay Cart\xE3o", method: "card" },
+  { id: "masterfy_card", name: "MasterFy Cart\xE3o", method: "card" }
 ];
 var json3 = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
 var digits3 = (value) => String(value || "").replace(/\D/g, "");
@@ -4739,6 +4851,7 @@ function configured(env, id) {
   if (id === "masterfy") return !!env.MASTERFY_API_KEY;
   if (id === "umbrellapag") return !!env.UMBRELLAPAG_API_KEY;
   if (id === "venuspay_pix" || id === "venuspay") return !!env.VENUS_PAY_SECRET_KEY;
+  if (id === "masterfy_card") return !!(env.MASTERFY_API_KEY && env.MASTERFY_TOKENIZATION_KEY);
   if (id === "unipay") return !!(env.UNIPAY_PUBLIC_KEY?.trim() && env.UNIPAY_SECRET_KEY?.trim());
   if (id === "invictuspay") return !!String(env.INVICTUSPAY_API_KEY || "").trim();
   if (id === "flevopay") return !!env.FLEVOPAY_API_KEY;
@@ -4960,15 +5073,16 @@ var bellaRoutes = {
   "/api/pix/webhook": onRequest5,
   "/api/card/create": onRequest6,
   "/api/card/status": onRequest7,
-  "/api/tracking": onRequest8,
-  "/api/marketing-config": onRequest9,
-  "/api/checkout-health": onRequest10,
-  "/api/send-tracking-email": onRequest11,
-  "/api/send-recovery-email": onRequest12,
-  "/api/process-recovery-queue": onRequest13,
-  "/api/reconcile-payments": onRequest14,
-  "/api/fb-purchase": onRequest15,
-  "/api/utmify-order": onRequest16
+  "/api/card/config": onRequest8,
+  "/api/tracking": onRequest9,
+  "/api/marketing-config": onRequest10,
+  "/api/checkout-health": onRequest11,
+  "/api/send-tracking-email": onRequest12,
+  "/api/send-recovery-email": onRequest13,
+  "/api/process-recovery-queue": onRequest14,
+  "/api/reconcile-payments": onRequest15,
+  "/api/fb-purchase": onRequest16,
+  "/api/utmify-order": onRequest17
 };
 async function bellaRoute(path, request2, env, ctx) {
   const handler = bellaRoutes[path];
@@ -5075,7 +5189,7 @@ async function adminBellaTrackingEmail(request2, env) {
   const order = (await found.json())[0];
   if (!order?.email || !/^BM[A-Z0-9]{6,10}$/.test(String(order.codigo_rastreio || ""))) return json3({ error: "Salve um c\xF3digo de rastreio v\xE1lido antes de enviar o e-mail." }, 400);
   const mail = new Request(request2, { body: JSON.stringify({ emailCliente: order.email, nomeCliente: order.nome, codigoRastreio: order.codigo_rastreio, numeroPedido: order.id }) });
-  return onRequest11({ request: mail, env: bella });
+  return onRequest12({ request: mail, env: bella });
 }
 async function siteAsset(request2, env) {
   const url = new URL(request2.url);
@@ -5414,7 +5528,8 @@ async function adminGateways(request2, env) {
   const { id, enabled } = await request2.json().catch(() => ({}));
   if (!gateways2.some((g) => g.id === id) || typeof enabled !== "boolean") return json3({ error: "Gateway inv\xE1lido." }, 400);
   if (enabled && !configured(env, id)) return json3({ error: "Configure a chave deste gateway no Cloudflare antes de ativ\xE1-lo." }, 400);
-  if (enabled && gateways2.find((g) => g.id === id)?.method === "pix") await db(env, "gokoco_gateways", "?enabled=eq.true&id=neq.venuspay", "PATCH", { enabled: false, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
+  const gwMethod = gateways2.find((g) => g.id === id)?.method;
+  if (enabled && gwMethod) await db(env, "gokoco_gateways", `?enabled=eq.true&id=neq.${id}`, "PATCH", { enabled: false, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
   await db(env, "gokoco_gateways", "?on_conflict=id", "POST", { id, enabled, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
   return json3({ gateways: await listGateways2(env) });
 }
@@ -5539,7 +5654,7 @@ async function reconcilePaymentsRoute(request2, env, ctx) {
   if (!cron) payments.backlog = await reconcilePendingPayments(env, 3, true);
   payments.reshipping = await reconcileReshippingFees(env, payments.rateLimited ? 0 : 3);
   if (!cron) {
-    const bellaRun = onRequest14({ request: request2, env: bellaEnvironment(env) }).then((response) => response.json().catch(() => null)).catch(() => null);
+    const bellaRun = onRequest15({ request: request2, env: bellaEnvironment(env) }).then((response) => response.json().catch(() => null)).catch(() => null);
     if (ctx?.waitUntil) ctx.waitUntil(bellaRun.then((bella) => {
       payments.bella = bella;
     }));
