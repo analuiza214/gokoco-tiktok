@@ -510,6 +510,103 @@ async function statusPixMasterfy(context, corsHeaders12, transactionId) {
     );
   }
 }
+async function createCardMasterfy(context, corsHeaders12, body) {
+  const { env } = context;
+  const apiKey = env.MASTERFY_API_KEY;
+  if (!apiKey) {
+    return new Response(
+      JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado. Configure MASTERFY_API_KEY no Cloudflare." }),
+      { status: 500, headers: corsHeaders12 }
+    );
+  }
+  const token = String(body?.cardToken || "").trim();
+  if (!token) {
+    return new Response(
+      JSON.stringify({ error: "Token do cart\xE3o ausente. Recarregue a p\xE1gina e tente novamente." }),
+      { status: 400, headers: corsHeaders12 }
+    );
+  }
+  const { amount, name, email, phone, productName, address, document, ip } = body;
+  const amountInCents = Math.round(Number(amount) * 100);
+  if (!Number.isSafeInteger(amountInCents) || amountInCents <= 0 || !name) {
+    return new Response(
+      JSON.stringify({ error: "Campos obrigat\xF3rios: amount, name." }),
+      { status: 400, headers: corsHeaders12 }
+    );
+  }
+  const numParcelas = Math.max(1, Math.min(12, parseInt(String(body.installments || 1), 10)));
+  const cpfDigits = String(document || "").replace(/\D/g, "");
+  const taxId = [11, 14].includes(cpfDigits.length) ? cpfDigits : gerarCpfAleatorio3();
+  const siteUrl = env.SITE_URL || "";
+  const notificationUrl = siteUrl ? `${siteUrl}/api/pix/webhook` : void 0;
+  const hasAddress = address && address.street && address.city;
+  const delivery = hasAddress ? {
+    fee: 0,
+    address: {
+      street: String(address.street),
+      number: String(address.number || "S/N"),
+      complement: String(address.complement || ""),
+      district: String(address.neighborhood || address.district || ""),
+      city: String(address.city),
+      state: String(address.state || ""),
+      zipCode: String(address.zipCode || address.cep || "").replace(/\D/g, ""),
+      country: "BR"
+    }
+  } : void 0;
+  const payload = {
+    amount: amountInCents,
+    currency: "BRL",
+    method: "CREDIT_CARD",
+    description: productName || "Pedido",
+    ...notificationUrl ? { notificationUrl } : {},
+    ...ip ? { ip: String(ip).slice(0, 45) } : {},
+    payer: {
+      name: String(name),
+      taxId,
+      email: email ? String(email) : "cliente@email.com",
+      phone: phone ? String(phone).replace(/\D/g, "") || "00000000000" : "00000000000"
+    },
+    card: { token, installments: numParcelas, chargeInterest: false },
+    items: [
+      {
+        name: productName || "Pedido",
+        quantity: 1,
+        price: amountInCents,
+        type: hasAddress ? "PHYSICAL" : "DIGITAL"
+      }
+    ],
+    ...delivery ? { delivery } : {}
+  };
+  try {
+    const res = await fetch("https://api.masterfypagamentos.com/v1/payment", {
+      method: "POST",
+      signal: AbortSignal.timeout(2e4),
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data) {
+      console.error("[masterfy/card]", res.status, JSON.stringify(data).slice(0, 500));
+      return new Response(
+        JSON.stringify({ status: "error", error: "Erro ao processar cart\xE3o. Tente novamente." }),
+        { status: 200, headers: corsHeaders12 }
+      );
+    }
+    const transactionId = data.id || null;
+    const rawStatus = String(data.status || "").toUpperCase();
+    const status = rawStatus === "PAID" ? "approved" : ["REFUSED", "CHARGEDBACK", "MED", "REFUNDED"].includes(rawStatus) ? "declined" : transactionId ? "processing" : "error";
+    return new Response(
+      JSON.stringify({ transactionId, status, rawStatus: rawStatus.toLowerCase(), gateway: "masterfy_card", amount: Number(amount), installments: numParcelas }),
+      { status: 200, headers: corsHeaders12 }
+    );
+  } catch (error) {
+    console.error("[masterfy/card]", error?.message || error);
+    return new Response(
+      JSON.stringify({ status: "error", error: "Erro de comunica\xE7\xE3o com o gateway." }),
+      { status: 200, headers: corsHeaders12 }
+    );
+  }
+}
 
 // worker-src/providers/umbrellapag.js
 var API_BASE = "https://api-gateway.umbrellapag.com/api";
@@ -1007,7 +1104,7 @@ var headers = { "Content-Type": "application/json" };
 async function queryPixGatewayStatus(env, transactionId, gateway) {
   let response;
   const context = { env };
-  if (gateway === "masterfy") response = await statusPixMasterfy(context, headers, transactionId);
+  if (gateway === "masterfy" || gateway === "masterfy_card") response = await statusPixMasterfy(context, headers, transactionId);
   else if (gateway === "umbrellapag") response = await statusPixUmbrellapag(context, headers, transactionId);
   else if (gateway === "venuspay_pix") response = await statusPixVenuspay(context, headers, transactionId);
   else if (gateway === "unipay") response = await statusPixUnipay(context, headers, transactionId);
@@ -5246,6 +5343,110 @@ async function maybeReconcileBacklog(env, ctx) {
   if (ctx?.waitUntil) ctx.waitUntil(run);
   else await run;
 }
+async function createCard(request2, env, ctx) {
+  const body = await request2.json().catch(() => null);
+  if (body?.client) body.client.email = normalizeBuyerEmail(body.client.email);
+  const invalid = validateBuyer(body);
+  if (invalid) return json3({ message: invalid, code: "invalid_document" }, 400);
+  const invalidShipping = validateShipping(body.shipping);
+  if (invalidShipping) return json3({ message: invalidShipping, code: "invalid_address" }, 400);
+  const cardToken = String(body?.cardToken || "").trim();
+  if (!cardToken) return json3({ message: "Token do cart\xE3o ausente. Recarregue a p\xE1gina e tente novamente." }, 400);
+  const checkoutId = String(body.checkoutId || "");
+  if (!/^[a-f0-9-]{20,50}$/i.test(checkoutId)) return json3({ message: "Identificador de checkout inv\xE1lido." }, 400);
+  const previous = await db(env, "gokoco_orders", `?checkout_id=eq.${encodeURIComponent(checkoutId)}&select=*&limit=1`);
+  if (previous[0]) {
+    const status = previous[0].status;
+    const isPix = previous[0].gateway !== "masterfy_card";
+    const age = Date.now() - (Date.parse(previous[0].created_at || "") || 0);
+    const stale = status === "expired" || status === "failed" || isPix && status === "pending" || status === "creating" && age > 2 * 60 * 1e3 || !isPix && status === "pending" && age > 10 * 60 * 1e3;
+    if (stale) {
+      const freed = await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(previous[0].id)}&status=eq.${previous[0].status}&select=id`, "PATCH", { status: "failed", updated_at: (/* @__PURE__ */ new Date()).toISOString() });
+      if (freed.length) previous[0].status = "failed";
+    }
+    if (previous[0].status === "paid") return json3({ message: "Este pedido j\xE1 foi pago." }, 409);
+    if (previous[0].status === "pending" && !isPix) return json3({ message: "O pagamento por cart\xE3o est\xE1 em processamento. Aguarde a confirma\xE7\xE3o." }, 409);
+    if (previous[0].status === "creating") return json3({ message: "A cobran\xE7a anterior est\xE1 em processamento. Aguarde um momento." }, 409);
+  }
+  const active = (await listGateways2(env)).filter((g) => g.enabled && g.method === "card");
+  if (!active.length || active[0].id !== "masterfy_card" || !active[0].configured) {
+    return json3({ message: "Pagamento por cart\xE3o indispon\xEDvel no momento." }, 503);
+  }
+  const ip = request2.headers.get("CF-Connecting-IP") || "unknown";
+  const ipKey = `card:${ip}`;
+  const hashBytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${env.ADMIN_SESSION_SECRET || ""}:${ip}`));
+  const ipHash = Array.from(new Uint8Array(hashBytes), (b) => b.toString(16).padStart(2, "0")).join("");
+  if (env.PIX_RATELIMIT) {
+    const count = Number(await env.PIX_RATELIMIT.get(ipKey) || 0);
+    if (count >= 5) return json3({ message: "Muitas tentativas com cart\xE3o. Tente novamente em uma hora." }, 429);
+  }
+  const shipping = body.shipping;
+  const order = {
+    checkout_id: checkoutId,
+    name: String(body.client.name).trim().slice(0, 150),
+    email: normalizeBuyerEmail(body.client.email),
+    phone: digits3(body.client.phone),
+    document: digits3(body.client.document),
+    amount: await nextPixAmount(env, cartTotal(body.cart)),
+    products: Array.isArray(body.products) ? body.products.slice(0, 10) : [],
+    shipping,
+    tracking: { ...await recoverCustomerAttribution(env, db, capturePurchaseTracking(request2, body), body.client), site_variant: "gokoco" },
+    gateway: "masterfy_card",
+    client_ip_hash: ipHash,
+    status: "creating"
+  };
+  const saved = previous[0] ? await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(previous[0].id)}&status=eq.failed&select=id`, "PATCH", { ...order, updated_at: (/* @__PURE__ */ new Date()).toISOString() }) : await db(env, "gokoco_orders", "?select=id", "POST", order);
+  const id = saved?.[0]?.id;
+  if (!id) return json3({ message: "A cobran\xE7a j\xE1 est\xE1 em processamento. Aguarde um momento." }, 409);
+  if (env.PIX_RATELIMIT) await env.PIX_RATELIMIT.put(ipKey, String(Number(await env.PIX_RATELIMIT.get(ipKey) || 0) + 1), { expirationTtl: 3600 });
+  const gatewayContact = maskedGatewayContact(env, id, order);
+  const payload = {
+    amount: order.amount,
+    name: order.name,
+    email: gatewayContact.email,
+    phone: gatewayContact.phone,
+    document: order.document,
+    cardToken,
+    installments: body.installments || 1,
+    productName: order.products.map((p) => p.name).filter(Boolean).join(" + ").slice(0, 255) || "Escova Modeladora GOKOCO",
+    address: {
+      street: shipping.logradouro,
+      number: shipping.numero,
+      complement: shipping.complemento,
+      neighborhood: shipping.bairro,
+      city: shipping.cidade,
+      state: shipping.uf,
+      zipCode: shipping.cep
+    },
+    ip: ip !== "unknown" ? ip : void 0
+  };
+  const result = await createCardMasterfy({ request: request2, env }, { "Content-Type": "application/json" }, payload);
+  const payment = await result.json().catch(() => ({}));
+  const transactionId = payment.transactionId ? String(payment.transactionId) : null;
+  if (!transactionId || payment.status === "error") {
+    await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(id)}`, "PATCH", { status: "failed", updated_at: (/* @__PURE__ */ new Date()).toISOString() });
+    return json3({ message: payment.error || "N\xE3o foi poss\xEDvel processar o cart\xE3o. Tente novamente." }, 502);
+  }
+  if (payment.status === "declined") {
+    await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(id)}`, "PATCH", { status: "failed", transaction_id: transactionId, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
+    return json3({ status: "declined", transactionId, message: payment.error || "Pagamento recusado pelo emissor." });
+  }
+  if (payment.status === "approved") {
+    const paidAt = (/* @__PURE__ */ new Date()).toISOString();
+    await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(id)}`, "PATCH", { status: "paid", transaction_id: transactionId, updated_at: paidAt });
+    await registerOrderTracking(env, id, paidAt).catch((e) => console.error("[tracking/card]", e?.message));
+    await deliverPaidPurchase(env, db, id, paidAt).catch((e) => console.error("[purchase/card]", e?.message));
+    await deliverPaidEmail(env, db, id, paidAt).catch((e) => console.error("[email/card]", e?.message));
+    return json3({ status: "approved", isPaid: true, transactionId, orderId: id, amount: order.amount, eventId: `card_${id}` });
+  }
+  await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(id)}`, "PATCH", { status: "pending", transaction_id: transactionId, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
+  if (purchaseDestination(env) === "utmify") {
+    const send = deliverPendingPurchase(env, db, id).catch((error) => console.error("[purchase/pending]", id, error?.message || error));
+    if (ctx?.waitUntil) ctx.waitUntil(send);
+    else await send;
+  }
+  return json3({ status: "processing", transactionId, orderId: id, amount: order.amount });
+}
 async function statusPix(request2, env, ctx) {
   const id = new URL(request2.url).searchParams.get("id");
   if (!id || id.length > 150) return json3({ error: "Transa\xE7\xE3o inv\xE1lida." }, 400);
@@ -5751,6 +5952,12 @@ var index_default = {
       if (path === "/api/market/pix/create" && request2.method === "POST") return await createMarketPix(request2, env, ctx);
       if (path === "/api/public/pix/create" && request2.method === "POST") return await createPix(request2, env, ctx);
       if (path === "/api/public/pix/status" && request2.method === "GET") return await statusPix(request2, env, ctx);
+      if (path === "/api/public/card/config" && request2.method === "GET") {
+        const cardGw = (await listGateways2(env)).find((g) => g.method === "card" && g.enabled);
+        if (!cardGw || !cardGw.configured || cardGw.id !== "masterfy_card") return json3({ gateway: null });
+        return json3({ gateway: cardGw.id, tokenizationKey: String(env.MASTERFY_TOKENIZATION_KEY || "") });
+      }
+      if (path === "/api/public/card/create" && request2.method === "POST") return await createCard(request2, env, ctx);
       if (path === "/api/pix/webhook" && request2.method === "POST") return await webhook(request2, env);
       if (path.startsWith("/api/")) return json3({ error: "Rota n\xE3o encontrada." }, 404);
       return siteAsset(request2, env);

@@ -11,7 +11,7 @@ const headers = { "Content-Type": "application/json" };
 export async function queryPixGatewayStatus(env, transactionId, gateway) {
   let response;
   const context = { env };
-  if (gateway === "masterfy") response = await statusPixMasterfy(context, headers, transactionId);
+  if (gateway === "masterfy" || gateway === "masterfy_card") response = await statusPixMasterfy(context, headers, transactionId);
   else if (gateway === "umbrellapag") response = await statusPixUmbrellapag(context, headers, transactionId);
   else if (gateway === "venuspay_pix") response = await statusPixVenuspay(context, headers, transactionId);
   else if (gateway === "unipay") response = await statusPixUnipay(context, headers, transactionId);

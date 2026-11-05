@@ -182,7 +182,35 @@ fbq('track','PageView');
       </section>
 
       <section class="bg-white rounded-2xl shadow-sm p-4">
-        <div style="display:flex;align-items:center;gap:9px;min-width:0;padding-bottom:12px;border-bottom:1px solid #f1f1f2">
+        <div id="lv-pay-method" style="display:flex;flex-direction:column;gap:8px;padding-bottom:12px;border-bottom:1px solid #f1f1f2;margin-bottom:2px">
+          <span style="font-size:14px;font-weight:700;color:#161823;letter-spacing:-.2px">Forma de pagamento</span>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <button type="button" id="lv-method-pix" style="display:flex;align-items:center;justify-content:center;gap:8px;height:48px;border-radius:9px;border:2px solid #fe2c55;background:#fff1f3;cursor:pointer;font-size:13px;font-weight:800;color:#161823">
+              <img src="/assets/pix-logo-EQU-5l0k.webp" alt="Pix" style="height:15px;width:auto;object-fit:contain"> PIX
+            </button>
+            <button type="button" id="lv-method-card" style="display:flex;align-items:center;justify-content:center;gap:8px;height:48px;border-radius:9px;border:2px solid #e4e4e7;background:#fff;cursor:pointer;font-size:13px;font-weight:800;color:#52525b">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg> CARTÃO
+            </button>
+          </div>
+        </div>
+        <div id="lv-card-form" style="display:none">
+          <div style="display:flex;align-items:center;gap:9px;min-width:0;padding-bottom:12px;border-bottom:1px solid #f1f1f2">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#161823" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
+            <span style="font-size:14px;font-weight:700;color:#161823;letter-spacing:-.2px">Pagamento no cartão de crédito</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+            <input id="lv-card-number" inputmode="numeric" autocomplete="cc-number" placeholder="Número do cartão" maxlength="19" style="width:100%;height:48px;border:1.5px solid #e4e4e7;border-radius:9px;padding:0 14px;font-size:15px;font-weight:600;color:#161823;outline:none">
+            <input id="lv-card-holder" autocomplete="cc-name" placeholder="Nome impresso no cartão" maxlength="60" style="width:100%;height:48px;border:1.5px solid #e4e4e7;border-radius:9px;padding:0 14px;font-size:15px;font-weight:600;color:#161823;outline:none;text-transform:uppercase">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <input id="lv-card-expiry" inputmode="numeric" autocomplete="cc-exp" placeholder="Validade (MM/AA)" maxlength="5" style="width:100%;height:48px;border:1.5px solid #e4e4e7;border-radius:9px;padding:0 14px;font-size:15px;font-weight:600;color:#161823;outline:none">
+              <input id="lv-card-cvv" inputmode="numeric" autocomplete="cc-csc" placeholder="CVV" maxlength="4" style="width:100%;height:48px;border:1.5px solid #e4e4e7;border-radius:9px;padding:0 14px;font-size:15px;font-weight:600;color:#161823;outline:none">
+            </div>
+            <select id="lv-card-installments" style="width:100%;height:48px;border:1.5px solid #e4e4e7;border-radius:9px;padding:0 14px;font-size:15px;font-weight:600;color:#161823;background:#fff;outline:none"></select>
+            <button type="button" id="lv-card-pay" style="width:100%;height:52px;border:none;border-radius:8px;background:#fe2c55;color:#fff;font-weight:800;font-size:15px;letter-spacing:.01em;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer">PAGAR NO CARTÃO</button>
+            <p id="lv-card-msg" style="display:none;margin:0;font-size:13px;font-weight:600;color:#dc2626;text-align:center"></p>
+          </div>
+        </div>
+        <div id="lv-pix-head" style="display:flex;align-items:center;gap:9px;min-width:0;padding-bottom:12px;border-bottom:1px solid #f1f1f2">
           <img decoding="async" loading="lazy" src="/assets/pix-logo-EQU-5l0k.webp" alt="Pix" style="height:16px;width:auto;object-fit:contain">
           <span style="font-size:14px;font-weight:700;color:#161823;letter-spacing:-.2px">Pagamento via Pix</span>
         </div>
@@ -1131,7 +1159,125 @@ var cor=localStorage.getItem('corSelecionada')||'';
 var img=localStorage.getItem('corImagem')||'/images/f2/potes-1.webp';
 var q=parseInt(localStorage.getItem('qtdSelecionada')||'1',10)||1;
  localStorage.setItem('produtoComprado',JSON.stringify({nome:'Escova Modeladora GOKOCO 3 em 1',cor:cor,voltagem:localStorage.getItem('voltagemSelecionada')||'',img:img,qtd:q,de:'R$ 129,90'}));
-}catch(e){}})();</script></body></html>
+}catch(e){}})();</script><script>
+(function(){
+  function el(id){return document.getElementById(id);}
+  function setMethod(m){
+    var pixBtn=el('lv-method-pix'),cardBtn=el('lv-method-card');
+    var showCard=(m==='card');
+    el('lv-card-form').style.display=showCard?'block':'none';
+    el('lv-pix-head').style.display=showCard?'none':'flex';
+    el('lv-pix-generate').style.display=showCard?'none':'flex';
+    el('lv-pix-content').style.display=showCard?'none':(window.__lvPixShown?'block':'none');
+    if(pixBtn){pixBtn.style.borderColor=showCard?'#e4e4e7':'#fe2c55';pixBtn.style.background=showCard?'#fff':'#fff1f3';pixBtn.style.color=showCard?'#52525b':'#161823';}
+    if(cardBtn){cardBtn.style.borderColor=showCard?'#fe2c55':'#e4e4e7';cardBtn.style.background=showCard?'#fff1f3':'#fff';cardBtn.style.color=showCard?'#161823':'#52525b';}
+  }
+  function maskNum(v){return v.replace(/\D/g,'').slice(0,19).replace(/(\d{4})(?=\d)/g,'$1 ');}
+  function maskExp(v){v=v.replace(/\D/g,'').slice(0,4);return v.length>2?v.slice(0,2)+'/'+v.slice(2):v;}
+  function maskCvv(v){return v.replace(/\D/g,'').slice(0,4);}
+  function fillInstallments(){
+    var sel=el('lv-card-installments');if(!sel)return;
+    var total=(typeof getAmount==='function'&&getAmount())||37.90;
+    sel.innerHTML='';
+    for(var i=1;i<=12;i++){
+      var v=total/i;
+      var o=document.createElement('option');o.value=i;
+      o.textContent=i+'x de R$ '+v.toFixed(2).replace('.',',');
+      sel.appendChild(o);
+    }
+  }
+  var tkPromise=null;
+  function loadTokenizer(key){
+    if(!tkPromise){tkPromise=(async function(){
+      if(!window.MasterFy){
+        await new Promise(function(res,rej){var s=document.createElement('script');s.type='module';s.src='https://api.masterfypagamentos.com/v1/scripts';s.onload=res;s.onerror=function(){rej(new Error('tk'));};document.head.appendChild(s);});
+      }
+      await window.MasterFy.init(key);return window.MasterFy;
+    })();}
+    return tkPromise;
+  }
+  function cardMsg(t,ok){var m=el('lv-card-msg');if(m){m.style.display='block';m.style.color=ok?'#15803d':'#dc2626';m.textContent=t;}}
+  function redirectPaid(){
+    try{localStorage.setItem('lvPixNext','/upsell4');}catch(e){}
+    if(window.lvGo){window.lvGo('/upsell4');}else{window.top.location.href='/upsell4';}
+  }
+  function paying(on){
+    var b=el('lv-card-pay');if(b){b.disabled=on;b.style.opacity=on?'.6':'1';b.textContent=on?'PROCESSANDO...':'PAGAR NO CARTÃO';}
+  }
+  window.__lvPayCard=async function(){
+    var num=el('lv-card-number').value.replace(/\s/g,''),hold=el('lv-card-holder').value.trim();
+    var exp=el('lv-card-expiry').value,cvv=el('lv-card-cvv').value,inst=parseInt(el('lv-card-installments').value||'1',10);
+    var mm=exp.slice(0,2),yy=exp.length===5?'20'+exp.slice(3):'';
+    if(num.length<13||num.length>19){cardMsg('Confira o número do cartão.');return;}
+    if(!hold){cardMsg('Informe o nome impresso no cartão.');return;}
+    if(exp.length!==5||+mm<1||+mm>12){cardMsg('Validade inválida. Use MM/AA.');return;}
+    if(cvv.length<3){cardMsg('CVV inválido.');return;}
+    paying(true);cardMsg('');
+    try{
+      var cfg=await (await fetch('/api/public/card/config')).json().catch(function(){return{};});
+      if(cfg.gateway!=='masterfy_card'||!cfg.tokenizationKey){cardMsg('Pagamento por cartão indisponível no momento. Tente pelo Pix.');paying(false);return;}
+      var tk=await loadTokenizer(cfg.tokenizationKey);
+      var cardToken=await tk.encrypt({number:num,holder:hold,expMonth:mm,expYear:yy,cvv:cvv});
+      saveDados();
+      var _d=loadDados();
+      var _v=function(id){var e=document.getElementById(id);return e&&e.value?String(e.value).trim():'';};
+      var amount=getAmount()||37.90;
+      var payload={
+        checkoutId:(function(){var id='';try{id=sessionStorage.getItem('lv_checkout_id')||'';}catch(e){}
+          if(!id){id=(crypto.randomUUID?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=Math.random()*16|0;return(c==='x'?r:(r&0x3|0x8)).toString(16);}));try{sessionStorage.setItem('lv_checkout_id',id);}catch(e){}}return id;})(),
+        amount:amount,
+        cart:(function(){var order=window.__lvPedido||{};var colors=[];try{colors=JSON.parse(localStorage.getItem('coresSelecionadas')||'[]').map(function(c){return{label:c.label,quantity:c.quantity};});}catch(e){}
+          return{qty:order.qty||1,colors:colors,shipping:order.shipping&&order.shipping.name||'Frete Grátis',bumps:(order.bumps||[]).map(function(b){return b.id;}),discount:(function(){try{return sessionStorage.getItem('lv_disc')==='0.5'?0.5:1;}catch(e){return 1;}})(),bonus:order.bonus||0};})(),
+        client:{
+          name:getVal('Nome e Sobrenome')||_d.nome||'Cliente',
+          email:(normalizePixEmail(getVal('email@email.com')||_d.email||'')||'').toLowerCase(),
+          document:((getVal('123.456.789-12')||_d.cpf||'00000000000')+'').replace(/\D/g,''),
+          phone:((getVal('(99) 99999-9999')||_d.telefone||'11999999999')+'').replace(/\D/g,'')
+        },
+        shipping:{cep:_v('lv-cep'),logradouro:_v('lv-endereco'),numero:_v('lv-numero'),complemento:_v('lv-complemento'),bairro:_v('lv-bairro'),cidade:_v('lv-cidade'),uf:_v('lv-uf')},
+        products:getProducts(amount),
+        tracking:Object.assign({},window.getUTMs?window.getUTMs():{},window.getVerdefyTracking?window.getVerdefyTracking():{}),
+        fb:(window.getFbData?window.getFbData():{}),
+        cardToken:cardToken,installments:inst
+      };
+      var r=await fetch('/api/public/card/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      var j=await r.json().catch(function(){return{};});
+      if(j.status==='approved'&&j.transactionId){
+        try{localStorage.setItem('lastPixTx',String(j.transactionId));localStorage.setItem('lastPixTxAt',String(Date.now()));localStorage.setItem('lastPixOrder',j.orderId||'');}catch(e){}
+        if(window.dataLayer)window.dataLayer.push({event:'card_paid',transaction_id:j.transactionId,amount:j.amount});
+        cardMsg('Pagamento aprovado!',true);
+        setTimeout(redirectPaid,600);return;
+      }
+      if(j.status==='processing'&&j.transactionId){
+        try{localStorage.setItem('lastPixTx',String(j.transactionId));localStorage.setItem('lastPixTxAt',String(Date.now()));localStorage.setItem('lastPixOrder',j.orderId||'');}catch(e){}
+        cardMsg('Pagamento em processamento. Aguardando confirmação...',true);
+        if(typeof startPolling==='function')startPolling(String(j.transactionId));
+        return;
+      }
+      if(j.status==='declined'){cardMsg(j.message||'Pagamento recusado pelo emissor. Tente outro cartão.');}
+      else{cardMsg(j.message||'Não foi possível processar o cartão. Tente novamente.');}
+      paying(false);
+    }catch(e){
+      cardMsg('Erro de conexão. Verifique os dados e tente novamente.');
+      paying(false);
+    }
+  };
+  document.addEventListener('click',function(e){
+    var t=e.target&&e.target.closest?e.target:null;
+    if(!t)return;
+    if(t.closest('#lv-method-pix')){setMethod('pix');return;}
+    if(t.closest('#lv-method-card')){setMethod('card');return;}
+    if(t.closest('#lv-card-pay')){window.__lvPayCard();return;}
+  });
+  var numEl=el('lv-card-number'),expEl=el('lv-card-expiry'),cvvEl=el('lv-card-cvv');
+  if(numEl)numEl.addEventListener('input',function(){numEl.value=maskNum(numEl.value);});
+  if(expEl)expEl.addEventListener('input',function(){expEl.value=maskExp(expEl.value);});
+  if(cvvEl)cvvEl.addEventListener('input',function(){cvvEl.value=maskCvv(cvvEl.value);});
+  fillInstallments();
+  document.addEventListener('lv:totals',fillInstallments);
+})();
+</script>
+</body></html>
 <!-- Reconciliador de pedido: fonte única de verdade (qtd + frete + ofertas) -->
 <script>
 (function(){

@@ -4,7 +4,7 @@ import { onRequest as adminLogin } from './admin-login.js';
 import { upsellCatalog } from './upsell-catalog.js';
 import { verifyAdminToken } from './admin-auth.js';
 import { createPixIronpay } from './providers/ironpay.js';
-import { createPixMasterfy } from './providers/masterfy.js';
+import { createPixMasterfy, createCardMasterfy } from './providers/masterfy.js';
 import { createPixUmbrellapag } from './providers/umbrellapag.js';
 import { createPixVenuspay } from './providers/venuspay.js';
 import { createPixUnipay } from './providers/unipay.js';
@@ -534,6 +534,114 @@ async function maybeReconcileBacklog(env, ctx) {
   if (ctx?.waitUntil) ctx.waitUntil(run); else await run;
 }
 
+// ── Cartão de crédito (MasterFy) ───────────────────────────────────────────────
+// Espelha createPix: mesmo pedido em gokoco_orders, mas gateway=masterfy_card e
+// o cartão chega já tokenizado pelo script oficial (frontend). PAID é síncrono;
+// PROCESSING/PENDING ficam 'pending' e o /api/public/pix/status continua servindo
+// porque queryPixGatewayStatus aceita gateway 'masterfy_card' (mesmo endpoint
+// /v1/payment/{id} da MasterFy).
+async function createCard(request, env, ctx) {
+  const body = await request.json().catch(() => null);
+  if (body?.client) body.client.email = normalizeBuyerEmail(body.client.email);
+  const invalid = validateBuyer(body);
+  if (invalid) return json({ message: invalid, code: 'invalid_document' }, 400);
+  const invalidShipping = validateShipping(body.shipping);
+  if (invalidShipping) return json({ message: invalidShipping, code: 'invalid_address' }, 400);
+  const cardToken = String(body?.cardToken || '').trim();
+  if (!cardToken) return json({ message: 'Token do cartão ausente. Recarregue a página e tente novamente.' }, 400);
+  const checkoutId = String(body.checkoutId || '');
+  if (!/^[a-f0-9-]{20,50}$/i.test(checkoutId)) return json({ message: 'Identificador de checkout inválido.' }, 400);
+  const previous = await db(env, 'gokoco_orders', `?checkout_id=eq.${encodeURIComponent(checkoutId)}&select=*&limit=1`);
+  if (previous[0]) {
+    const status = previous[0].status;
+    const isPix = previous[0].gateway !== 'masterfy_card';
+    const age = Date.now() - (Date.parse(previous[0].created_at || '') || 0);
+    // PIX não pago/expirado ou tentativa de cartão travada há >10min → libera pra nova cobrança
+    const stale = status === 'expired' || status === 'failed'
+      || (isPix && status === 'pending')
+      || (status === 'creating' && age > 2 * 60 * 1000)
+      || (!isPix && status === 'pending' && age > 10 * 60 * 1000);
+    if (stale) {
+      const freed = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(previous[0].id)}&status=eq.${previous[0].status}&select=id`, 'PATCH', { status: 'failed', updated_at: new Date().toISOString() });
+      if (freed.length) previous[0].status = 'failed';
+    }
+    if (previous[0].status === 'paid') return json({ message: 'Este pedido já foi pago.' }, 409);
+    if (previous[0].status === 'pending' && !isPix) return json({ message: 'O pagamento por cartão está em processamento. Aguarde a confirmação.' }, 409);
+    if (previous[0].status === 'creating') return json({ message: 'A cobrança anterior está em processamento. Aguarde um momento.' }, 409);
+  }
+  const active = (await listGateways(env)).filter((g) => g.enabled && g.method === 'card');
+  if (!active.length || active[0].id !== 'masterfy_card' || !active[0].configured) {
+    return json({ message: 'Pagamento por cartão indisponível no momento.' }, 503);
+  }
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const ipKey = `card:${ip}`;
+  const hashBytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${env.ADMIN_SESSION_SECRET || ''}:${ip}`));
+  const ipHash = Array.from(new Uint8Array(hashBytes), (b) => b.toString(16).padStart(2, '0')).join('');
+  if (env.PIX_RATELIMIT) {
+    const count = Number(await env.PIX_RATELIMIT.get(ipKey) || 0);
+    if (count >= 5) return json({ message: 'Muitas tentativas com cartão. Tente novamente em uma hora.' }, 429);
+  }
+  const shipping = body.shipping;
+  const order = {
+    checkout_id: checkoutId,
+    name: String(body.client.name).trim().slice(0, 150),
+    email: normalizeBuyerEmail(body.client.email),
+    phone: digits(body.client.phone),
+    document: digits(body.client.document),
+    amount: await nextPixAmount(env, cartTotal(body.cart)),
+    products: Array.isArray(body.products) ? body.products.slice(0, 10) : [],
+    shipping,
+    tracking: { ...await recoverCustomerAttribution(env, db, capturePurchaseTracking(request, body), body.client), site_variant: 'gokoco' },
+    gateway: 'masterfy_card',
+    client_ip_hash: ipHash,
+    status: 'creating',
+  };
+  const saved = previous[0]
+    ? await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(previous[0].id)}&status=eq.failed&select=id`, 'PATCH', { ...order, updated_at: new Date().toISOString() })
+    : await db(env, 'gokoco_orders', '?select=id', 'POST', order);
+  const id = saved?.[0]?.id;
+  if (!id) return json({ message: 'A cobrança já está em processamento. Aguarde um momento.' }, 409);
+  if (env.PIX_RATELIMIT) await env.PIX_RATELIMIT.put(ipKey, String(Number(await env.PIX_RATELIMIT.get(ipKey) || 0) + 1), { expirationTtl: 3600 });
+  const gatewayContact = maskedGatewayContact(env, id, order);
+  const payload = {
+    amount: order.amount, name: order.name, email: gatewayContact.email, phone: gatewayContact.phone,
+    document: order.document, cardToken,
+    installments: body.installments || 1,
+    productName: order.products.map((p) => p.name).filter(Boolean).join(' + ').slice(0, 255) || 'Escova Modeladora GOKOCO',
+    address: {
+      street: shipping.logradouro, number: shipping.numero, complement: shipping.complemento,
+      neighborhood: shipping.bairro, city: shipping.cidade, state: shipping.uf, zipCode: shipping.cep,
+    },
+    ip: ip !== 'unknown' ? ip : undefined,
+  };
+  const result = await createCardMasterfy({ request, env }, { 'Content-Type': 'application/json' }, payload);
+  const payment = await result.json().catch(() => ({}));
+  const transactionId = payment.transactionId ? String(payment.transactionId) : null;
+  if (!transactionId || payment.status === 'error') {
+    await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(id)}`, 'PATCH', { status: 'failed', updated_at: new Date().toISOString() });
+    return json({ message: payment.error || 'Não foi possível processar o cartão. Tente novamente.' }, 502);
+  }
+  if (payment.status === 'declined') {
+    await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(id)}`, 'PATCH', { status: 'failed', transaction_id: transactionId, updated_at: new Date().toISOString() });
+    return json({ status: 'declined', transactionId, message: payment.error || 'Pagamento recusado pelo emissor.' });
+  }
+  if (payment.status === 'approved') {
+    const paidAt = new Date().toISOString();
+    await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(id)}`, 'PATCH', { status: 'paid', transaction_id: transactionId, updated_at: paidAt });
+    await registerOrderTracking(env, id, paidAt).catch((e) => console.error('[tracking/card]', e?.message));
+    await deliverPaidPurchase(env, db, id, paidAt).catch((e) => console.error('[purchase/card]', e?.message));
+    await deliverPaidEmail(env, db, id, paidAt).catch((e) => console.error('[email/card]', e?.message));
+    return json({ status: 'approved', isPaid: true, transactionId, orderId: id, amount: order.amount, eventId: `card_${id}` });
+  }
+  // PROCESSING/PENDING → segue 'pending'; statusPix + reconciler cobrem o desfecho
+  await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(id)}`, 'PATCH', { status: 'pending', transaction_id: transactionId, updated_at: new Date().toISOString() });
+  if (purchaseDestination(env) === 'utmify') {
+    const send = deliverPendingPurchase(env, db, id).catch((error) => console.error('[purchase/pending]', id, error?.message || error));
+    if (ctx?.waitUntil) ctx.waitUntil(send); else await send;
+  }
+  return json({ status: 'processing', transactionId, orderId: id, amount: order.amount });
+}
+
 async function statusPix(request, env, ctx) {
   const id = new URL(request.url).searchParams.get('id');
   if (!id || id.length > 150) return json({ error: 'Transação inválida.' }, 400);
@@ -1008,6 +1116,12 @@ export default {
       if (path === '/api/market/pix/create' && request.method === 'POST') return await createMarketPix(request, env, ctx);
       if (path === '/api/public/pix/create' && request.method === 'POST') return await createPix(request, env, ctx);
       if (path === '/api/public/pix/status' && request.method === 'GET') return await statusPix(request, env, ctx);
+      if (path === '/api/public/card/config' && request.method === 'GET') {
+        const cardGw = (await listGateways(env)).find((g) => g.method === 'card' && g.enabled);
+        if (!cardGw || !cardGw.configured || cardGw.id !== 'masterfy_card') return json({ gateway: null });
+        return json({ gateway: cardGw.id, tokenizationKey: String(env.MASTERFY_TOKENIZATION_KEY || '') });
+      }
+      if (path === '/api/public/card/create' && request.method === 'POST') return await createCard(request, env, ctx);
       if (path === '/api/pix/webhook' && request.method === 'POST') return await webhook(request, env);
       if (path.startsWith('/api/')) return json({ error: 'Rota não encontrada.' }, 404);
       return siteAsset(request, env);
