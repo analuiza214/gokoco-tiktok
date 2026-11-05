@@ -1183,7 +1183,7 @@ var q=parseInt(localStorage.getItem('qtdSelecionada')||'1',10)||1;
       var total=i<=3?base:base*Math.pow(1.0299,i);
       var v=total/i;
       var o=document.createElement('option');o.value=i;
-      o.textContent=i+'x de R$ '+v.toFixed(2).replace('.',',')+(i<=3?' sem juros':' (total R$ '+total.toFixed(2).replace('.',',')+')');
+      o.textContent=i+'x de R$ '+v.toFixed(2).replace('.',',')+(i<=3?' sem juros':'');
       sel.appendChild(o);
     }
   }
