@@ -4861,7 +4861,7 @@ async function listGateways2(env) {
   const rows = await db(env, "gokoco_gateways", "?select=id,enabled,updated_at");
   return gateways2.map((g) => {
     const saved = rows.find((row) => row.id === g.id);
-    return { ...g, enabled: saved ? !!saved.enabled : g.method === "card", configured: configured(env, g.id), updated_at: saved?.updated_at || null };
+    return { ...g, enabled: saved ? !!saved.enabled : g.id === "venuspay", configured: configured(env, g.id), updated_at: saved?.updated_at || null };
   });
 }
 async function requireAdmin(request2, env) {
@@ -5529,7 +5529,12 @@ async function adminGateways(request2, env) {
   if (!gateways2.some((g) => g.id === id) || typeof enabled !== "boolean") return json3({ error: "Gateway inv\xE1lido." }, 400);
   if (enabled && !configured(env, id)) return json3({ error: "Configure a chave deste gateway no Cloudflare antes de ativ\xE1-lo." }, 400);
   const gwMethod = gateways2.find((g) => g.id === id)?.method;
-  if (enabled && gwMethod) await db(env, "gokoco_gateways", `?enabled=eq.true&id=neq.${id}`, "PATCH", { enabled: false, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
+  if (enabled && gwMethod) {
+    const sameMethod = (await listGateways2(env)).filter((g) => g.method === gwMethod && g.enabled && g.id !== id);
+    for (const g of sameMethod) {
+      await db(env, "gokoco_gateways", `?id=eq.${g.id}`, "PATCH", { enabled: false, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
+    }
+  }
   await db(env, "gokoco_gateways", "?on_conflict=id", "POST", { id, enabled, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
   return json3({ gateways: await listGateways2(env) });
 }
