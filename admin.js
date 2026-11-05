@@ -16,7 +16,7 @@ let selectedSort = 'recentes';
 let page = 1;
 let busy = false;
 const PAGE_SIZE = 50;
-const gatewayNames = { unipay: 'UniPay', invictuspay: 'InvictusPay', ironpay: 'IronPay', masterfy: 'MasterFy', umbrellapag: 'UmbrellaPag', venuspay: 'Venus Pay', venuspay_pix: 'Venus Pay', flevopay: 'FlevoPay' };
+const gatewayNames = { unipay: 'UniPay', invictuspay: 'InvictusPay', ironpay: 'IronPay', masterfy: 'MasterFy', umbrellapag: 'UmbrellaPag', venuspay: 'Venus Pay', venuspay_pix: 'Venus Pay', flevopay: 'FlevoPay', masterfy_card: 'MasterFy' };
 const statusInfo = {
   creating: { label: 'Criando PIX', fg: '#92400e', bg: '#fef3c7' },
   pending: { label: 'PIX gerado', fg: '#1d4ed8', bg: '#dbeafe' },
@@ -265,13 +265,13 @@ function renderOrders() {
 function renderGateways() {
   const groups = new Map();
   for (const gateway of gateways) {
-    const name = gateway.name.replace(/ PIX$/, '');
+    const name = gateway.name.replace(/ (PIX|Cartão)$/, '');
     if (!groups.has(name)) groups.set(name, []);
     groups.get(name).push(gateway);
   }
   $('gateways').innerHTML = [...groups.entries()].sort(([a], [b]) => a.localeCompare(b, 'pt-BR')).map(([name, entries]) => `
     <section class="gateway-group"><div class="gateway-group-title">${esc(name)}${entries.length > 1 ? '<span class="method-tag">Cartão e PIX</span>' : ''}</div>
-      ${entries.map((gateway) => `<div class="gateway-method"><div><div class="gateway-method-label"><span class="method-tag">PIX</span><span style="color:${gateway.enabled ? '#166534' : '#9ca3af'}">${gateway.enabled ? 'Ativado' : 'Desativado'}</span></div><small>${gateway.configured ? 'Chave configurada' : 'Chave pendente nas variáveis do Cloudflare'}</small></div><button class="toggle ${gateway.enabled ? 'on' : ''}" data-gateway="${esc(gateway.id)}" aria-label="${esc(`${name} PIX`)}" aria-checked="${gateway.enabled}" role="switch" ${!gateway.configured && !gateway.enabled ? 'disabled' : ''}><i></i></button></div>`).join('')}
+      ${entries.map((gateway) => `<div class="gateway-method"><div><div class="gateway-method-label"><span class="method-tag ${gateway.method === 'card' ? 'card' : 'pix'}">${gateway.method === 'card' ? 'CARTÃO' : 'PIX'}</span><span style="color:${gateway.enabled ? '#166534' : '#9ca3af'}">${gateway.enabled ? 'Ativado' : 'Desativado'}</span></div><small>${gateway.configured ? 'Chave configurada' : 'Chave pendente nas variáveis do Cloudflare'}</small></div><button class="toggle ${gateway.enabled ? 'on' : ''}" data-gateway="${esc(gateway.id)}" aria-label="${esc(`${name} ${gateway.method === 'card' ? 'Cartão' : 'PIX'}`)}" aria-checked="${gateway.enabled}" role="switch" ${!gateway.configured && !gateway.enabled ? 'disabled' : ''}><i></i></button></div>`).join('')}
     </section>`).join('');
 }
 
