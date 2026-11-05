@@ -1,3 +1,4 @@
+import {metaReadiness} from './meta-readiness.js';
 import {retryVerdefy} from './verdefy-sales.js';
 import { onRequest as adminLogin } from './admin-login.js';
 import { upsellCatalog } from './upsell-catalog.js';
@@ -978,6 +979,7 @@ export default {
         });
         if (handled) return handled;
       }
+      if(path==='/api/admin/meta-readiness'&&request.method==='GET'){const denied=await requireAdmin(request,env);if(denied)return denied;return json(await metaReadiness(env));}
       if (path === '/api/process-purchase-queue' && request.method === 'POST') {
         const secret = String(env.CRON_SECRET || '');
         if (!secret || request.headers.get('x-cron-secret') !== secret) return json({ error: 'Não autorizado.' }, 401);

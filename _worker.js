@@ -1,3 +1,17 @@
+// site-source/worker-src/meta-readiness.js
+async function metaReadiness(env, send = fetch) {
+  const pixel = String(env.FB_PIXEL_ID || "1542362403143695").trim(), token = String(env.FB_ACCESS_TOKEN || "").trim();
+  if (!token) return { configured: false, readAccess: false, reason: "missing_token" };
+  if (!/^\d+$/.test(pixel)) return { configured: true, readAccess: false, reason: "invalid_pixel" };
+  try {
+    const r = await send("https://graph.facebook.com/v25.0/" + pixel + "?fields=id", { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(12e3) });
+    const d = await r.json();
+    return { configured: true, pixel, readAccess: r.ok && String(d.id) === pixel, reason: r.ok && String(d.id) === pixel ? "pixel_read_verified" : "meta_rejected", metaCode: Number(d.error?.code) || null, purchaseTested: false };
+  } catch {
+    return { configured: true, pixel, readAccess: false, reason: "unavailable", purchaseTested: false };
+  }
+}
+
 // site-source/worker-src/providers/unipay.js
 var BASE = "https://api-dash.unipaybr.com/v1";
 var reply = (value, status, headers6) => new Response(JSON.stringify(value), { status, headers: headers6 });
@@ -1399,6 +1413,11 @@ async function deliverPaidPurchase(env, db2, orderId, paidAt) {
     if (!order) return { state: "not_paid" };
     if (order.tracking?.manualExternal) return { state: "external_tracking" };
     const metadata = order.tracking?._purchase || {};
+    if (destination === "meta" && metadata.utmify?.state) return { destination: "utmify", state: "previous_destination", event_id: "pix_" + order.id };
+    if (destination === "meta" && env.PURCHASE_MIGRATION_AT) {
+      const cutoff = Date.parse(env.PURCHASE_MIGRATION_AT), confirmed = Date.parse(metadata.paid_at || order.tracking?._payment?.paid_at || paidAt || "");
+      if (!Number.isFinite(cutoff) || !Number.isFinite(confirmed) || confirmed < cutoff) return { state: "before_migration" };
+    }
     const prior = metadata[destination] || {};
     if (prior.state === "sent") return purchaseSummary(env, order);
     if (destination === "utmify" && metadata.utmify_pending?.state === "sending" && Date.parse(metadata.utmify_pending.lease_until) > Date.now()) return { state: "pending_sending" };
@@ -5579,6 +5598,11 @@ var index_default = {
           providers: { unipay: createPixUnipay, invictuspay: createPixInvictuspay, ironpay: createPixIronpay, masterfy: createPixMasterfy, umbrellapag: createPixUmbrellapag, venuspay_pix: createPixVenuspay, flevopay: createPixFlevopay }
         });
         if (handled) return handled;
+      }
+      if (path === "/api/admin/meta-readiness" && request2.method === "GET") {
+        const denied = await requireAdmin(request2, env);
+        if (denied) return denied;
+        return json3(await metaReadiness(env));
       }
       if (path === "/api/process-purchase-queue" && request2.method === "POST") {
         const secret = String(env.CRON_SECRET || "");

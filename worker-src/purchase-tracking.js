@@ -186,6 +186,12 @@ export async function deliverPaidPurchase(env, db, orderId, paidAt) {
     if (!order) return { state: 'not_paid' };
     if (order.tracking?.manualExternal) return { state: 'external_tracking' };
     const metadata = order.tracking?._purchase || {};
+    // Durante a migracao, compras ja encaminhadas a Utmify nao mudam de destino.
+    if(destination==='meta'&&metadata.utmify?.state)return {destination:'utmify',state:'previous_destination',event_id:'pix_'+order.id};
+    if(destination==='meta'&&env.PURCHASE_MIGRATION_AT){
+      const cutoff=Date.parse(env.PURCHASE_MIGRATION_AT),confirmed=Date.parse(metadata.paid_at||order.tracking?._payment?.paid_at||paidAt||'');
+      if(!Number.isFinite(cutoff)||!Number.isFinite(confirmed)||confirmed<cutoff)return {state:'before_migration'};
+    }
     const prior = metadata[destination] || {};
     if (prior.state === 'sent') return purchaseSummary(env, order);
     if (destination === 'utmify' && metadata.utmify_pending?.state === 'sending' && Date.parse(metadata.utmify_pending.lease_until) > Date.now()) return { state: 'pending_sending' };
