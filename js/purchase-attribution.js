@@ -1,6 +1,6 @@
 (function () {
   var keys = ['src', 'sck', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'utm_id', 'fbclid', 'gclid', 'ttclid'];
-  var verdefyPixel=location.origin==='https://gocoko-tiktok.shop'?'98988e4c-9c44-4d29-afea-9759b20d8604':null;
+  var verdefyPixel=['https://gokoco-tiktok.pages.dev','https://gokoco-tiktok.loja-oficial.workers.dev'].includes(location.origin)?'98988e4c-9c44-4d29-afea-9759b20d8604':null;
   if(verdefyPixel&&!document.querySelector('script[data-verdefy-loader]')){var loader=document.createElement('script');loader.src='https://verdefy-sales.loja-oficial.workers.dev/tracker.js?pixel='+verdefyPixel;loader.defer=true;loader.setAttribute('data-verdefy-loader','');document.head.appendChild(loader);}
   var storeKey = 'gokoco_attribution';
   var saved = {};

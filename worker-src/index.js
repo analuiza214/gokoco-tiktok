@@ -1,5 +1,5 @@
 import {metaReadiness} from './meta-readiness.js';
-import {retryVerdefy} from './verdefy-sales.js';
+import {retryVerdefy,deliverVerdefy} from './verdefy-sales.js';
 import { onRequest as adminLogin } from './admin-login.js';
 import { upsellCatalog } from './upsell-catalog.js';
 import { verifyAdminToken } from './admin-auth.js';
@@ -282,13 +282,19 @@ async function createPix(request, env, ctx, siteVariant = 'gokoco') {
     return json({ message: providerMessage }, result.status || 502);
   }
   const qr = payment.qrCodeBase64 || payment.qrCodeImage || null;
+  const pixAt = new Date().toISOString();
   await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(id)}`, 'PATCH', {
     status: 'pending', transaction_id: String(payment.transactionId), pix_code: payment.pixCode, qr_code: qr,
-    updated_at: new Date().toISOString(),
+    updated_at: pixAt,
   });
   if (purchaseDestination(env) === 'utmify') {
     const send = deliverPendingPurchase(env, db, id).catch((error) => console.error('[purchase/pending]', id, error?.message || error));
     if (ctx?.waitUntil) ctx.waitUntil(send); else await send;
+  }
+  // Venda iniciada no Verdefy: somente após o gateway devolver a cobrança Pix. Falhas ficam para a fila do reconciliador.
+  if (env.VERDEFY_SALES_TOKEN) {
+    const mirror = deliverVerdefy(env, db, id, undefined, 'pending', { pixAt }).catch(() => console.error('[verdefy] Pix sync pending.'));
+    if (ctx?.waitUntil) ctx.waitUntil(mirror); else await mirror;
   }
   if (env.PIX_RATELIMIT) {
     const count = Number(await env.PIX_RATELIMIT.get(ipKey) || 0);
