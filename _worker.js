@@ -1146,7 +1146,7 @@ async function mirrorVerdefy(env, order, query = queryPixGatewayStatus, send = f
   const paidAt = adminConfirmed ? manual.paidAt : verified.paidAt || order.tracking?._payment?.paid_at || order.tracking?._purchase?.paid_at;
   if (!paidAt || !Number.isFinite(Date.parse(paidAt))) throw Error("Data confirmada de pagamento ausente.");
   const payload = { source: "gokoco", orderId: String(order.id), status: "paid", confirmedByProvider: !adminConfirmed, confirmationSource: adminConfirmed ? "admin" : "provider", currency: "BRL", amount: Math.round(Number(order.amount) * 100), netAmount: null, createdAt: order.created_at, paidAt, gateway: order.gateway, tracking: order.tracking, items: (order.products || []).map((p) => ({ productId: p.id ? String(p.id) : "", title: p.name, quantity: p.quantity })) };
-  const r = await send("https://verdefy-sales.joazinhisonetinho44.workers.dev/v1/sales", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + env.VERDEFY_SALES_TOKEN }, body: JSON.stringify(payload), signal: AbortSignal.timeout(12e3) });
+  const r = await send("https://verdefy-sales.loja-oficial.workers.dev/v1/sales", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + env.VERDEFY_SALES_TOKEN }, body: JSON.stringify(payload), signal: AbortSignal.timeout(12e3) });
   if (!r.ok) throw Error("Verdefy HTTP " + r.status);
   const receipt = await r.json();
   if (receipt.ok !== true) throw Error("Recebimento n\xE3o confirmado.");
@@ -4990,14 +4990,14 @@ function validateShipping(shipping) {
   if (!/^[A-Za-z]{2}$/.test(String(address.uf || "").trim())) return "Informe a UF com duas letras.";
   return null;
 }
-function maskedGatewayContact(env, orderId, order) {
+function maskedGatewayContact(env, orderId, order, request2) {
   if (String(env.GATEWAY_MASK_CUSTOMER || "").toLowerCase() === "false") return { email: order.email, phone: order.phone };
   let domain = String(env.GATEWAY_MASK_EMAIL_DOMAIN || "").trim().replace(/^@/, "");
   if (!domain) {
     try {
       domain = new URL(env.SITE_URL).hostname;
     } catch {
-      domain = "gokoco-tiktok.pages.dev";
+      domain = new URL(request2.url).hostname;
     }
   }
   const ref = String(orderId).replace(/[^a-z0-9]/gi, "").slice(0, 12).toLowerCase() || "cliente";
@@ -5068,7 +5068,7 @@ async function createPix(request2, env, ctx, siteVariant = "gokoco") {
   const saved = previous[0] ? await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(previous[0].id)}&status=eq.failed&select=id`, "PATCH", { ...order, updated_at: (/* @__PURE__ */ new Date()).toISOString() }) : await db(env, "gokoco_orders", "?select=id", "POST", order);
   const id = saved?.[0]?.id;
   if (!id) return json3({ message: "A cobran\xE7a j\xE1 est\xE1 em processamento. Aguarde um momento." }, 409);
-  const gatewayContact = maskedGatewayContact(env, id, order);
+  const gatewayContact = maskedGatewayContact(env, id, order, request2);
   const payload = {
     amount: order.amount,
     name: order.name,
@@ -5154,13 +5154,13 @@ function bellaSiteRequest(url, env) {
   const hostname = String(env.BELLA_HOSTNAME || "").trim().toLowerCase();
   return hostname && url.hostname.toLowerCase() === hostname || url.pathname === "/video" || url.pathname.startsWith("/video/");
 }
-function bellaEnvironment(env) {
+function bellaEnvironment(env, request2) {
   const override = Object.fromEntries(Object.keys(env).filter((key) => key.startsWith("BELLA_") && env[key]).map((key) => [key.slice("BELLA_".length), env[key]]));
   return {
     ...env,
     ...override,
     SITE_VARIANT: "video",
-    SITE_URL: env.BELLA_SITE_URL || `${String(env.SITE_URL || "https://gokoco-tiktok.pages.dev").replace(/\/+$/, "")}/video`
+    SITE_URL: env.BELLA_SITE_URL || `${String(env.SITE_URL || new URL(request2.url).origin).replace(/\/+$/, "")}/video`
   };
 }
 var bellaRoutes = {
@@ -5186,12 +5186,12 @@ async function bellaRoute(path, request2, env, ctx) {
   if (!handler) return null;
   const url = new URL(request2.url);
   url.pathname = path;
-  return handler({ request: new Request(url, request2), env: bellaEnvironment(env), waitUntil: ctx?.waitUntil?.bind(ctx) });
+  return handler({ request: new Request(url, request2), env: bellaEnvironment(env, request2), waitUntil: ctx?.waitUntil?.bind(ctx) });
 }
 async function adminBellaOrders(request2, env) {
   const denied = await requireAdmin(request2, env);
   if (denied) return denied;
-  const bella = bellaEnvironment(env);
+  const bella = bellaEnvironment(env, request2);
   const base = String(bella.SUPABASE_URL || "").replace(/\/+$/, "");
   const key = String(bella.SUPABASE_SERVICE_ROLE_KEY || "");
   if (!base || !key) return json3({ error: "Banco Bella Mix n\xE3o configurado." }, 503);
@@ -5244,7 +5244,7 @@ async function adminBellaCard(request2, env) {
   if (request2.method !== "GET") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
   const id = String(new URL(request2.url).searchParams.get("id") || "");
   if (!/^[0-9a-f-]{36}$/i.test(id)) return json3({ error: "Pedido inv\xE1lido." }, 400);
-  const bella = bellaEnvironment(env);
+  const bella = bellaEnvironment(env, request2);
   const base = String(bella.SUPABASE_URL || "").replace(/\/+$/, "");
   const key = String(bella.SUPABASE_SERVICE_ROLE_KEY || "");
   if (!base || !key) return json3({ error: "Banco Bella Mix n\xE3o configurado." }, 503);
@@ -5305,7 +5305,7 @@ async function adminBellaTrackingEmail(request2, env) {
   if (request2.method !== "POST") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
   const { id } = await request2.json().catch(() => ({}));
   if (!/^[0-9a-f-]{36}$/i.test(String(id || ""))) return json3({ error: "Pedido inv\xE1lido." }, 400);
-  const bella = bellaEnvironment(env);
+  const bella = bellaEnvironment(env, request2);
   const base = String(bella.SUPABASE_URL || "").replace(/\/+$/, "");
   const key = String(bella.SUPABASE_SERVICE_ROLE_KEY || "");
   if (!base || !key) return json3({ error: "Banco Bella Mix n\xE3o configurado." }, 503);
@@ -5465,7 +5465,7 @@ async function createCard(request2, env, ctx) {
   const id = saved?.[0]?.id;
   if (!id) return json3({ message: "A cobran\xE7a j\xE1 est\xE1 em processamento. Aguarde um momento." }, 409);
   if (env.PIX_RATELIMIT) await env.PIX_RATELIMIT.put(ipKey, String(Number(await env.PIX_RATELIMIT.get(ipKey) || 0) + 1), { expirationTtl: 3600 });
-  const gatewayContact = maskedGatewayContact(env, id, order);
+  const gatewayContact = maskedGatewayContact(env, id, order, request2);
   const payload = {
     amount: order.amount,
     name: order.name,
@@ -5926,7 +5926,7 @@ async function reconcilePaymentsRoute(request2, env, ctx) {
   if (!cron) payments.backlog = await reconcilePendingPayments(env, 3, true);
   payments.reshipping = await reconcileReshippingFees(env, payments.rateLimited ? 0 : 3);
   if (!cron) {
-    const bellaRun = onRequest15({ request: request2, env: bellaEnvironment(env) }).then((response) => response.json().catch(() => null)).catch(() => null);
+    const bellaRun = onRequest15({ request: request2, env: bellaEnvironment(env, request2) }).then((response) => response.json().catch(() => null)).catch(() => null);
     if (ctx?.waitUntil) ctx.waitUntil(bellaRun.then((bella) => {
       payments.bella = bella;
     }));

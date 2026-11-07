@@ -166,11 +166,11 @@ function validateShipping(shipping) {
 // The gateway only receives placeholder contact data; the real e-mail/phone stay in gokoco_orders for the admin.
 // A unique alias per order avoids antifraud flags caused by many charges sharing one e-mail.
 // Set GATEWAY_MASK_CUSTOMER=false to send the real data again.
-function maskedGatewayContact(env, orderId, order) {
+function maskedGatewayContact(env, orderId, order, request) {
   if (String(env.GATEWAY_MASK_CUSTOMER || '').toLowerCase() === 'false') return { email: order.email, phone: order.phone };
   let domain = String(env.GATEWAY_MASK_EMAIL_DOMAIN || '').trim().replace(/^@/, '');
   if (!domain) {
-    try { domain = new URL(env.SITE_URL).hostname; } catch { domain = 'gokoco-tiktok.pages.dev'; }
+    try { domain = new URL(env.SITE_URL).hostname; } catch { domain = new URL(request.url).hostname; }
   }
   const ref = String(orderId).replace(/[^a-z0-9]/gi, '').slice(0, 12).toLowerCase() || 'cliente';
   const phone = digits(env.GATEWAY_MASK_PHONE) || '11999999999';
@@ -249,7 +249,7 @@ async function createPix(request, env, ctx, siteVariant = 'gokoco') {
     : await db(env, 'gokoco_orders', '?select=id', 'POST', order);
   const id = saved?.[0]?.id;
   if (!id) return json({ message: 'A cobrança já está em processamento. Aguarde um momento.' }, 409);
-  const gatewayContact = maskedGatewayContact(env, id, order);
+  const gatewayContact = maskedGatewayContact(env, id, order, request);
   const payload = {
     amount: order.amount, name: order.name, email: gatewayContact.email, phone: gatewayContact.phone,
     reference: id,
@@ -337,7 +337,7 @@ function bellaSiteRequest(url, env) {
 // Todas as lojas usam o mesmo backend e as mesmas variáveis. Se algum dia
 // precisar separar uma conta, uma variável BELLA_<NOME> sobrescreve a
 // equivalente apenas nas rotas do catálogo Bella Mix.
-function bellaEnvironment(env) {
+function bellaEnvironment(env, request) {
   const override = Object.fromEntries(Object.keys(env)
     .filter((key) => key.startsWith('BELLA_') && env[key])
     .map((key) => [key.slice('BELLA_'.length), env[key]]));
@@ -345,7 +345,7 @@ function bellaEnvironment(env) {
     ...env,
     ...override,
     SITE_VARIANT: 'video',
-    SITE_URL: env.BELLA_SITE_URL || `${String(env.SITE_URL || 'https://gokoco-tiktok.pages.dev').replace(/\/+$/, '')}/video`,
+    SITE_URL: env.BELLA_SITE_URL || `${String(env.SITE_URL || new URL(request.url).origin).replace(/\/+$/, '')}/video`,
   };
 }
 
@@ -373,12 +373,12 @@ async function bellaRoute(path, request, env, ctx) {
   if (!handler) return null;
   const url = new URL(request.url);
   url.pathname = path;
-  return handler({ request: new Request(url, request), env: bellaEnvironment(env), waitUntil: ctx?.waitUntil?.bind(ctx) });
+  return handler({ request: new Request(url, request), env: bellaEnvironment(env, request), waitUntil: ctx?.waitUntil?.bind(ctx) });
 }
 
 async function adminBellaOrders(request, env) {
   const denied = await requireAdmin(request, env); if (denied) return denied;
-  const bella = bellaEnvironment(env);
+  const bella = bellaEnvironment(env, request);
   const base = String(bella.SUPABASE_URL || '').replace(/\/+$/, '');
   const key = String(bella.SUPABASE_SERVICE_ROLE_KEY || '');
   if (!base || !key) return json({ error: 'Banco Bella Mix não configurado.' }, 503);
@@ -432,7 +432,7 @@ async function adminBellaCard(request, env) {
   if (request.method !== 'GET') return json({ error: 'Método inválido.' }, 405);
   const id = String(new URL(request.url).searchParams.get('id') || '');
   if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ error: 'Pedido inválido.' }, 400);
-  const bella = bellaEnvironment(env);
+  const bella = bellaEnvironment(env, request);
   const base = String(bella.SUPABASE_URL || '').replace(/\/+$/, '');
   const key = String(bella.SUPABASE_SERVICE_ROLE_KEY || '');
   if (!base || !key) return json({ error: 'Banco Bella Mix não configurado.' }, 503);
@@ -493,7 +493,7 @@ async function adminBellaTrackingEmail(request, env) {
   if (request.method !== 'POST') return json({ error: 'Método inválido.' }, 405);
   const { id } = await request.json().catch(() => ({}));
   if (!/^[0-9a-f-]{36}$/i.test(String(id || ''))) return json({ error: 'Pedido inválido.' }, 400);
-  const bella = bellaEnvironment(env);
+  const bella = bellaEnvironment(env, request);
   const base = String(bella.SUPABASE_URL || '').replace(/\/+$/, '');
   const key = String(bella.SUPABASE_SERVICE_ROLE_KEY || '');
   if (!base || !key) return json({ error: 'Banco Bella Mix não configurado.' }, 503);
@@ -678,7 +678,7 @@ async function createCard(request, env, ctx) {
   const id = saved?.[0]?.id;
   if (!id) return json({ message: 'A cobrança já está em processamento. Aguarde um momento.' }, 409);
   if (env.PIX_RATELIMIT) await env.PIX_RATELIMIT.put(ipKey, String(Number(await env.PIX_RATELIMIT.get(ipKey) || 0) + 1), { expirationTtl: 3600 });
-  const gatewayContact = maskedGatewayContact(env, id, order);
+  const gatewayContact = maskedGatewayContact(env, id, order, request);
   const payload = {
     amount: order.amount, name: order.name, email: gatewayContact.email, phone: gatewayContact.phone,
     document: order.document, cardToken,
@@ -1105,7 +1105,7 @@ async function reconcilePaymentsRoute(request, env, ctx) {
   payments.reshipping = await reconcileReshippingFees(env, payments.rateLimited ? 0 : 3);
   if (!cron) {
     // Mesmo backend e mesmas credenciais: o painel também sincroniza a loja Vídeo.
-    const bellaRun = bellaReconcilePayments({ request, env: bellaEnvironment(env) })
+    const bellaRun = bellaReconcilePayments({ request, env: bellaEnvironment(env, request) })
       .then((response) => response.json().catch(() => null))
       .catch(() => null);
     if (ctx?.waitUntil) ctx.waitUntil(bellaRun.then((bella) => { payments.bella = bella; }));

@@ -1,0 +1,66 @@
+[
+  {
+    "method": "GET",
+    "path": "/",
+    "status": 200,
+    "contentType": "text/html",
+    "url": "https://gokoco-tiktok.joazinhisonetinho44.workers.dev/",
+    "ok": true
+  },
+  {
+    "method": "GET",
+    "path": "/pagamento.html",
+    "status": 200,
+    "contentType": "text/html",
+    "url": "https://gokoco-tiktok.joazinhisonetinho44.workers.dev/pagamento",
+    "ok": true
+  },
+  {
+    "method": "GET",
+    "path": "/video/",
+    "status": 200,
+    "contentType": "text/html; charset=utf-8",
+    "url": "https://gokoco-tiktok.joazinhisonetinho44.workers.dev/video/",
+    "ok": true
+  },
+  {
+    "method": "GET",
+    "path": "/tl/",
+    "status": 200,
+    "contentType": "text/html; charset=utf-8",
+    "url": "https://gokoco-tiktok.joazinhisonetinho44.workers.dev/tl/",
+    "ok": true
+  },
+  {
+    "method": "POST",
+    "path": "/api/public/pix/create",
+    "status": 400,
+    "contentType": "application/json; charset=utf-8",
+    "url": "https://gokoco-tiktok.joazinhisonetinho44.workers.dev/api/public/pix/create",
+    "ok": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/orders",
+    "status": 401,
+    "contentType": "application/json; charset=utf-8",
+    "url": "https://gokoco-tiktok.joazinhisonetinho44.workers.dev/api/admin/orders",
+    "ok": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/xyz",
+    "status": 404,
+    "contentType": "application/json; charset=utf-8",
+    "url": "https://gokoco-tiktok.joazinhisonetinho44.workers.dev/api/xyz",
+    "ok": true
+  },
+  {
+    "method": "GET",
+    "path": "/_worker.js",
+    "status": 404,
+    "contentType": "",
+    "url": "https://gokoco-tiktok.joazinhisonetinho44.workers.dev/_worker.js",
+    "ok": true
+  }
+]

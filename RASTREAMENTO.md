@@ -4,7 +4,7 @@
 
 Depois que o gateway confirma o pagamento e o código de rastreio é gerado, o servidor pode enviar um e-mail com o código, o link da página de rastreio e quatro perguntas para o cliente responder. O e-mail é enviado uma vez por pedido pago; webhook, checkout e admin compartilham o mesmo registro de envio. Pedidos sem rastreio ou ainda pendentes não recebem e-mail. Falhas podem ser repetidas sem marcar o pedido como enviado.
 
-Antes de ativar, verifique no Resend um domínio próprio e configure na aplicação Cloudflare Pages `gokoco-tiktok`, em **Settings → Variables and Secrets → Production**:
+Antes de ativar, verifique no Resend um domínio próprio e configure na aplicação Cloudflare Workers `gokoco-tiktok`, em **Settings → Variables and Secrets → Production**:
 
 | Nome | Valor / finalidade |
 | --- | --- |
@@ -12,7 +12,7 @@ Antes de ativar, verifique no Resend um domínio próprio e configure na aplica�
 | `RESEND_FROM_EMAIL` | Endereço do domínio verificado, por exemplo `pedidos@seudominio.com`. |
 | `SITE_URL` | URL HTTPS pública da loja, usada no link de rastreio. |
 
-Sem esses valores, a automação fica desativada. Após configurá-los, faça novo deployment no Pages. A rotina protegida `/api/process-purchase-queue` também tenta novamente e-mails pendentes; para isso, mantenha a chamada agendada com `CRON_SECRET`. O remetente precisa ser um domínio verificado no Resend. As respostas vão para o mesmo endereço do remetente. Compras pagas antes da ativação desta integração não recebem e-mails retroativos.
+Sem esses valores, a automação fica desativada. Após configurá-los, faça novo deployment no Worker. A rotina protegida `/api/process-purchase-queue` também tenta novamente e-mails pendentes; para isso, mantenha a chamada agendada com `CRON_SECRET`. O remetente precisa ser um domínio verificado no Resend. As respostas vão para o mesmo endereço do remetente. Compras pagas antes da ativação desta integração não recebem e-mails retroativos.
 
 A confirmação continua sendo consultada no gateway. Depois de confirmar, o servidor envia a compra; a página do cliente não precisa continuar aberta. A consulta do checkout, o webhook e a atualização do admin passam pelo mesmo controle de envio no campo `tracking` existente em `gokoco_orders`. Não é necessário executar SQL novo.
 
@@ -20,7 +20,7 @@ A confirmação continua sendo consultada no gateway. Depois de confirmar, o ser
 
 A chamada agendada já usada em `/api/process-purchase-queue` também processa a recuperação. Um pedido com PIX pendente criado após a ativação recebe no máximo três e-mails: o primeiro após 30 minutos, o segundo 4 horas depois e o terceiro 24 horas após o segundo. Antes de cada envio, o servidor consulta o gateway e interrompe a sequência se o pagamento já foi confirmado. A mesma pessoa não recebe uma nova sequência por outro pedido quando já pagou ou já foi contatada. Cada tentativa usa chave de envio única e registra seu resultado em `tracking._recovery`, sem alterar o banco. O admin mostra quantos e-mails foram enviados e a data prevista do próximo. Os textos são da GOKOCO e não prometem prazo de entrega ou estoque não confirmados. Pedidos anteriores à ativação não entram nessa automação.
 
-## Configuração no Cloudflare Pages
+## Configuração no Cloudflare Workers
 
 Projeto: `gokoco-tiktok`. Em Settings → Variables and Secrets → Production, cadastre:
 
@@ -28,11 +28,11 @@ Projeto: `gokoco-tiktok`. Em Settings → Variables and Secrets → Production, 
 | --- | --- |
 | `UTMIFY_API_TOKEN` | Secret: credencial em UTMify → Integrações → Webhooks → Credenciais de API. Não é o ID `6ac04e3b1a55004cc989a15d`. |
 | `PURCHASE_DELIVERY_MODE` | `utmify` para usar o fluxo de pedidos da loja Top Mix. |
-| `SITE_URL` | `https://gokoco-tiktok.pages.dev` ou o domínio definitivo da loja. |
+| `SITE_URL` | `https://gokoco-tiktok.loja-oficial.workers.dev` ou o domínio definitivo da loja. |
 
 Na UTMify, confira se o pixel `1542362403143695` está vinculado à conta e configurado para receber eventos de compra. A aceitação do pedido pela API da UTMify comprova o envio à UTMify; o recebimento pela Meta precisa ser conferido no Gerenciador de Eventos e depende da configuração da conta UTMify.
 
-Após mudar os secrets, faça um novo deployment/retry do deployment no Pages para a versão ativa receber os valores. Os scripts públicos não devem conter credenciais privadas.
+Após mudar os secrets, confira a versão ativa do Worker; `wrangler secret put` publica imediatamente os valores. Os scripts públicos não devem conter credenciais privadas.
 
 ## Alternativa: Meta diretamente
 
@@ -58,7 +58,7 @@ Ao atualizar o admin, são recuperados até três envios de compras pagos nos ú
 
 Não é necessário manter um Worker Cron separado para essa rotina. Se o painel estiver fechado e o gateway não enviar webhook, a conferência de pagamentos pendentes volta a ocorrer quando o admin for aberto ou atualizado; não há consulta contínua do servidor em segundo plano.
 
-Webhook: `https://gokoco-tiktok.pages.dev/api/pix/webhook`. Na Venus Pay, ele precisa estar cadastrado no painel do gateway. Nos gateways que aceitam callback na cobrança, a configuração usa `SITE_URL`. O webhook reconhece IDs nos formatos planos e aninhados mais comuns, verifica a transação consultando a API do gateway e registra aviso no log quando não encontra um pedido. Se um gateway não enviar webhook, o admin continua verificando a fila ao ser aberto/atualizado.
+Webhook: `https://gokoco-tiktok.loja-oficial.workers.dev/api/pix/webhook`. Na Venus Pay, ele precisa estar cadastrado no painel do gateway. Nos gateways que aceitam callback na cobrança, a configuração usa `SITE_URL`. O webhook reconhece IDs nos formatos planos e aninhados mais comuns, verifica a transação consultando a API do gateway e registra aviso no log quando não encontra um pedido. Se um gateway não enviar webhook, o admin continua verificando a fila ao ser aberto/atualizado.
 
 Se o pedido foi aceito pelo destino, mas o processo caiu antes de registrar o sucesso, a tentativa pode se repetir. A UTMify recebe sempre o mesmo `orderId`; a Meta recebe sempre o mesmo `event_id` e data do evento. O controle local impede envios simultâneos, mas não promete execução exatamente uma vez entre serviços externos.
 

@@ -9,6 +9,7 @@ const directories = ['assets', 'css', 'images', 'js', 'videos'];
 
 fs.rmSync(output, { recursive: true, force: true });
 fs.mkdirSync(output, { recursive: true });
+fs.writeFileSync(path.join(output, '.assetsignore'), '_worker.js\n');
 for (const file of files) fs.copyFileSync(path.join(root, file), path.join(output, file));
 for (const directory of directories) {
   const source = path.join(root, directory);

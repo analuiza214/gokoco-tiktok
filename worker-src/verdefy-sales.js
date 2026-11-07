@@ -14,7 +14,7 @@ export async function mirrorVerdefy(env, order, query = queryPixGatewayStatus, s
   const paidAt=adminConfirmed?manual.paidAt:(verified.paidAt||order.tracking?._payment?.paid_at||order.tracking?._purchase?.paid_at);
   if (!paidAt || !Number.isFinite(Date.parse(paidAt))) throw Error('Data confirmada de pagamento ausente.');
   const payload = {source:'gokoco',orderId:String(order.id),status:'paid',confirmedByProvider:!adminConfirmed,confirmationSource:adminConfirmed?'admin':'provider',currency:'BRL',amount:Math.round(Number(order.amount)*100),netAmount:null,createdAt:order.created_at,paidAt,gateway:order.gateway,tracking:order.tracking,items:(order.products||[]).map(p=>({productId:p.id?String(p.id):'',title:p.name,quantity:p.quantity}))};
-  const r = await send('https://verdefy-sales.joazinhisonetinho44.workers.dev/v1/sales', {method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+env.VERDEFY_SALES_TOKEN},body:JSON.stringify(payload),signal:AbortSignal.timeout(12000)});
+  const r = await send('https://verdefy-sales.loja-oficial.workers.dev/v1/sales', {method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+env.VERDEFY_SALES_TOKEN},body:JSON.stringify(payload),signal:AbortSignal.timeout(12000)});
   if (!r.ok) throw Error('Verdefy HTTP '+r.status);
   const receipt = await r.json();
   if (receipt.ok !== true) throw Error('Recebimento não confirmado.');
