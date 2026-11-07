@@ -9,3 +9,6 @@ Modo explícitoverdefy preparado sem fallbackUtmify/Meta direto. Captura indepen
 keep_vars preserva variáveis públicas doDashboard; segredos continuamCloudflare.84testes centrais,60da loja,9integração,check,build,multisite e performance-assets passaram. Prévia isolada do diagnóstico confirmou as verificações. Banco/gatewayMasterfy consultados em saúde real readonly. Purchase real e Meta dependem da troca coordenada e compra legítima.
 
 Taxas7,99%+R$1,49/imposto12% e convençãoROI preservadas; câmbio aindaPTAXatual para período, não histórico diário. Cartão e gateways não usados não foram homologados com cobrança real. Build apontou dependências antigas preexistentes, sem upgradeforçado. Relatório central registra versões e pendências reais.
+
+
+Final verification: six private readiness checks passed in authenticated production after service bindings VERDEFY_SALES/PAYMENT_RECONCILER/STORE were deployed. Token was correct; no rotation. Commit aca823a, store version1542300d, reconciler375cffd0.65 selected store tests,84 central,9 integration and check passed. Utmify remains the current sender; central destination paused. Coordinated cutover and real legitimate Purchase proof still pending. See central docs/21-PREPARACAO-DA-TROCA-VERDEFY.md.
