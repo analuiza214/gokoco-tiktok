@@ -10,6 +10,8 @@
     "test:multisite": "node tests/multisite.mjs"
   },
   "devDependencies": {
-    "esbuild": "^0.25.12"
+    "esbuild": "^0.25.12",
+    "sharp": "^0.35.5",
+    "wrangler": "^4.158.0"
   }
 }

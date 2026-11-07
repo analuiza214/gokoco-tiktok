@@ -9,6 +9,7 @@ const directories = ['assets', 'css', 'images', 'js', 'videos'];
 
 fs.rmSync(output, { recursive: true, force: true });
 fs.mkdirSync(output, { recursive: true });
+fs.writeFileSync(path.join(output, '.assetsignore'), '_worker.js\n');
 for (const file of files) fs.copyFileSync(path.join(root, file), path.join(output, file));
 for (const directory of directories) {
   const source = path.join(root, directory);
@@ -42,4 +43,6 @@ const upsellScript = fs.readFileSync(upsellScriptPath, 'utf8')
   .replace('href="${key}.html"', 'href="${({original:"/upsell1",bella:"/video/upsell1",tl:"/tl/upsell1"})[key]}"');
 fs.writeFileSync(upsellScriptPath, upsellScript);
 await import('./build-upsell.mjs');
+const { optimizeImages } = await import('./optimize-images.mjs');
+await optimizeImages(output);
 console.log(`Assets de publicação preparados em ${output}`);

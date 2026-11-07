@@ -1,0 +1,30 @@
+{
+  "name": "gokoco-tiktok",
+  "main": "./dist/_worker.js",
+  "compatibility_date": "2026-11-07",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true,
+    "traces": {
+      "enabled": true
+    }
+  },
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "kv_namespaces": [
+    {
+      "binding": "PIX_RATELIMIT",
+      "id": "44122051ba9a4c83a7d09019a3671894"
+    }
+  ],
+  "vars": {
+    "ADMIN_EMAIL": "wsssfmeng@gmail.com",
+    "CF_ACCESS_AUD": "228c87dc1065aca9879c699abda25fd9996604877257a07ce58b85c23021db15",
+    "CF_ACCESS_TEAM_DOMAIN": "verdefy-wsss.cloudflareaccess.com",
+    "SITE_URL": "https://gokoco-tiktok.loja-oficial.workers.dev",
+    "BELLA_SITE_URL": "https://gokoco-tiktok.loja-oficial.workers.dev/video"
+  }
+}

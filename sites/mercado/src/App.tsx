@@ -1,21 +1,23 @@
+import { lazy, Suspense } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import ProductPage from "@/pages/product-page";
-import CepPage from "@/pages/cep-page";
-import SuccessPage from "@/pages/success-page";
-import OrdersPage from "@/pages/orders-page";
-import InstructionsPage from "@/pages/instructions-page";
-import AddCardPage from "@/pages/add-card-page";
-import RedirectPage from "@/pages/redirect-page";
-import CardDeclinedPage from "@/pages/card-declined-page";
-import NotFound from "@/pages/not-found";
+const CepPage = lazy(() => import("@/pages/cep-page"));
+const SuccessPage = lazy(() => import("@/pages/success-page"));
+const OrdersPage = lazy(() => import("@/pages/orders-page"));
+const InstructionsPage = lazy(() => import("@/pages/instructions-page"));
+const AddCardPage = lazy(() => import("@/pages/add-card-page"));
+const RedirectPage = lazy(() => import("@/pages/redirect-page"));
+const CardDeclinedPage = lazy(() => import("@/pages/card-declined-page"));
+const NotFound = lazy(() => import("@/pages/not-found"));
 
 const queryClient = new QueryClient();
 
 function Router() {
   return (
+    <Suspense fallback={<div className="min-h-screen bg-white" role="status" aria-label="Carregando" />}>
     <Switch>
       <Route path="/r" component={RedirectPage} />
       <Route path="/" component={ProductPage} />
@@ -27,6 +29,7 @@ function Router() {
       <Route path="/card-declined" component={CardDeclinedPage} />
       <Route component={NotFound} />
     </Switch>
+    </Suspense>
   );
 }
 

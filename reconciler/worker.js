@@ -1,18 +1,19 @@
 // Cada lote executa em uma requisição própria para respeitar o limite do Pages.
 export default {
   async scheduled(_event, env) {
+    if (!env.SITE_URL) throw new Error('SITE_URL não configurado.');
     if (!env.CRON_SECRET) throw new Error('CRON_SECRET não configurado.');
     const summary = { checked: 0, paid: 0, failed: 0 };
     let rateLimited = false;
     const call = async (path) => {
-      const response = await fetch(`https://gokoco-tiktok.pages.dev${path}`, {
+      const response = await fetch(`${String(env.SITE_URL).replace(/\/+$/, '')}${path}`, {
         method: 'POST', headers: { 'x-cron-secret': env.CRON_SECRET },
         signal: AbortSignal.timeout(45000),
       });
       if (!response.ok) throw new Error(`Reconciliação respondeu HTTP ${response.status}.`);
       return response.json();
     };
-    // Espelho independente: falhas de entrega/gateway n�o bloqueiam o painel.
+    // Espelho independente: falhas de entrega/gateway n�o bloqueiam o painel.
     await call('/api/process-purchase-queue?phase=verdefy').catch(error=>console.error('Verdefy sync failed',error.message));
     for (let batch = 0; batch < 5; batch++) {
       const result = await call('/api/admin/reconcile-payments');

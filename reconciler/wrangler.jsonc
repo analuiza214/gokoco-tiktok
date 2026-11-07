@@ -3,6 +3,7 @@
   "main": "worker.js",
   "compatibility_date": "2026-10-01",
   "workers_dev": true,
+  "vars": { "SITE_URL": "https://gokoco-tiktok.loja-oficial.workers.dev" },
   "triggers": { "crons": ["* * * * *"] },
   "observability": { "enabled": true }
 }

@@ -1,8 +1,6 @@
-name: Publicar GOKOCO no Cloudflare Pages
+name: Publicar GOKOCO manualmente no Cloudflare Workers
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -24,12 +22,12 @@ jobs:
           VITE_GA_ID: ${{ secrets.VITE_GA_ID }}
           VITE_UTMIFY_PIXEL_ID: ${{ secrets.VITE_UTMIFY_PIXEL_ID }}
           VITE_SUPPORT_EMAIL: ${{ secrets.VITE_SUPPORT_EMAIL }}
-      - name: Publicar no Cloudflare Pages
+      - name: Publicar no Cloudflare Workers
         uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=gokoco-tiktok --branch=main
+          command: deploy --config wrangler.jsonc
       - name: Publicar rotina de confirmação de pagamentos
         uses: cloudflare/wrangler-action@v4
         with:

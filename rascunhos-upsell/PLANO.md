@@ -45,9 +45,9 @@ Builds das duas lojas, empacotamento, sintaxe JS e testes multi-site passaram; a
 Revisão de código: https://github.com/analuiza214/gokoco-tiktok/pull/2
 
 Publicação confirmada no domínio principal e páginas abertas no navegador:
-- https://gokoco-tiktok.pages.dev/upsell1
-- https://gokoco-tiktok.pages.dev/tl/upsell1
-- https://gokoco-tiktok.pages.dev/video/upsell1
+- https://gokoco-tiktok.loja-oficial.workers.dev/upsell1
+- https://gokoco-tiktok.loja-oficial.workers.dev/tl/upsell1
+- https://gokoco-tiktok.loja-oficial.workers.dev/video/upsell1
 Merge de publicação: 7014bd6054ea835e210b57dddb3f3658833755b2. As três páginas responderam com a identidade e o conteúdo de demonstração corretos.
 
 ## Correção de estrutura — 21/10/2026

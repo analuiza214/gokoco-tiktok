@@ -366,6 +366,11 @@ export default function ProductPage() {
                   <div key={i} className="relative w-full h-full shrink-0" style={{ scrollSnapAlign: "start", scrollSnapStop: "always" }}>
                     <img
                       src={slide.src}
+                      loading={i === 0 ? "eager" : "lazy"}
+                      fetchPriority={i === 0 ? "high" : "low"}
+                      decoding="async"
+                      width={480}
+                      height={480}
                       alt={i === 0 ? 'Kit GOKOCO com escova, luva, dois prendedores e caixa com zíper — imagem ilustrativa' : i === 1 ? `Escova GOKOCO na cor ${selectedColor.name}` : 'Detalhe da Escova GOKOCO'}
                       className="w-full h-full object-contain p-4"
                     />
