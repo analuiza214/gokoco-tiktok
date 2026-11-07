@@ -27,5 +27,15 @@
     "SITE_URL": "https://gokoco-tiktok.loja-oficial.workers.dev",
     "BELLA_SITE_URL": "https://gokoco-tiktok.loja-oficial.workers.dev/video"
   },
-  "keep_vars": true
+  "keep_vars": true,
+  "services": [
+    {
+      "binding": "VERDEFY_SALES",
+      "service": "verdefy-sales"
+    },
+    {
+      "binding": "PAYMENT_RECONCILER",
+      "service": "gokoco-payment-reconciler"
+    }
+  ]
 }

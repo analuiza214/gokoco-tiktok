@@ -19,7 +19,7 @@ function trackingPayload(tracking = {}) {
   return {...Object.fromEntries(TRACKING_KEYS.filter((k) => tracking[k]).map((k) => [k, String(tracking[k]).slice(0, 300)])), _browser: {fbp: browser.fbp || null, fbc: browser.fbc || null, ip: browser.ip || null, user_agent: browser.user_agent || null, source_url: browser.source_url || null}};
 }
 
-export async function mirrorVerdefy(env, order, kind = 'paid', opts = {}, query = queryPixGatewayStatus, send = fetch) {
+export async function mirrorVerdefy(env, order, kind = 'paid', opts = {}, query = queryPixGatewayStatus, send = env.VERDEFY_SALES?.fetch.bind(env.VERDEFY_SALES) || fetch) {
   if (typeof kind === 'function') { send = opts; query = kind; kind = 'paid'; opts = {}; }
   if (!env.VERDEFY_SALES_TOKEN) return {state:'not_configured'};
   const source = verdefySource(env);

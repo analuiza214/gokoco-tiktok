@@ -6,7 +6,7 @@ export default {
     const summary = { checked: 0, paid: 0, failed: 0 };
     let rateLimited = false;
     const call = async (path) => {
-      const response = await fetch(`${String(env.SITE_URL).replace(/\/+$/, '')}${path}`, {
+      const response = await (env.STORE?.fetch.bind(env.STORE) || fetch)(`${String(env.SITE_URL).replace(/\/+$/, '')}${path}`, {
         method: 'POST', headers: { 'x-cron-secret': env.CRON_SECRET },
         signal: AbortSignal.timeout(45000),
       });
