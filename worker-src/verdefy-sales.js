@@ -1,4 +1,5 @@
 import { queryPixGatewayStatus } from './pix-gateway-status.js';
+export const verdefyToken=env=>String(env.VERDEFY_SALES_TOKEN||'').trim().replace(/^Bearer\s+/i,'');
 const gateways = new Set(['masterfy','umbrellapag','venuspay_pix','unipay','invictuspay','flevopay','ironpay']);
 const TRACKING_KEYS = ['utm_id','utm_source','utm_medium','utm_campaign','utm_content','utm_term','verdefy_pixel'];
 // Estado independente por etapa; _verdefy continua sendo o espelho do pagamento confirmado.
@@ -55,7 +56,7 @@ export async function mirrorVerdefy(env, order, kind = 'paid', opts = {}, query 
     if (!paidAt || !Number.isFinite(Date.parse(paidAt))) throw Error('Data confirmada de pagamento ausente.');
     payload = {...common,status:'paid',confirmedByProvider:!adminConfirmed,confirmationSource:adminConfirmed?'admin':'provider',createdAt:order.created_at,paidAt};
   }
-  const r = await send('https://verdefy-sales.loja-oficial.workers.dev/v1/sales', {method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+env.VERDEFY_SALES_TOKEN},body:JSON.stringify(payload),signal:AbortSignal.timeout(12000)});
+  const r = await send('https://verdefy-sales.loja-oficial.workers.dev/v1/sales', {method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+verdefyToken(env)},body:JSON.stringify(payload),signal:AbortSignal.timeout(12000)});
   if (!r.ok) throw Error('Verdefy HTTP '+r.status);
   const receipt = await r.json();
   if (receipt.ok !== true) throw Error('Recebimento não confirmado.');

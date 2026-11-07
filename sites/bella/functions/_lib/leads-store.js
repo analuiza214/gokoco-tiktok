@@ -192,7 +192,8 @@ export async function savePixLead(env, body, result, gateway) {
 
 export async function updatePixLeadStatus(env, transactionId, status) {
   if (!transactionId) return false;
-  const response = await supabaseRequest(env, `leads?transaction_id=eq.${encodeURIComponent(transactionId)}&select=id`, {
+  const guard=status==="pix_gerado"?"&status=in.(checkout_iniciado,pix_gerado)":status==="expirado"?"&status=in.(checkout_iniciado,pix_gerado,expirado)":status==="pago"?"&status=neq.reembolsado":"";
+  const response = await supabaseRequest(env, `leads?transaction_id=eq.${encodeURIComponent(transactionId)}${guard}&select=id`, {
     method: "PATCH",
     headers: { Prefer: "return=representation" },
     body: JSON.stringify({ status, updated_at: new Date().toISOString() }),

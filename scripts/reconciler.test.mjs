@@ -42,3 +42,5 @@ test('rotina sem SITE_URL não consulta nenhum servidor', async () => {
   const old=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;throw Error('não deve chamar');};
   try {await assert.rejects(()=>worker.scheduled({}, {CRON_SECRET:'isolated-only'}), /SITE_URL/);assert.equal(calls,0);}finally{globalThis.fetch=old;}
 });
+
+test('verificação privada do cron confirma destino sem rodar a fila',async()=>{const old=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;throw Error('não deve chamar');};try{const url='https://cron.invalid/connection';assert.equal((await worker.fetch(new Request(url),{CRON_SECRET:'isolated'})).status,401);const r=await worker.fetch(new Request(url,{headers:{'x-cron-secret':'isolated'}}),{CRON_SECRET:'isolated',SITE_URL:'https://store.invalid'});assert.equal(r.status,200);assert.equal((await r.json()).target,'https://store.invalid');assert.equal(calls,0);}finally{globalThis.fetch=old;}});

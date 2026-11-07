@@ -30,5 +30,8 @@ export default {
     console.log('Payment reconciliation completed', { ...summary, queue, recovery, bella });
     if (summary.failed) console.error('Falhas temporárias de consulta ao gateway', { failed: summary.failed });
   },
-  fetch() { return Response.json({ service: 'gokoco-payment-reconciler', ok: true }); },
+  async fetch(request,env) {
+    if(new URL(request.url).pathname==='/connection'){if(request.method!=='GET'||!env.CRON_SECRET||request.headers.get('x-cron-secret')!==env.CRON_SECRET)return Response.json({ok:false},{status:401,headers:{'Cache-Control':'no-store'}});return Response.json({ok:true,target:env.SITE_URL||null},{headers:{'Cache-Control':'no-store'}});}
+    return Response.json({ service: 'gokoco-payment-reconciler', ok: true });
+  },
 };

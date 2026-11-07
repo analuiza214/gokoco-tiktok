@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mirrorVerdefy,deliverVerdefy,retryVerdefy} from '../worker-src/verdefy-sales.js';
+import {mirrorVerdefy,deliverVerdefy,retryVerdefy,verdefyToken} from '../worker-src/verdefy-sales.js';
 const env={VERDEFY_SALES_TOKEN:'isolated-test-only'};
 const order={id:'test-1',status:'paid',gateway:'masterfy',transaction_id:'provider-1',amount:10,created_at:new Date().toISOString(),tracking:{_payment:{paid_at:new Date().toISOString()},utm_id:'123'},products:[{name:'Item',quantity:1}]};
 test('manual, unsupported and unpaid never call provider or receiver',async()=>{
@@ -89,3 +89,5 @@ test('admin confirmed payment mirrors independently without provider or Meta cal
  assert.equal(result.state,'sent');assert.equal(payload.confirmedByProvider,false);assert.equal(payload.confirmationSource,'admin');assert.equal(payload.paidAt,manual.paidAt);assert.equal(payload.tracking.utm_id,'123');
  }
 });
+
+test('credencial Verdefy tolera espaços externos e prefixo Bearer sem mudar segredo',()=>{assert.equal(verdefyToken({VERDEFY_SALES_TOKEN:'  Bearer vfy_isolated  '}),'vfy_isolated');});
