@@ -9,7 +9,7 @@ Projeto versionado no GitHub e publicado automaticamente no Cloudflare Workers.
 
 ## Publicação automática
 
-O workflow `.github/workflows/pages-deployment.yml` publica a branch `main` no Worker sempre que recebe uma atualização. O build gera `_worker.js` a partir de `worker-src/` e prepara os arquivos públicos em `dist/`.
+O Worker está conectado diretamente ao repositório `analuiza214/gokoco-tiktok`, branch `main`, via Cloudflare Workers Builds. Cada push executa `npm run build` e `npx wrangler deploy`. O workflow `.github/workflows/pages-deployment.yml` permanece disponível somente para execução manual, incluindo o deploy do reconciler, para evitar publicações automáticas duplicadas. O build gera `_worker.js` a partir de `worker-src/` e prepara os arquivos públicos em `dist/`.
 
 O repositório precisa ter os secrets `CLOUDFLARE_API_TOKEN` e `CLOUDFLARE_ACCOUNT_ID`, usados somente pelo GitHub Actions para publicar no Cloudflare.
 

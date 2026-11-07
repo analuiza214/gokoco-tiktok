@@ -1,8 +1,6 @@
-name: Publicar GOKOCO no Cloudflare Workers
+name: Publicar GOKOCO manualmente no Cloudflare Workers
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
