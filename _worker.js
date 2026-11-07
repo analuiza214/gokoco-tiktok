@@ -223,17 +223,17 @@ function gerarCpfAleatorio2() {
   d.push(sum * 10 % 11 % 10);
   return d.join("");
 }
-async function createPixIronpay(context, corsHeaders12, body) {
+async function createPixIronpay(context, corsHeaders10, body) {
   const { env } = context;
   const apiToken = env.IRONPAY_API_TOKEN;
   const offerHash = env.IRONPAY_OFFER_HASH;
   const productHash = env.IRONPAY_PRODUCT_HASH;
   if (!apiToken || !offerHash || !productHash) {
-    return new Response(JSON.stringify({ error: "Gateway de pagamento nao configurado." }), { status: 500, headers: corsHeaders12 });
+    return new Response(JSON.stringify({ error: "Gateway de pagamento nao configurado." }), { status: 500, headers: corsHeaders10 });
   }
   const { amount, name, document, productName, email, phone, address } = body;
   if (!amount || !name) {
-    return new Response(JSON.stringify({ error: "Campos obrigatorios: amount, name." }), { status: 400, headers: corsHeaders12 });
+    return new Response(JSON.stringify({ error: "Campos obrigatorios: amount, name." }), { status: 400, headers: corsHeaders10 });
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
   const payerDocument = [11, 14].includes(cpfDigits.length) ? cpfDigits : gerarCpfAleatorio2();
@@ -283,18 +283,18 @@ async function createPixIronpay(context, corsHeaders12, body) {
     );
     const data = await res.json();
     if (!res.ok) {
-      return new Response(JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: data }), { status: 502, headers: corsHeaders12 });
+      return new Response(JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: data }), { status: 502, headers: corsHeaders10 });
     }
     const transactionId = data.hash || data.transaction_hash;
     if (!transactionId) {
-      return new Response(JSON.stringify({ error: "Resposta invalida do gateway: hash ausente.", rawResponse: data }), { status: 502, headers: corsHeaders12 });
+      return new Response(JSON.stringify({ error: "Resposta invalida do gateway: hash ausente.", rawResponse: data }), { status: 502, headers: corsHeaders10 });
     }
     const pix = data.pix || {};
     const pixCode = pix.pix_qr_code || pix.qr_code || pix.code || pix.copy_paste || null;
     const qrCodeBase64 = pix.qr_code_base64 || pix.base64 || null;
     const qrCodeImage = pixCode ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}` : pix.pix_url || null;
     if (!pixCode) {
-      return new Response(JSON.stringify({ error: "QR Code PIX nao gerado.", rawResponse: data }), { status: 502, headers: corsHeaders12 });
+      return new Response(JSON.stringify({ error: "QR Code PIX nao gerado.", rawResponse: data }), { status: 502, headers: corsHeaders10 });
     }
     return new Response(
       JSON.stringify({
@@ -305,17 +305,17 @@ async function createPixIronpay(context, corsHeaders12, body) {
         qrCodeBase64: qrCodeBase64 || null,
         qrCodeImage: qrCodeImage || null
       }),
-      { status: 200, headers: corsHeaders12 }
+      { status: 200, headers: corsHeaders10 }
     );
   } catch {
-    return new Response(JSON.stringify({ error: "Erro de comunicacao com o gateway." }), { status: 502, headers: corsHeaders12 });
+    return new Response(JSON.stringify({ error: "Erro de comunicacao com o gateway." }), { status: 502, headers: corsHeaders10 });
   }
 }
-async function statusPixIronpay(context, corsHeaders12, transactionId) {
+async function statusPixIronpay(context, corsHeaders10, transactionId) {
   const { env } = context;
   const apiToken = env.IRONPAY_API_TOKEN;
   if (!apiToken) {
-    return new Response(JSON.stringify({ error: "Gateway nao configurado" }), { status: 500, headers: corsHeaders12 });
+    return new Response(JSON.stringify({ error: "Gateway nao configurado" }), { status: 500, headers: corsHeaders10 });
   }
   try {
     const res = await fetch(
@@ -324,7 +324,7 @@ async function statusPixIronpay(context, corsHeaders12, transactionId) {
     );
     const data = await res.json();
     if (!res.ok) {
-      return new Response(JSON.stringify({ error: "Erro ao consultar gateway.", upstreamStatus: res.status }), { status: 502, headers: corsHeaders12 });
+      return new Response(JSON.stringify({ error: "Erro ao consultar gateway.", upstreamStatus: res.status }), { status: 502, headers: corsHeaders10 });
     }
     const rawStatus = (data.payment_status || data.status || "").toUpperCase();
     const isPaid = rawStatus === "PAID";
@@ -338,10 +338,10 @@ async function statusPixIronpay(context, corsHeaders12, transactionId) {
         isExpired,
         payedAt: data.paid_at || null
       }),
-      { status: 200, headers: corsHeaders12 }
+      { status: 200, headers: corsHeaders10 }
     );
   } catch {
-    return new Response(JSON.stringify({ error: "Erro ao consultar status do pagamento." }), { status: 502, headers: corsHeaders12 });
+    return new Response(JSON.stringify({ error: "Erro ao consultar status do pagamento." }), { status: 502, headers: corsHeaders10 });
   }
 }
 
@@ -355,20 +355,20 @@ function gerarCpfAleatorio3() {
   d.push(s2 * 10 % 11 % 10);
   return d.join("");
 }
-async function createPixMasterfy(context, corsHeaders12, body) {
+async function createPixMasterfy(context, corsHeaders10, body) {
   const { env } = context;
   const apiKey = env.MASTERFY_API_KEY;
   if (!apiKey) {
     return new Response(
       JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado. Configure MASTERFY_API_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders12 }
+      { status: 500, headers: corsHeaders10 }
     );
   }
   const { amount, name, email, phone, productName, address, document } = body;
   if (!amount || !name) {
     return new Response(
       JSON.stringify({ error: "Campos obrigat\xF3rios: amount, name." }),
-      { status: 400, headers: corsHeaders12 }
+      { status: 400, headers: corsHeaders10 }
     );
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
@@ -425,21 +425,21 @@ async function createPixMasterfy(context, corsHeaders12, body) {
     if (!res.ok) {
       return new Response(
         JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: data }),
-        { status: 502, headers: corsHeaders12 }
+        { status: 502, headers: corsHeaders10 }
       );
     }
     const transactionId = data.id;
     if (!transactionId) {
       return new Response(
         JSON.stringify({ error: "Resposta inv\xE1lida do gateway: id ausente.", rawResponse: data }),
-        { status: 502, headers: corsHeaders12 }
+        { status: 502, headers: corsHeaders10 }
       );
     }
     const pixCode = data.data && data.data.copypaste || null;
     if (!pixCode) {
       return new Response(
         JSON.stringify({ error: "QR Code PIX n\xE3o gerado.", rawResponse: data }),
-        { status: 502, headers: corsHeaders12 }
+        { status: 502, headers: corsHeaders10 }
       );
     }
     const qrCodeImage = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`;
@@ -452,22 +452,22 @@ async function createPixMasterfy(context, corsHeaders12, body) {
         qrCodeBase64: null,
         qrCodeImage
       }),
-      { status: 200, headers: corsHeaders12 }
+      { status: 200, headers: corsHeaders10 }
     );
   } catch {
     return new Response(
       JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway." }),
-      { status: 502, headers: corsHeaders12 }
+      { status: 502, headers: corsHeaders10 }
     );
   }
 }
-async function statusPixMasterfy(context, corsHeaders12, transactionId) {
+async function statusPixMasterfy(context, corsHeaders10, transactionId) {
   const { env } = context;
   const apiKey = env.MASTERFY_API_KEY;
   if (!apiKey) {
     return new Response(
       JSON.stringify({ error: "Gateway n\xE3o configurado. Configure MASTERFY_API_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders12 }
+      { status: 500, headers: corsHeaders10 }
     );
   }
   try {
@@ -486,7 +486,7 @@ async function statusPixMasterfy(context, corsHeaders12, transactionId) {
     if (!res.ok) {
       return new Response(
         JSON.stringify({ error: "Erro ao consultar gateway.", upstreamStatus: res.status }),
-        { status: 502, headers: corsHeaders12 }
+        { status: 502, headers: corsHeaders10 }
       );
     }
     const rawStatus = (data.status || "").toUpperCase();
@@ -501,29 +501,29 @@ async function statusPixMasterfy(context, corsHeaders12, transactionId) {
         isExpired,
         payedAt: data.paidAt || null
       }),
-      { status: 200, headers: corsHeaders12 }
+      { status: 200, headers: corsHeaders10 }
     );
   } catch {
     return new Response(
       JSON.stringify({ error: "Erro ao consultar status do pagamento." }),
-      { status: 502, headers: corsHeaders12 }
+      { status: 502, headers: corsHeaders10 }
     );
   }
 }
-async function createCardMasterfy(context, corsHeaders12, body) {
+async function createCardMasterfy(context, corsHeaders10, body) {
   const { env } = context;
   const apiKey = env.MASTERFY_API_KEY;
   if (!apiKey) {
     return new Response(
       JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado. Configure MASTERFY_API_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders12 }
+      { status: 500, headers: corsHeaders10 }
     );
   }
   const token = String(body?.cardToken || "").trim();
   if (!token) {
     return new Response(
       JSON.stringify({ error: "Token do cart\xE3o ausente. Recarregue a p\xE1gina e tente novamente." }),
-      { status: 400, headers: corsHeaders12 }
+      { status: 400, headers: corsHeaders10 }
     );
   }
   const { amount, name, email, phone, productName, address, document, ip } = body;
@@ -531,7 +531,7 @@ async function createCardMasterfy(context, corsHeaders12, body) {
   if (!Number.isSafeInteger(amountInCents) || amountInCents <= 0 || !name) {
     return new Response(
       JSON.stringify({ error: "Campos obrigat\xF3rios: amount, name." }),
-      { status: 400, headers: corsHeaders12 }
+      { status: 400, headers: corsHeaders10 }
     );
   }
   const numParcelas = Math.max(1, Math.min(12, parseInt(String(body.installments || 1), 10)));
@@ -589,7 +589,7 @@ async function createCardMasterfy(context, corsHeaders12, body) {
       console.error("[masterfy/card]", res.status, JSON.stringify(data).slice(0, 500));
       return new Response(
         JSON.stringify({ status: "error", error: "Erro ao processar cart\xE3o. Tente novamente." }),
-        { status: 200, headers: corsHeaders12 }
+        { status: 200, headers: corsHeaders10 }
       );
     }
     const transactionId = data.id || null;
@@ -597,13 +597,13 @@ async function createCardMasterfy(context, corsHeaders12, body) {
     const status = rawStatus === "PAID" ? "approved" : ["REFUSED", "CHARGEDBACK", "MED", "REFUNDED"].includes(rawStatus) ? "declined" : transactionId ? "processing" : "error";
     return new Response(
       JSON.stringify({ transactionId, status, rawStatus: rawStatus.toLowerCase(), gateway: "masterfy_card", amount: Number(amount), installments: numParcelas }),
-      { status: 200, headers: corsHeaders12 }
+      { status: 200, headers: corsHeaders10 }
     );
   } catch (error) {
     console.error("[masterfy/card]", error?.message || error);
     return new Response(
       JSON.stringify({ status: "error", error: "Erro de comunica\xE7\xE3o com o gateway." }),
-      { status: 200, headers: corsHeaders12 }
+      { status: 200, headers: corsHeaders10 }
     );
   }
 }
@@ -654,20 +654,20 @@ function extractPixCode(data) {
   }
   return null;
 }
-async function createPixUmbrellapag(context, corsHeaders12, body) {
+async function createPixUmbrellapag(context, corsHeaders10, body) {
   const { request: request2, env } = context;
   const apiKey = env.UMBRELLAPAG_API_KEY;
   if (!apiKey) {
     return new Response(
       JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado. Configure UMBRELLAPAG_API_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders12 }
+      { status: 500, headers: corsHeaders10 }
     );
   }
   const { amount, name, email, phone, productName, address, document } = body;
   if (!amount || !name) {
     return new Response(
       JSON.stringify({ error: "Campos obrigat\xF3rios: amount, name." }),
-      { status: 400, headers: corsHeaders12 }
+      { status: 400, headers: corsHeaders10 }
     );
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
@@ -725,21 +725,21 @@ async function createPixUmbrellapag(context, corsHeaders12, body) {
     if (!res.ok) {
       return new Response(
         JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: json4 }),
-        { status: 502, headers: corsHeaders12 }
+        { status: 502, headers: corsHeaders10 }
       );
     }
     const transactionId = data.id;
     if (!transactionId) {
       return new Response(
         JSON.stringify({ error: "Resposta inv\xE1lida do gateway: id ausente.", rawResponse: json4 }),
-        { status: 502, headers: corsHeaders12 }
+        { status: 502, headers: corsHeaders10 }
       );
     }
     const pixCode = extractPixCode(data);
     if (!pixCode) {
       return new Response(
         JSON.stringify({ error: "QR Code PIX n\xE3o gerado.", rawResponse: json4 }),
-        { status: 502, headers: corsHeaders12 }
+        { status: 502, headers: corsHeaders10 }
       );
     }
     const qrCodeImage = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`;
@@ -752,22 +752,22 @@ async function createPixUmbrellapag(context, corsHeaders12, body) {
         qrCodeBase64: null,
         qrCodeImage
       }),
-      { status: 200, headers: corsHeaders12 }
+      { status: 200, headers: corsHeaders10 }
     );
   } catch {
     return new Response(
       JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway." }),
-      { status: 502, headers: corsHeaders12 }
+      { status: 502, headers: corsHeaders10 }
     );
   }
 }
-async function statusPixUmbrellapag(context, corsHeaders12, transactionId) {
+async function statusPixUmbrellapag(context, corsHeaders10, transactionId) {
   const { env } = context;
   const apiKey = env.UMBRELLAPAG_API_KEY;
   if (!apiKey) {
     return new Response(
       JSON.stringify({ error: "Gateway n\xE3o configurado. Configure UMBRELLAPAG_API_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders12 }
+      { status: 500, headers: corsHeaders10 }
     );
   }
   try {
@@ -784,7 +784,7 @@ async function statusPixUmbrellapag(context, corsHeaders12, transactionId) {
     if (!res.ok) {
       return new Response(
         JSON.stringify({ error: "Erro ao consultar gateway.", details: json4 }),
-        { status: 502, headers: corsHeaders12 }
+        { status: 502, headers: corsHeaders10 }
       );
     }
     const rawStatus = String(data.status || "").toUpperCase();
@@ -799,12 +799,12 @@ async function statusPixUmbrellapag(context, corsHeaders12, transactionId) {
         isExpired,
         payedAt: data.paidAt || null
       }),
-      { status: 200, headers: corsHeaders12 }
+      { status: 200, headers: corsHeaders10 }
     );
   } catch {
     return new Response(
       JSON.stringify({ error: "Erro ao consultar status do pagamento." }),
-      { status: 502, headers: corsHeaders12 }
+      { status: 502, headers: corsHeaders10 }
     );
   }
 }
@@ -846,27 +846,27 @@ function extractQrImage(data) {
   }
   return null;
 }
-async function createPixVenuspay(context, corsHeaders12, body) {
+async function createPixVenuspay(context, corsHeaders10, body) {
   const { env } = context;
   const secretKey = env.VENUS_PAY_SECRET_KEY;
   if (!secretKey) {
     return new Response(
       JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado. Configure VENUS_PAY_SECRET_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders12 }
+      { status: 500, headers: corsHeaders10 }
     );
   }
   const { amount, name, email, phone, productName, address, document } = body;
   if (!amount || !name) {
     return new Response(
       JSON.stringify({ error: "Campos obrigat\xF3rios: amount, name." }),
-      { status: 400, headers: corsHeaders12 }
+      { status: 400, headers: corsHeaders10 }
     );
   }
   const amountDecimal = Number(Number(amount).toFixed(2));
   if (amountDecimal < MIN_AMOUNT || amountDecimal > MAX_AMOUNT) {
     return new Response(
       JSON.stringify({ error: `A VenusPay aceita PIX de R$ ${MIN_AMOUNT},00 at\xE9 R$ ${MAX_AMOUNT.toLocaleString("pt-BR")},00.` }),
-      { status: 400, headers: corsHeaders12 }
+      { status: 400, headers: corsHeaders10 }
     );
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
@@ -923,21 +923,21 @@ async function createPixVenuspay(context, corsHeaders12, body) {
           error: Array.isArray(data.error?.message) ? data.error.message.join(", ") : typeof data.error === "string" ? data.error : Array.isArray(data.message) ? data.message.join(", ") : typeof data.message === "string" ? data.message : "Erro ao gerar PIX. Confira seus dados e tente novamente.",
           details: data
         }),
-        { status: 502, headers: corsHeaders12 }
+        { status: 502, headers: corsHeaders10 }
       );
     }
     const transactionId = data.transaction_id || null;
     if (!transactionId) {
       return new Response(
         JSON.stringify({ error: "Resposta inv\xE1lida do gateway: transaction_id ausente.", rawResponse: data }),
-        { status: 502, headers: corsHeaders12 }
+        { status: 502, headers: corsHeaders10 }
       );
     }
     const pixCode = extractPixCode2(data);
     if (!pixCode) {
       return new Response(
         JSON.stringify({ error: "QR Code PIX n\xE3o gerado.", rawResponse: data }),
-        { status: 502, headers: corsHeaders12 }
+        { status: 502, headers: corsHeaders10 }
       );
     }
     const qrCodeBase64 = extractQrImage(data);
@@ -952,16 +952,16 @@ async function createPixVenuspay(context, corsHeaders12, body) {
         qrCodeImage,
         expiresAt: data.expiration_date || null
       }),
-      { status: 200, headers: corsHeaders12 }
+      { status: 200, headers: corsHeaders10 }
     );
   } catch {
     return new Response(
       JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway." }),
-      { status: 502, headers: corsHeaders12 }
+      { status: 502, headers: corsHeaders10 }
     );
   }
 }
-async function statusPixVenuspay(context, corsHeaders12, transactionId) {
+async function statusPixVenuspay(context, corsHeaders10, transactionId) {
   try {
     const res = await fetch(
       `${STATUS_URL}?transaction_id=${encodeURIComponent(transactionId)}`,
@@ -971,13 +971,13 @@ async function statusPixVenuspay(context, corsHeaders12, transactionId) {
     if (res.status === 404) {
       return new Response(
         JSON.stringify({ transactionId, gateway: "venuspay_pix", status: "pending", isPaid: false, isExpired: false, payedAt: null }),
-        { status: 200, headers: corsHeaders12 }
+        { status: 200, headers: corsHeaders10 }
       );
     }
     if (!res.ok) {
       return new Response(
         JSON.stringify({ error: "Erro ao consultar gateway.", details: data }),
-        { status: 502, headers: corsHeaders12 }
+        { status: 502, headers: corsHeaders10 }
       );
     }
     const rawStatus = String(data.status || "pending").toLowerCase();
@@ -992,12 +992,12 @@ async function statusPixVenuspay(context, corsHeaders12, transactionId) {
         isExpired,
         payedAt: isPaid ? data.paid_at || data.created_at || null : null
       }),
-      { status: 200, headers: corsHeaders12 }
+      { status: 200, headers: corsHeaders10 }
     );
   } catch {
     return new Response(
       JSON.stringify({ error: "Erro ao consultar status do pagamento." }),
-      { status: 502, headers: corsHeaders12 }
+      { status: 502, headers: corsHeaders10 }
     );
   }
 }
@@ -2681,17 +2681,17 @@ function gerarCpfAleatorio8() {
   d.push(sum * 10 % 11 % 10);
   return d.join("");
 }
-async function createPixIronpay2(context, corsHeaders12, body) {
+async function createPixIronpay2(context, corsHeaders10, body) {
   const { env } = context;
   const apiToken = env.IRONPAY_API_TOKEN;
   const offerHash = env.IRONPAY_OFFER_HASH;
   const productHash = env.IRONPAY_PRODUCT_HASH;
   if (!apiToken || !offerHash || !productHash) {
-    return new Response(JSON.stringify({ error: "Gateway de pagamento nao configurado." }), { status: 500, headers: corsHeaders12 });
+    return new Response(JSON.stringify({ error: "Gateway de pagamento nao configurado." }), { status: 500, headers: corsHeaders10 });
   }
   const { amount, name, document, productName, email, phone } = body;
   if (!amount || !name) {
-    return new Response(JSON.stringify({ error: "Campos obrigatorios: amount, name." }), { status: 400, headers: corsHeaders12 });
+    return new Response(JSON.stringify({ error: "Campos obrigatorios: amount, name." }), { status: 400, headers: corsHeaders10 });
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
   const payerDocument = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio8();
@@ -2734,18 +2734,18 @@ async function createPixIronpay2(context, corsHeaders12, body) {
     );
     const data = await res.json();
     if (!res.ok) {
-      return new Response(JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: data }), { status: 502, headers: corsHeaders12 });
+      return new Response(JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: data }), { status: 502, headers: corsHeaders10 });
     }
     const transactionId = data.hash || data.transaction_hash;
     if (!transactionId) {
-      return new Response(JSON.stringify({ error: "Resposta invalida do gateway: hash ausente.", rawResponse: data }), { status: 502, headers: corsHeaders12 });
+      return new Response(JSON.stringify({ error: "Resposta invalida do gateway: hash ausente.", rawResponse: data }), { status: 502, headers: corsHeaders10 });
     }
     const pix = data.pix || {};
     const pixCode = pix.pix_qr_code || pix.qr_code || pix.code || pix.copy_paste || null;
     const qrCodeBase64 = pix.qr_code_base64 || pix.base64 || null;
     const qrCodeImage = pixCode ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}` : pix.pix_url || null;
     if (!pixCode) {
-      return new Response(JSON.stringify({ error: "QR Code PIX nao gerado.", rawResponse: data }), { status: 502, headers: corsHeaders12 });
+      return new Response(JSON.stringify({ error: "QR Code PIX nao gerado.", rawResponse: data }), { status: 502, headers: corsHeaders10 });
     }
     return new Response(
       JSON.stringify({
@@ -2756,17 +2756,17 @@ async function createPixIronpay2(context, corsHeaders12, body) {
         qrCodeBase64: qrCodeBase64 || null,
         qrCodeImage: qrCodeImage || null
       }),
-      { status: 200, headers: corsHeaders12 }
+      { status: 200, headers: corsHeaders10 }
     );
   } catch {
-    return new Response(JSON.stringify({ error: "Erro de comunicacao com o gateway." }), { status: 502, headers: corsHeaders12 });
+    return new Response(JSON.stringify({ error: "Erro de comunicacao com o gateway." }), { status: 502, headers: corsHeaders10 });
   }
 }
-async function statusPixIronpay2(context, corsHeaders12, transactionId) {
+async function statusPixIronpay2(context, corsHeaders10, transactionId) {
   const { env } = context;
   const apiToken = env.IRONPAY_API_TOKEN;
   if (!apiToken) {
-    return new Response(JSON.stringify({ error: "Gateway nao configurado" }), { status: 500, headers: corsHeaders12 });
+    return new Response(JSON.stringify({ error: "Gateway nao configurado" }), { status: 500, headers: corsHeaders10 });
   }
   try {
     const res = await fetch(
@@ -2775,7 +2775,7 @@ async function statusPixIronpay2(context, corsHeaders12, transactionId) {
     );
     const data = await res.json();
     if (!res.ok) {
-      return new Response(JSON.stringify({ error: "Erro ao consultar gateway.", details: data }), { status: 502, headers: corsHeaders12 });
+      return new Response(JSON.stringify({ error: "Erro ao consultar gateway.", details: data }), { status: 502, headers: corsHeaders10 });
     }
     const rawStatus = (data.payment_status || data.status || "").toUpperCase();
     const isPaid = rawStatus === "PAID";
@@ -2789,10 +2789,10 @@ async function statusPixIronpay2(context, corsHeaders12, transactionId) {
         isExpired,
         payedAt: data.paid_at || null
       }),
-      { status: 200, headers: corsHeaders12 }
+      { status: 200, headers: corsHeaders10 }
     );
   } catch {
-    return new Response(JSON.stringify({ error: "Erro ao consultar status do pagamento." }), { status: 502, headers: corsHeaders12 });
+    return new Response(JSON.stringify({ error: "Erro ao consultar status do pagamento." }), { status: 502, headers: corsHeaders10 });
   }
 }
 
@@ -2806,20 +2806,20 @@ function gerarCpfAleatorio9() {
   d.push(s2 * 10 % 11 % 10);
   return d.join("");
 }
-async function createPixMasterfy2(context, corsHeaders12, body) {
+async function createPixMasterfy2(context, corsHeaders10, body) {
   const { env } = context;
   const apiKey = env.MASTERFY_API_KEY;
   if (!apiKey) {
     return new Response(
       JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado. Configure MASTERFY_API_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders12 }
+      { status: 500, headers: corsHeaders10 }
     );
   }
   const { amount, name, email, phone, productName, address, document } = body;
   if (!amount || !name) {
     return new Response(
       JSON.stringify({ error: "Campos obrigat\xF3rios: amount, name." }),
-      { status: 400, headers: corsHeaders12 }
+      { status: 400, headers: corsHeaders10 }
     );
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
@@ -2876,21 +2876,21 @@ async function createPixMasterfy2(context, corsHeaders12, body) {
     if (!res.ok) {
       return new Response(
         JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: data }),
-        { status: 502, headers: corsHeaders12 }
+        { status: 502, headers: corsHeaders10 }
       );
     }
     const transactionId = data.id;
     if (!transactionId) {
       return new Response(
         JSON.stringify({ error: "Resposta inv\xE1lida do gateway: id ausente.", rawResponse: data }),
-        { status: 502, headers: corsHeaders12 }
+        { status: 502, headers: corsHeaders10 }
       );
     }
     const pixCode = data.data && data.data.copypaste || null;
     if (!pixCode) {
       return new Response(
         JSON.stringify({ error: "QR Code PIX n\xE3o gerado.", rawResponse: data }),
-        { status: 502, headers: corsHeaders12 }
+        { status: 502, headers: corsHeaders10 }
       );
     }
     const qrCodeImage = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`;
@@ -2903,22 +2903,22 @@ async function createPixMasterfy2(context, corsHeaders12, body) {
         qrCodeBase64: null,
         qrCodeImage
       }),
-      { status: 200, headers: corsHeaders12 }
+      { status: 200, headers: corsHeaders10 }
     );
   } catch {
     return new Response(
       JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway." }),
-      { status: 502, headers: corsHeaders12 }
+      { status: 502, headers: corsHeaders10 }
     );
   }
 }
-async function statusPixMasterfy2(context, corsHeaders12, transactionId) {
+async function statusPixMasterfy2(context, corsHeaders10, transactionId) {
   const { env } = context;
   const apiKey = env.MASTERFY_API_KEY;
   if (!apiKey) {
     return new Response(
       JSON.stringify({ error: "Gateway n\xE3o configurado. Configure MASTERFY_API_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders12 }
+      { status: 500, headers: corsHeaders10 }
     );
   }
   try {
@@ -2936,7 +2936,7 @@ async function statusPixMasterfy2(context, corsHeaders12, transactionId) {
     if (!res.ok) {
       return new Response(
         JSON.stringify({ error: "Erro ao consultar gateway.", details: data }),
-        { status: 502, headers: corsHeaders12 }
+        { status: 502, headers: corsHeaders10 }
       );
     }
     const rawStatus = (data.status || "").toUpperCase();
@@ -2951,12 +2951,12 @@ async function statusPixMasterfy2(context, corsHeaders12, transactionId) {
         isExpired,
         payedAt: data.paidAt || null
       }),
-      { status: 200, headers: corsHeaders12 }
+      { status: 200, headers: corsHeaders10 }
     );
   } catch {
     return new Response(
       JSON.stringify({ error: "Erro ao consultar status do pagamento." }),
-      { status: 502, headers: corsHeaders12 }
+      { status: 502, headers: corsHeaders10 }
     );
   }
 }
@@ -3007,20 +3007,20 @@ function extractPixCode3(data) {
   }
   return null;
 }
-async function createPixUmbrellapag2(context, corsHeaders12, body) {
+async function createPixUmbrellapag2(context, corsHeaders10, body) {
   const { request: request2, env } = context;
   const apiKey = env.UMBRELLAPAG_API_KEY;
   if (!apiKey) {
     return new Response(
       JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado. Configure UMBRELLAPAG_API_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders12 }
+      { status: 500, headers: corsHeaders10 }
     );
   }
   const { amount, name, email, phone, productName, address, document } = body;
   if (!amount || !name) {
     return new Response(
       JSON.stringify({ error: "Campos obrigat\xF3rios: amount, name." }),
-      { status: 400, headers: corsHeaders12 }
+      { status: 400, headers: corsHeaders10 }
     );
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
@@ -3078,21 +3078,21 @@ async function createPixUmbrellapag2(context, corsHeaders12, body) {
     if (!res.ok) {
       return new Response(
         JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: json4 }),
-        { status: 502, headers: corsHeaders12 }
+        { status: 502, headers: corsHeaders10 }
       );
     }
     const transactionId = data.id;
     if (!transactionId) {
       return new Response(
         JSON.stringify({ error: "Resposta inv\xE1lida do gateway: id ausente.", rawResponse: json4 }),
-        { status: 502, headers: corsHeaders12 }
+        { status: 502, headers: corsHeaders10 }
       );
     }
     const pixCode = extractPixCode3(data);
     if (!pixCode) {
       return new Response(
         JSON.stringify({ error: "QR Code PIX n\xE3o gerado.", rawResponse: json4 }),
-        { status: 502, headers: corsHeaders12 }
+        { status: 502, headers: corsHeaders10 }
       );
     }
     const qrCodeImage = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`;
@@ -3105,22 +3105,22 @@ async function createPixUmbrellapag2(context, corsHeaders12, body) {
         qrCodeBase64: null,
         qrCodeImage
       }),
-      { status: 200, headers: corsHeaders12 }
+      { status: 200, headers: corsHeaders10 }
     );
   } catch {
     return new Response(
       JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway." }),
-      { status: 502, headers: corsHeaders12 }
+      { status: 502, headers: corsHeaders10 }
     );
   }
 }
-async function statusPixUmbrellapag2(context, corsHeaders12, transactionId) {
+async function statusPixUmbrellapag2(context, corsHeaders10, transactionId) {
   const { env } = context;
   const apiKey = env.UMBRELLAPAG_API_KEY;
   if (!apiKey) {
     return new Response(
       JSON.stringify({ error: "Gateway n\xE3o configurado. Configure UMBRELLAPAG_API_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders12 }
+      { status: 500, headers: corsHeaders10 }
     );
   }
   try {
@@ -3136,7 +3136,7 @@ async function statusPixUmbrellapag2(context, corsHeaders12, transactionId) {
     if (!res.ok) {
       return new Response(
         JSON.stringify({ error: "Erro ao consultar gateway.", details: json4 }),
-        { status: 502, headers: corsHeaders12 }
+        { status: 502, headers: corsHeaders10 }
       );
     }
     const rawStatus = String(data.status || "").toUpperCase();
@@ -3151,12 +3151,12 @@ async function statusPixUmbrellapag2(context, corsHeaders12, transactionId) {
         isExpired,
         payedAt: data.paidAt || null
       }),
-      { status: 200, headers: corsHeaders12 }
+      { status: 200, headers: corsHeaders10 }
     );
   } catch {
     return new Response(
       JSON.stringify({ error: "Erro ao consultar status do pagamento." }),
-      { status: 502, headers: corsHeaders12 }
+      { status: 502, headers: corsHeaders10 }
     );
   }
 }
@@ -3241,27 +3241,27 @@ function extractQrImage2(data) {
   }
   return null;
 }
-async function createPixVenuspay2(context, corsHeaders12, body) {
+async function createPixVenuspay2(context, corsHeaders10, body) {
   const { env } = context;
   const secretKey = env.VENUS_PAY_SECRET_KEY;
   if (!secretKey) {
     return new Response(
       JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado. Configure VENUS_PAY_SECRET_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders12 }
+      { status: 500, headers: corsHeaders10 }
     );
   }
   const { amount, name, email, phone, productName, address, document } = body;
   if (!amount || !name) {
     return new Response(
       JSON.stringify({ error: "Campos obrigat\xF3rios: amount, name." }),
-      { status: 400, headers: corsHeaders12 }
+      { status: 400, headers: corsHeaders10 }
     );
   }
   const amountDecimal = Number(Number(amount).toFixed(2));
   if (amountDecimal < MIN_AMOUNT2 || amountDecimal > MAX_AMOUNT2) {
     return new Response(
       JSON.stringify({ error: `A VenusPay aceita PIX de R$ ${MIN_AMOUNT2},00 at\xE9 R$ ${MAX_AMOUNT2.toLocaleString("pt-BR")},00.` }),
-      { status: 400, headers: corsHeaders12 }
+      { status: 400, headers: corsHeaders10 }
     );
   }
   const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
@@ -3323,7 +3323,7 @@ async function createPixVenuspay2(context, corsHeaders12, body) {
       console.error("[VENUSPAY_PIX] Resposta n\xE3o-JSON recebida:", res.status, text2);
       return new Response(
         JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway Venus Pay." }),
-        { status: 502, headers: corsHeaders12 }
+        { status: 502, headers: corsHeaders10 }
       );
     }
     console.log(JSON.stringify({
@@ -3341,21 +3341,21 @@ async function createPixVenuspay2(context, corsHeaders12, body) {
           error: errorMsg,
           details: data
         }),
-        { status: 502, headers: corsHeaders12 }
+        { status: 502, headers: corsHeaders10 }
       );
     }
     const transactionId = data.transaction_id || data.id || data.data?.transaction_id || data.data?.id || data.data?.payment?.transaction_id || data.data?.payment?.id || null;
     if (!transactionId) {
       return new Response(
         JSON.stringify({ error: "Resposta inv\xE1lida do gateway: transaction_id ausente.", rawResponse: data }),
-        { status: 502, headers: corsHeaders12 }
+        { status: 502, headers: corsHeaders10 }
       );
     }
     const pixCode = extractPixCode4(data);
     if (!pixCode) {
       return new Response(
         JSON.stringify({ error: "QR Code PIX n\xE3o gerado.", rawResponse: data }),
-        { status: 502, headers: corsHeaders12 }
+        { status: 502, headers: corsHeaders10 }
       );
     }
     const qrCodeBase64 = extractQrImage2(data);
@@ -3370,17 +3370,17 @@ async function createPixVenuspay2(context, corsHeaders12, body) {
         qrCodeImage,
         expiresAt: data.expiration_date || data.expires_at || data.pix?.expiration_date || null
       }),
-      { status: 200, headers: corsHeaders12 }
+      { status: 200, headers: corsHeaders10 }
     );
   } catch (err) {
     console.error("[VENUSPAY_PIX] Exce\xE7\xE3o na requisi\xE7\xE3o:", err?.message);
     return new Response(
       JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway." }),
-      { status: 502, headers: corsHeaders12 }
+      { status: 502, headers: corsHeaders10 }
     );
   }
 }
-async function statusPixVenuspay2(context, corsHeaders12, transactionId) {
+async function statusPixVenuspay2(context, corsHeaders10, transactionId) {
   const { env } = context;
   const secretKey = env?.VENUS_PAY_SECRET_KEY || "";
   try {
@@ -3396,13 +3396,13 @@ async function statusPixVenuspay2(context, corsHeaders12, transactionId) {
     if (res.status === 404) {
       return new Response(
         JSON.stringify({ transactionId, gateway: "venuspay_pix", status: "pending", isPaid: false, isExpired: false, payedAt: null }),
-        { status: 200, headers: corsHeaders12 }
+        { status: 200, headers: corsHeaders10 }
       );
     }
     if (!res.ok) {
       return new Response(
         JSON.stringify({ error: "Erro ao consultar gateway.", details: data }),
-        { status: 502, headers: corsHeaders12 }
+        { status: 502, headers: corsHeaders10 }
       );
     }
     const rawStatus = String(data.status || data.data?.status || "pending").toLowerCase();
@@ -3417,12 +3417,12 @@ async function statusPixVenuspay2(context, corsHeaders12, transactionId) {
         isExpired,
         payedAt: isPaid ? data.paid_at || data.data?.paid_at || data.created_at || null : null
       }),
-      { status: 200, headers: corsHeaders12 }
+      { status: 200, headers: corsHeaders10 }
     );
   } catch {
     return new Response(
       JSON.stringify({ error: "Erro ao consultar status do pagamento." }),
-      { status: 502, headers: corsHeaders12 }
+      { status: 502, headers: corsHeaders10 }
     );
   }
 }
@@ -3924,7 +3924,7 @@ async function onRequest6(context) {
     );
   }
 }
-async function processCardMasterfy(env, corsHeaders12, order, body, { cpfFinal, phoneFinal, numParcelas, clientIp }) {
+async function processCardMasterfy(env, corsHeaders10, order, body, { cpfFinal, phoneFinal, numParcelas, clientIp }) {
   const gw = "masterfy_card";
   const amountDecimal = cardAmount(order.valor, numParcelas);
   const amountInCents = Math.round(amountDecimal * 100);
@@ -3968,7 +3968,7 @@ async function processCardMasterfy(env, corsHeaders12, order, body, { cpfFinal, 
     if (!res.ok || !data) {
       console.error("[masterfy_card]", res.status, JSON.stringify(data).slice(0, 500));
       await updateLeadById(env, body.orderId, { status: "cartao_recusado", gateway: gw, card_erro: "Erro ao processar cartao no gateway." });
-      return new Response(JSON.stringify({ status: "error", error: "Erro ao processar cartao. Tente novamente." }), { status: 200, headers: corsHeaders12 });
+      return new Response(JSON.stringify({ status: "error", error: "Erro ao processar cartao. Tente novamente." }), { status: 200, headers: corsHeaders10 });
     }
     const transactionId = data.id || null;
     const rawStatus = String(data.status || "").toUpperCase();
@@ -3977,11 +3977,11 @@ async function processCardMasterfy(env, corsHeaders12, order, body, { cpfFinal, 
     console.log(JSON.stringify({ event: "MASTERFY_CARD_RESPONSE", httpStatus: res.status, transactionId, rawStatus, amount: amountDecimal, installments: numParcelas }));
     if (!transactionId) {
       await updateLeadById(env, body.orderId, { status: "cartao_recusado", gateway: gw, card_erro: "Resposta invalida do gateway." });
-      return new Response(JSON.stringify({ status: "error", error: "Erro ao processar cartao. Tente novamente." }), { status: 200, headers: corsHeaders12 });
+      return new Response(JSON.stringify({ status: "error", error: "Erro ao processar cartao. Tente novamente." }), { status: 200, headers: corsHeaders10 });
     }
     if (isRefused) {
       await updateLeadById(env, body.orderId, { status: "cartao_recusado", gateway: gw, transaction_id: transactionId, card_erro: "Cartao recusado (" + rawStatus + ")." });
-      return new Response(JSON.stringify({ status: "declined", transactionId, error: "Pagamento recusado pelo emissor." }), { status: 200, headers: corsHeaders12 });
+      return new Response(JSON.stringify({ status: "declined", transactionId, error: "Pagamento recusado pelo emissor." }), { status: 200, headers: corsHeaders10 });
     }
     if (isPaid) {
       try {
@@ -3990,15 +3990,15 @@ async function processCardMasterfy(env, corsHeaders12, order, body, { cpfFinal, 
       } catch (e) {
         console.error("[masterfy_card] fulfillment:", e?.message);
       }
-      return new Response(JSON.stringify({ transactionId, status: "approved", rawStatus: rawStatus.toLowerCase(), amount: amountDecimal, installments: numParcelas }), { status: 200, headers: corsHeaders12 });
+      return new Response(JSON.stringify({ transactionId, status: "approved", rawStatus: rawStatus.toLowerCase(), amount: amountDecimal, installments: numParcelas }), { status: 200, headers: corsHeaders10 });
     }
     await updateLeadById(env, body.orderId, { status: "cartao_processando", gateway: gw, transaction_id: transactionId, cpf: cpfFinal, valor: amountDecimal });
-    return new Response(JSON.stringify({ transactionId, status: "pending", rawStatus: rawStatus.toLowerCase(), amount: amountDecimal, installments: numParcelas }), { status: 200, headers: corsHeaders12 });
+    return new Response(JSON.stringify({ transactionId, status: "pending", rawStatus: rawStatus.toLowerCase(), amount: amountDecimal, installments: numParcelas }), { status: 200, headers: corsHeaders10 });
   } catch (err) {
     console.error("[masterfy_card]", err?.message || err);
     await updateLeadById(env, body.orderId, { status: "cartao_recusado", gateway: gw, card_erro: "Erro de comunicacao com o gateway." }).catch(() => {
     });
-    return new Response(JSON.stringify({ status: "error", error: "Erro de comunicacao com o gateway." }), { status: 200, headers: corsHeaders12 });
+    return new Response(JSON.stringify({ status: "error", error: "Erro de comunicacao com o gateway." }), { status: 200, headers: corsHeaders10 });
   }
 }
 
@@ -4853,78 +4853,13 @@ async function onRequest15({ request: request2, env }) {
   }
 }
 
-// sites/bella/functions/api/fb-purchase.js
-var corsHeaders10 = {
-  "Access-Control-Allow-Origin": "*",
-  "Content-Type": "application/json"
-};
-async function onRequest16(context) {
-  const { request: request2, env } = context;
-  if (request2.method === "OPTIONS") return new Response("", { status: 204, headers: corsHeaders10 });
-  if (request2.method !== "POST") return new Response(JSON.stringify({ error: "POST only" }), { status: 405, headers: corsHeaders10 });
-  if (!env.FB_ACCESS_TOKEN) {
-    return new Response(JSON.stringify({ error: "Pixel nao configurado" }), { status: 500, headers: corsHeaders10 });
-  }
-  let payload;
-  try {
-    payload = await request2.json();
-  } catch {
-    return new Response(JSON.stringify({ error: "JSON invalido" }), { status: 400, headers: corsHeaders10 });
-  }
-  try {
-    const result = await sendFacebookPurchase(env, payload);
-    console.log("FB CAPI response:", result.status, result.body);
-    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: corsHeaders10 });
-  } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders10 });
-  }
-}
-
-// sites/bella/functions/api/utmify-order.js
-var corsHeaders11 = {
-  "Access-Control-Allow-Origin": "*",
-  "Content-Type": "application/json"
-};
-async function onRequest17(context) {
-  const { request: request2, env } = context;
-  if (request2.method === "OPTIONS") return new Response("", { status: 204, headers: corsHeaders11 });
-  if (request2.method !== "POST") return new Response(JSON.stringify({ error: "POST only" }), { status: 405, headers: corsHeaders11 });
-  let body;
-  try {
-    body = await request2.json();
-  } catch {
-    return new Response(JSON.stringify({ error: "JSON invalido" }), { status: 400, headers: corsHeaders11 });
-  }
-  const {
-    orderId,
-    status,
-    customerName,
-    customerEmail,
-    customerPhone,
-    customerDocument,
-    productName,
-    valueInCents,
-    tracking,
-    paymentMethod
-  } = body;
-  try {
-    const result = await sendUtmifyOrder(env, {
-      orderId,
-      status,
-      customerName,
-      customerEmail,
-      customerPhone,
-      customerDocument,
-      productName,
-      valueInCents,
-      tracking,
-      paymentMethod
-    });
-    return new Response(JSON.stringify({ ok: true, utmifyStatus: result.status }), { status: 200, headers: corsHeaders11 });
-  } catch (err) {
-    console.error("[utmify-order]", err?.message);
-    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders11 });
-  }
+// sites/bella/functions/_lib/retired-purchase-route.js
+function retiredPurchaseRoute() {
+  return Response.json({
+    ok: false,
+    code: "legacy_purchase_route_disabled",
+    error: "Esta rota de eventos foi encerrada. O pagamento \xE9 processado pelo servidor da loja."
+  }, { status: 410, headers: { "Cache-Control": "no-store" } });
 }
 
 // worker-src/index.js
@@ -5240,8 +5175,8 @@ var bellaRoutes = {
   "/api/send-recovery-email": onRequest13,
   "/api/process-recovery-queue": onRequest14,
   "/api/reconcile-payments": onRequest15,
-  "/api/fb-purchase": onRequest16,
-  "/api/utmify-order": onRequest17
+  "/api/fb-purchase": retiredPurchaseRoute,
+  "/api/utmify-order": retiredPurchaseRoute
 };
 async function bellaRoute(path, request2, env, ctx) {
   const handler = bellaRoutes[path];

@@ -2,8 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-const source = fs.readFileSync(new URL('../worker-src/purchase-tracking.js', import.meta.url), 'utf8');
-const { capturePurchaseTracking, recoverCustomerAttribution, deliverPaidPurchase, deliverPendingPurchase, purchaseDestination } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+import { capturePurchaseTracking, recoverCustomerAttribution, deliverPaidPurchase, deliverPendingPurchase, purchaseDestination } from '../worker-src/purchase-tracking.js';
 const copy = (value) => JSON.parse(JSON.stringify(value));
 function fixture() {
   let order = { id: 'order-123', transaction_id: 'tx-123', status: 'paid', created_at: '2026-10-02T12:00:00Z', updated_at: '2026-10-02T12:30:00Z', name: 'Cliente Teste', email: 'teste@example.com', phone: '85999999999', document: '52998224725', amount: 75.80, products: [{ name: 'Escova', quantity: 2, price: 37.90 }], tracking: { utm_source: 'FB', utm_campaign: 'Campanha A', _browser: { source_url: 'https://example.com/pagamento', fbp: 'fb.1.123.456', ip: '192.0.2.1', user_agent: 'Test Browser' } } };
