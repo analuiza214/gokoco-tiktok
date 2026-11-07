@@ -1,3 +1,4 @@
+import {capturePurchaseTracking} from '../../../../../worker-src/purchase-tracking.js';
 import { createCheckoutLead } from "../../_lib/leads-store.js";
 import { validateCartItems } from "../../_lib/catalog.js";
 
@@ -14,7 +15,7 @@ export async function onRequest({ request, env }) {
   }
   try {
     const cart = validateCartItems(body.items, method);
-    const lead = await createCheckoutLead(env, { ...body, ...cart }, method);
+    const lead = await createCheckoutLead(env, { ...body, ...cart, _serverBrowser: capturePurchaseTracking(request,body)._browser }, method);
     return json({ ok: true, orderId: lead.id, tracking: lead.tracking }, 201);
   } catch (error) {
     console.error("[orders/create] Falha ao salvar pedido:", error?.message);

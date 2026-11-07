@@ -485,7 +485,7 @@ export default function Success() {
         try {
           const gatewayParam = pixData!.gateway ? `&gateway=${encodeURIComponent(pixData!.gateway)}` : "";
           const res = await fetch(import.meta.env.BASE_URL + `api/pix/status?id=${pixData!.transactionId}${gatewayParam}`);
-          const data = await res.json() as { status?: string; isPaid?: boolean };
+          const data = await res.json() as { status?: string; isPaid?: boolean; eventId?:string; purchaseDestination?:string };
           const paid = data.isPaid || data.status === "paid" || data.status === "approved" || data.status === "PAID";
           if (paid) {
             if (pollInterval.current) clearInterval(pollInterval.current);
@@ -498,7 +498,7 @@ export default function Success() {
                 value: orderAmount,
                 payment_type: "pix",
                 items: [{ item_id: "bellamix_order", item_name: orderProductName, price: orderAmount, quantity: 1 }],
-              }, { event_id: `${pixData!.transactionId}_purchase` });
+              }, { event_id: data.eventId || `${pixData!.transactionId}_purchase`,purchaseDestination:data.purchaseDestination });
             }
             clearCart();
             setPaymentConfirmed(true);

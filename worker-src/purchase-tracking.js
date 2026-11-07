@@ -8,7 +8,7 @@ const utc = (value) => new Date(value).toISOString().slice(0, 19).replace('T', '
 export function capturePurchaseTracking(request, body) {
   const tracking = Object.fromEntries(ATTRIBUTION_KEYS.map((key) => [key, text(body.tracking?.[key]) || null]));
   if(/^[-a-f0-9]{36}$/.test(body.tracking?.verdefy_pixel||''))tracking.verdefy_pixel=body.tracking.verdefy_pixel;
-  const fb = body.fb || {};
+  const fb = body.fb || {fbp:body.tracking?.fbp,fbc:body.tracking?.fbc};
   const fbp = text(fb.fbp, 200);
   const fbc = text(fb.fbc, 300);
   const origin = new URL(request.url).origin;
@@ -48,6 +48,7 @@ export async function recoverCustomerAttribution(env, db, tracking, buyer) {
 
 export function purchaseDestination(env) {
   const mode = String(env.PURCHASE_DELIVERY_MODE || 'auto').trim().toLowerCase();
+  if (mode === 'verdefy') return 'verdefy';
   if (mode === 'utmify') return 'utmify';
   if (mode === 'meta') return 'meta';
   if (mode !== 'auto') return null;
@@ -58,7 +59,7 @@ export function purchaseDestination(env) {
 
 export function purchaseSummary(env, order) {
   const destination = purchaseDestination(env);
-  const state = destination ? order.tracking?._purchase?.[destination] : null;
+  const state = destination === 'verdefy' ? order.tracking?._verdefy : destination ? order.tracking?._purchase?.[destination] : null;
   return {
     destination,
     state: destination ? state?.state || 'pending' : 'not_configured',
@@ -177,9 +178,10 @@ async function swapTracking(db, env, order, tracking) {
 }
 
 export async function deliverPaidPurchase(env, db, orderId, paidAt) {
-  await deliverVerdefy(env,db,orderId).catch(()=>console.error("[verdefy] Sync pending."));
+  const mirror=await deliverVerdefy(env,db,orderId).catch(()=>({state:"failed"}));
   const destination = purchaseDestination(env);
   if (!destination) return { state: 'not_configured' };
+  if (destination === 'verdefy') return {...mirror,destination,event_id:'pix_'+orderId};
   for (let attempt = 0; attempt < 3; attempt++) {
     const rows = await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(orderId)}&status=eq.paid&select=*&limit=1`);
     const order = rows?.[0];

@@ -2,6 +2,7 @@ const adminIcons = {"lock": "<rect x=\"3\" y=\"11\" width=\"18\" height=\"11\" r
 const icon = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${adminIcons[name] || ""}</svg>`;
 document.querySelectorAll("[data-icon]").forEach((element) => { element.innerHTML = icon(element.dataset.icon); });
 const $ = (id) => document.getElementById(id);
+const integrationCheck=new URLSearchParams(location.search).has('integration-check');
 const TOKEN_KEY = 'gokoco_admin_token';
 let token = sessionStorage.getItem(TOKEN_KEY) || '';
 let orders = [];
@@ -126,7 +127,12 @@ async function api(path, options = {}) {
 function showPanel() {
   $('login').hidden = true;
   $('shell').hidden = false;
+  if(integrationCheck){showIntegrationCheck();return;}
   load();
+}
+async function showIntegrationCheck(){
+ const box=document.createElement('section');box.className='panel';const title=document.createElement('h2');title.textContent='Verificação da integração';box.append(title);const output=document.createElement('div');box.append(output);const refresh=document.createElement('button');refresh.textContent='Verificar novamente';refresh.onclick=showIntegrationCheck;box.append(refresh);$('shell').replaceChildren(box);
+ try{const d=await api('integration-readiness');for(const [label,ok] of [['Login configurado',d.loginConfigured],['Banco acessível',d.database],['Credencial Verdefy autorizada',d.receiver.authorized],['Origem da loja correta',d.receiver.sourceMatches]]){const p=document.createElement('p');p.textContent=(ok?'✓ ':'⚠ ')+label;output.append(p);}const p=document.createElement('p');p.textContent='Gateway Pix: '+(d.activeGateway||'não disponível')+' · Envio atual: '+(d.destination||'não configurado');output.append(p);const note=document.createElement('p');note.textContent='Esta verificação não cria Pix, não envia compras nem dispara e-mails.';output.append(note);}catch(e){output.textContent=e.message;}
 }
 function showLogin() {
   token = '';
@@ -352,7 +358,7 @@ $('login-form').addEventListener('submit', async (event) => {
 $('refresh').addEventListener('click', load);
 // Painel aberto = varredura contínua: a cada 60s confere pagamentos novos,
 // pendentes antigos e a loja Vídeo sem precisar recarregar.
-setInterval(() => { if (token && !document.hidden) api('reconcile-payments', { method: 'POST' }).catch(() => {}); }, 60000);
+setInterval(() => { if (!integrationCheck && token && !document.hidden) api('reconcile-payments', { method: 'POST' }).catch(() => {}); }, 60000);
 $('logout').addEventListener('click', showLogin);
 $('external-tracking-form').addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -595,5 +601,5 @@ $('gateways').addEventListener('click', async (event) => {
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { $('gateway-modal').hidden = true; closeEmailModal(); } });
 
 if (token) api('verify').then((data) => data.valid ? showPanel() : showLogin()).catch(showLogin);
-window.setInterval(() => { if (token && !$('shell').hidden) load(); }, 60_000);
+window.setInterval(() => { if (!integrationCheck && token && !$('shell').hidden) load(); }, 60_000);
 

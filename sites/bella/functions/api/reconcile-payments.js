@@ -1,5 +1,5 @@
 import { verifyAdminToken } from "../_lib/admin-auth.js";
-import { fulfillPaidPixLead, listPendingPixLeads, updateLeadById } from "../_lib/leads-store.js";
+import { fulfillPaidPixLead, listPendingPixLeads, updateLeadById, updatePixLeadStatus } from "../_lib/leads-store.js";
 import { queryPixGatewayStatus } from "../_lib/pix-gateway-status.js";
 
 const headers = { "Content-Type": "application/json", "Cache-Control": "no-store" };
@@ -20,11 +20,12 @@ export async function onRequest({ request, env }) {
     for (const lead of leads) {
       try {
         const result = await queryPixGatewayStatus(env, lead.transaction_id, lead.gateway || "ironpay");
-        if (result.isPaid) {
+        if(result.isRefunded){await updatePixLeadStatus(env,lead.transaction_id,"reembolsado");}
+        else if (result.isPaid) {
           await fulfillPaidPixLead(env, lead.transaction_id, result.paidAt);
           paid++;
         } else if (result.isExpired) {
-          await updateLeadById(env, lead.id, { status: "expirado" });
+          await updatePixLeadStatus(env, lead.transaction_id, "expirado");
           expired++;
         } else {
           pending++;

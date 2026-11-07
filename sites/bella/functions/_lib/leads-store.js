@@ -1,3 +1,5 @@
+import {deliverVideoVerdefy,rememberVideoPayment} from '../../../../worker-src/verdefy-video.js';
+import {purchaseDestination} from '../../../../worker-src/purchase-tracking.js';
 import { sendUtmifyOrder } from "./utmify.js";
 import { sendFacebookPurchase } from "./facebook.js";
 import { safeCardSummary } from "./card-summary.js";
@@ -48,7 +50,7 @@ async function supabaseRequest(env, path, options = {}) {
   return response;
 }
 
-const TRACKING_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "src", "sck", "gclid", "fbclid", "ttclid", "fbc", "fbp"];
+const TRACKING_KEYS = ["utm_id", "verdefy_pixel", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "src", "sck", "gclid", "fbclid", "ttclid", "fbc", "fbp"];
 
 function trackingValues(tracking) {
   const source = tracking && typeof tracking === "object" ? tracking : {};
@@ -56,7 +58,7 @@ function trackingValues(tracking) {
 }
 
 function hasAttribution(tracking) {
-  return TRACKING_KEYS.some((key) => Boolean(tracking?.[key]));
+  return TRACKING_KEYS.filter(key=>!["verdefy_pixel","fbp","fbc"].includes(key)).some((key) => Boolean(tracking?.[key]));
 }
 
 async function previousCustomerTracking(env, body) {
@@ -90,6 +92,9 @@ async function resolveLeadTracking(env, body) {
   const effective = hasAttribution(current) ? current : (hasAttribution(prior) ? prior : current);
   return {
     ...effective,
+    verdefy_pixel: current.verdefy_pixel || null,
+    _browser: body._serverBrowser || {},
+    _items: (body.items||[]).map(p=>({id:p.id,name:p.name,quantity:p.quantity})),
     first_touch: hasAttribution(prior) ? prior : effective,
     last_touch: hasAttribution(current) ? current : null,
     attribution_source: hasAttribution(current) ? "current_visit" : (hasAttribution(prior) ? "recovered_customer_history" : "unattributed"),
@@ -150,7 +155,7 @@ export async function getLeadById(env, leadId) {
   if (!leadId) return null;
   const response = await supabaseRequest(
     env,
-    `leads?id=eq.${encodeURIComponent(leadId)}&select=id,valor,produtos,metodo_pagamento,status,transaction_id,gateway&limit=1`,
+    `leads?id=eq.${encodeURIComponent(leadId)}&select=id,valor,produtos,metodo_pagamento,status,transaction_id,gateway,tracking,created_at&limit=1`,
   );
   const rows = await response.json();
   return Array.isArray(rows) && rows[0] ? rows[0] : null;
@@ -171,13 +176,17 @@ export async function nextLeadPixAmount(env, baseAmount) {
 
 export async function savePixLead(env, body, result, gateway) {
   if (!body.orderId) throw new Error("Pedido interno não informado.");
+  const prior=await getLeadById(env,body.orderId);
+  const generated=!!(result.pixCode||result.pix_code||result.copyPaste);
   const saved = await updateLeadById(env, body.orderId, {
+    tracking:{...(prior?.tracking||{}),_verdefy_pix:{generated,at:new Date().toISOString()}},
     status: "pix_gerado",
     transaction_id: result.transactionId,
     gateway: gateway || result.gateway || null,
     valor: Number(body.amount) || undefined,
   });
   if (!saved) throw new Error("O pedido interno não foi encontrado.");
+  await deliverVideoVerdefy(env,body.orderId,'pending').catch(()=>{});
   return true;
 }
 
@@ -189,6 +198,7 @@ export async function updatePixLeadStatus(env, transactionId, status) {
     body: JSON.stringify({ status, updated_at: new Date().toISOString() }),
   });
   const rows = await response.json();
+  if(['expirado','reembolsado'].includes(status))for(const row of rows||[])await deliverVideoVerdefy(env,row.id,status==='expirado'?'expired':'refunded').catch(()=>{});
   return Array.isArray(rows) && rows.length > 0;
 }
 
@@ -218,6 +228,11 @@ async function registerTrackingOrigin(env, code, name) {
 }
 
 async function sendPaidAttribution(env, transactionId, paidAt, paymentMethod = "pix") {
+  const leadRows=await supabaseRequest(env,`leads?transaction_id=eq.${encodeURIComponent(transactionId)}&select=id&limit=1`).then(r=>r.json());
+  const mirror=leadRows[0]?await deliverVideoVerdefy(env,leadRows[0].id).catch(()=>({state:'failed'})):{state:'not_found'};
+  const destination=purchaseDestination(env);
+  if(destination==='verdefy')return {destination,...mirror};
+  if(!destination)return {destination:null,state:'not_configured'};
   const response = await supabaseRequest(
     env,
     `leads?transaction_id=eq.${encodeURIComponent(transactionId)}&purchase_sent=eq.false&select=id,transaction_id,nome,email,telefone,cpf,produtos,valor,tracking,created_at`,
@@ -246,9 +261,8 @@ async function sendPaidAttribution(env, transactionId, paidAt, paymentMethod = "
       paidAt,
     };
     const names = String(lead.nome || "").trim().split(/\s+/);
-    await Promise.all([
-      sendUtmifyOrder(env, orderPayload),
-      sendFacebookPurchase(env, {
+    if(destination==='utmify')await sendUtmifyOrder(env,orderPayload);
+    else await sendFacebookPurchase(env, {
         event_id: `${lead.transaction_id || lead.id}_purchase`,
         user_data: {
           em: [lead.email],
@@ -264,9 +278,8 @@ async function sendPaidAttribution(env, transactionId, paidAt, paymentMethod = "
           content_name: lead.produtos,
           content_type: "product",
         },
-      }),
-    ]);
-    return { sent: true };
+      });
+    return { sent: true,destination };
   } catch (error) {
     await supabaseRequest(env, `leads?id=eq.${encodeURIComponent(lead.id)}`, {
       method: "PATCH",
@@ -279,6 +292,7 @@ async function sendPaidAttribution(env, transactionId, paidAt, paymentMethod = "
 }
 
 export async function fulfillPaidLead(env, transactionId, paidAt, paymentMethod = "pix") {
+  await rememberVideoPayment(env,transactionId,paidAt);
   const code = trackingCode();
   const response = await supabaseRequest(
     env,

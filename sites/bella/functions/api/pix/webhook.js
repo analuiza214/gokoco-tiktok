@@ -75,7 +75,8 @@ export async function onRequest(context) {
         // O conteúdo público do webhook não é aceito sozinho: o servidor
         // consulta o gateway usando a credencial privada antes de marcar pago.
         const verified = await queryPixGatewayStatus(context.env, String(paymentId), gateway);
-        if (verified.isPaid) await fulfillPaidPixLead(context.env, String(paymentId), verified.paidAt);
+        if(verified.isRefunded)await updatePixLeadStatus(context.env,String(paymentId),"reembolsado");
+        else if (verified.isPaid) await fulfillPaidPixLead(context.env, String(paymentId), verified.paidAt);
         else if (verified.isExpired) await updatePixLeadStatus(context.env, String(paymentId), "expirado");
       } catch (error) {
         console.error("[pix/webhook] Falha ao validar pagamento no gateway:", error?.message);

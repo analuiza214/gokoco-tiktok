@@ -1,3 +1,5 @@
+import {integrationReadiness} from './integration-readiness.js';
+import {retryVideoVerdefy} from './verdefy-video.js';
 import {metaReadiness} from './meta-readiness.js';
 import {retryVerdefy,deliverVerdefy} from './verdefy-sales.js';
 import { onRequest as adminLogin } from './admin-login.js';
@@ -1131,7 +1133,7 @@ async function fulfillConfirmedPayment(env) {
 
 async function retryPaidPurchases(env, limit = 3) {
   const destination = purchaseDestination(env);
-  if (!destination) return { configured: false, processed: 0 };
+  if (!destination || destination==='verdefy') return { configured: destination==='verdefy', processed: 0 };
   const since = new Date(Date.now() - 7 * 86400000).toISOString();
   const path = `tracking->_purchase->${destination}->>state`;
   const rows = await db(env, 'gokoco_orders', `?status=eq.paid&gateway=neq.manual_tracking&updated_at=gte.${encodeURIComponent(since)}&or=(${path}.is.null,${path}.neq.sent)&select=id&order=created_at.asc&limit=${limit}`);
@@ -1158,6 +1160,7 @@ export default {
         const response = await bellaRoute(path.slice('/video'.length), request, env, ctx);
         return response || json({ error: 'Rota inválida.' }, 404);
       }
+      if(path==='/api/admin/integration-readiness')return integrationReadiness(request,env);
       if (path === '/api/admin/login') return await adminLogin({ request, env });
       if (path === '/api/admin/verify') return json({ valid: (await verifyAdminToken(request, env)).valid });
       if (path === '/api/admin/gateways') return await adminGateways(request, env);
@@ -1185,7 +1188,7 @@ export default {
         const secret = String(env.CRON_SECRET || '');
         if (!secret || request.headers.get('x-cron-secret') !== secret) return json({ error: 'Não autorizado.' }, 401);
         const phase = url.searchParams.get('phase');
-        if (phase === 'verdefy') return json({verdefy:await retryVerdefy(env,db)});
+        if (phase === 'verdefy') return json({verdefy:await retryVerdefy(env,db),video:await retryVideoVerdefy(bellaEnvironment(env,request)).catch(()=>({state:'retry_pending'}))});
         if (phase === 'recovery') return json({ recovery: await processRecoveryQueue(env, db, queryPixGatewayStatus) });
         const payments = phase === 'fulfillment' ? null : await reconcilePendingPayments(env, 2, true);
         await fulfillConfirmedPayment(env);

@@ -24,7 +24,7 @@ export async function mirrorVerdefy(env, order, kind = 'paid', opts = {}, query 
   const source = verdefySource(env);
   if (!source) throw Error('VERDEFY_SALES_SOURCE inválido.');
   if (order.tracking?.manualExternal || !gateways.has(order.gateway)) return {state:'ineligible'};
-  const common = {source,orderId:String(order.id),currency:'BRL',amount:Math.round(Number(order.amount)*100),netAmount:null,gateway:order.gateway,eventId:'pix_'+order.id,tracking:trackingPayload(order.tracking),items:(order.products||[]).map(p=>({productId:p.id?String(p.id):'',title:p.name,quantity:p.quantity}))};
+  const common = {source,orderId:String(order.id),currency:'BRL',amount:Math.round(Number(order.amount)*100),netAmount:null,gateway:order.gateway,eventId:order.serverEventId||'pix_'+order.id,tracking:trackingPayload(order.tracking),items:(order.products||[]).map(p=>({productId:p.id?String(p.id):'',title:p.name,quantity:p.quantity}))};
   const pixAt = opts.pixAt || order.tracking?._verdefy_pending?.pix_at || order.created_at;
   let payload;
   if (kind === 'pending') {
@@ -76,7 +76,7 @@ export async function deliverVerdefy(env, db, orderId, mirror = mirrorVerdefy, k
     if (Date.parse(prior.retry_at)>Date.now() || Date.parse(prior.lease_until)>Date.now()) return {state:'retry_pending'};
     const pending={state:'sending',attempts:(Number(prior.attempts)||0)+1,lease_until:new Date(Date.now()+120000).toISOString(),...(opts.pixAt||prior.pix_at?{pix_at:opts.pixAt||prior.pix_at}:{})};
     const tracking={...order.tracking,[key]:pending};
-    const swap=async (before,after)=>db(env,'gokoco_orders',`?id=eq.${encodeURIComponent(order.id)}${filter}&tracking=eq.${encodeURIComponent(JSON.stringify(before||{}))}&select=*`,'PATCH',{tracking:after});
+    const swap=async (before,after)=>db(env,'gokoco_orders',`?id=eq.${encodeURIComponent(order.id)}${filter}&tracking=${before==null?'is.null':'eq.'+encodeURIComponent(JSON.stringify(before))}&select=*`,'PATCH',{tracking:after});
     if (!(await swap(order.tracking,tracking))?.[0]) continue;
     let result;
     try { result=await mirror(env,order,kind,{pixAt:pending.pix_at}); if(result.state==='ineligible')result.retry_at=new Date(Date.now()+86400000).toISOString(); }

@@ -1,3 +1,4 @@
+import {purchaseDestination} from '../../../../../worker-src/purchase-tracking.js';
 // Cloudflare Pages Function — /api/pix/status
 // Consulta status no gateway PIX ativo (IronPay, MasterFy, UmbrellaPag ou Venus Pay).
 //
@@ -45,9 +46,10 @@ export async function onRequest(context) {
 
   try {
     const verified = await queryPixGatewayStatus(context.env, transactionId, activeGateway);
+    if(verified.isRefunded){await updatePixLeadStatus(context.env,transactionId,"reembolsado");return Response.json({status:"refunded",isPaid:false},{headers:corsHeaders});}
     if (verified.isPaid) {
       const fulfillment = await fulfillPaidPixLead(context.env, transactionId, verified.paidAt);
-      return new Response(JSON.stringify({ ...verified, status: "paid", ...fulfillment }), { status: 200, headers: corsHeaders });
+      return new Response(JSON.stringify({ ...verified, status: "paid", ...fulfillment, purchaseDestination:purchaseDestination(context.env),eventId:transactionId+"_purchase" }), { status: 200, headers: corsHeaders });
     }
     if (verified.isExpired) {
       await updatePixLeadStatus(context.env, transactionId, "expirado");

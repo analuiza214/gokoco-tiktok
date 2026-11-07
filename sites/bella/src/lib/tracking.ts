@@ -1,6 +1,7 @@
 declare global {
   interface Window {
     dataLayer: Record<string, unknown>[];
+    getVerdefyTracking?: () => Record<string, string>;
   }
 }
 
@@ -9,6 +10,7 @@ export function saveTrackingParams(): void {
   window.dataLayer = window.dataLayer || [];
   const params = new URLSearchParams(window.location.search);
   const keys = [
+    "utm_id",
     "utm_source",
     "utm_medium",
     "utm_campaign",
@@ -48,7 +50,9 @@ export function getTrackingParams(): Record<string, string | null> {
     .find((part) => part.startsWith(`${name}=`))
     ?.slice(name.length + 1) || null;
   const fbclid = read("fbclid");
-  return {
+  const own = {
+    utm_id: read("utm_id"),
+    event_source_url: location.href,
     utm_source: read("utm_source"),
     utm_medium: read("utm_medium"),
     utm_campaign: read("utm_campaign"),
@@ -62,6 +66,7 @@ export function getTrackingParams(): Record<string, string | null> {
     fbp: cookie("_fbp"),
     fbc: cookie("_fbc") || (fbclid ? `fb.1.${Date.now()}.${fbclid}` : null),
   };
+  return {...own, ...(window.getVerdefyTracking?.() || {})};
 }
 
 export function getGaClientId(): string | null {
@@ -91,7 +96,7 @@ export function pushEcommerceEvent(
   };
   const metaEventName = metaEventNames[eventName];
   const fbq = (window as unknown as Record<string, unknown>).fbq as ((...args: unknown[]) => void) | undefined;
-  if (metaEventName && typeof fbq === "function") {
+  if (metaEventName && !(eventName === "purchase" && extraData.purchaseDestination === "utmify") && typeof fbq === "function") {
     const items = Array.isArray(ecommerceData.items) ? ecommerceData.items as Record<string, unknown>[] : [];
     const eventId = typeof extraData.event_id === "string" ? extraData.event_id : undefined;
     fbq("track", metaEventName, {

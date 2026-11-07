@@ -24,8 +24,10 @@ export async function queryPixGatewayStatus(env, transactionId, gateway) {
   return {
     ...data,
     status: normalized,
+    isRefunded: Boolean(data.isRefunded) || ['refunded','chargeback','reembolsado'].includes(normalized),
+    refundedAt: data.refundedAt || data.refunded_at || null,
     isPaid: Boolean(data.isPaid) || ["paid", "approved", "pago"].includes(normalized),
-    isExpired: Boolean(data.isExpired) || ["expired", "cancelled", "canceled", "refunded"].includes(normalized),
+    isExpired: Boolean(data.isExpired) || ["expired", "cancelled", "canceled"].includes(normalized),
     paidAt: data.paidAt || data.payedAt || null,
   };
 }

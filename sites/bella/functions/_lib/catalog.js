@@ -32,7 +32,7 @@ export function validateCartItems(rawItems, method) {
   const amount = Number(normalized.reduce((sum, item) => sum + item[priceKey] * item.quantity, 0).toFixed(2));
   const products = normalized.map((item) => `${item.name} (x${item.quantity})`).join(", ");
   const productName = normalized.map((item) => item.name).join(", ");
-  return { amount, products, productName };
+  return { amount, products, productName, items: normalized.map(p=>({id:p.id,name:p.name,quantity:p.quantity})) };
 }
 
 export function cardAmount(baseAmount, installments) {

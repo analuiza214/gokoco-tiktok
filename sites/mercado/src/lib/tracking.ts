@@ -5,6 +5,7 @@ declare global {
   interface Window {
     fbq?: (...args: unknown[]) => void;
     getUTMs?: () => Record<string, string>;
+    getVerdefyTracking?: () => Record<string, string>;
     getFbData?: () => { fbp: string; fbc: string };
     trackGoogleAdsPurchase?: (amount: number, transactionId: string) => void;
   }
@@ -20,7 +21,7 @@ export function fbqTrack(event: string, data: Record<string, unknown>, eventId?:
 
 export function trackingPayload(): { tracking: Record<string, string>; fb: { fbp: string; fbc: string } } {
   return {
-    tracking: window.getUTMs ? window.getUTMs() : {},
+    tracking: {...(window.getUTMs?.() || {}), ...(window.getVerdefyTracking?.() || {})},
     fb: window.getFbData ? window.getFbData() : { fbp: "", fbc: "" },
   };
 }

@@ -1,3 +1,4 @@
+import {purchaseDestination} from '../../../../../worker-src/purchase-tracking.js';
 // Cloudflare Pages Function — /api/pix/create
 // Proteção por IP: máximo 5 tentativas por hora por IP usando Cloudflare KV
 // Roteia para IronPay, MasterFy, UmbrellaPag ou Venus Pay conforme o gateway PIX
@@ -121,7 +122,7 @@ export async function onRequest(context) {
       }
     }
     try {
-      await sendUtmifyOrder(env, {
+      if(purchaseDestination(env)==='utmify')await sendUtmifyOrder(env, {
         orderId: result.transactionId,
         status: "waiting_payment",
         paymentMethod: "pix",

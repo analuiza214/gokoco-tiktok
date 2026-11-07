@@ -1,29 +1,52 @@
-// worker-src/meta-readiness.js
-async function metaReadiness(env, send = fetch) {
-  const pixel = String(env.FB_PIXEL_ID || "1542362403143695").trim(), token = String(env.FB_ACCESS_TOKEN || "").trim();
-  if (!token) return { configured: false, readAccess: false, reason: "missing_token" };
-  if (!/^\d+$/.test(pixel)) return { configured: true, readAccess: false, reason: "invalid_pixel" };
-  try {
-    const r = await send("https://graph.facebook.com/v25.0/" + pixel + "?fields=id", { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(12e3) });
-    const d = await r.json();
-    let tokenRecognized = null;
-    if (!r.ok) {
-      try {
-        const identity = await send("https://graph.facebook.com/v25.0/me?fields=id", { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(12e3) });
-        const identityBody = await identity.json();
-        tokenRecognized = identity.ok && !!identityBody.id;
-      } catch {
-      }
-    }
-    return { configured: true, pixel, tokenRecognized, readAccess: r.ok && String(d.id) === pixel, reason: r.ok && String(d.id) === pixel ? "pixel_read_verified" : "meta_rejected", metaCode: Number(d.error?.code) || null, purchaseTested: false };
-  } catch {
-    return { configured: true, pixel, readAccess: false, reason: "unavailable", purchaseTested: false };
+// worker-src/admin-auth.js
+async function hmacSign(payload, secret) {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(payload));
+  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+function timingSafeEqual(a, b) {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+async function verifyAdminToken(request3, env) {
+  const secret = env.ADMIN_SESSION_SECRET;
+  if (!secret) return { valid: false, error: "Servidor n\xE3o configurado." };
+  const auth = request3.headers.get("Authorization") ?? "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : null;
+  if (!token) return { valid: false, error: "N\xE3o autorizado." };
+  const dot = token.lastIndexOf(".");
+  if (dot === -1) return { valid: false, error: "Token inv\xE1lido." };
+  const payloadB64 = token.slice(0, dot);
+  const providedSig = token.slice(dot + 1);
+  const expectedSig = await hmacSign(payloadB64, secret);
+  if (!timingSafeEqual(expectedSig, providedSig)) {
+    return { valid: false, error: "Token inv\xE1lido." };
   }
+  let payload;
+  try {
+    payload = JSON.parse(atob(payloadB64));
+  } catch {
+    return { valid: false, error: "Token inv\xE1lido." };
+  }
+  if (!payload.exp || Date.now() > payload.exp) {
+    return { valid: false, error: "Sess\xE3o expirada." };
+  }
+  return { valid: true };
 }
 
 // worker-src/providers/unipay.js
 var BASE = "https://api-dash.unipaybr.com/v1";
-var reply = (value, status, headers6) => new Response(JSON.stringify(value), { status, headers: headers6 });
+var reply = (value, status2, headers6) => new Response(JSON.stringify(value), { status: status2, headers: headers6 });
 var digits = (value) => String(value || "").replace(/\D/g, "");
 var STATUSES = /* @__PURE__ */ new Set(["pending", "authorized", "captured", "partially_refunded", "refunded", "voided", "failed", "expired", "chargeback"]);
 async function call(env, path, payload) {
@@ -50,7 +73,7 @@ async function call(env, path, payload) {
 function transaction(data) {
   return data.data?.transaction || data.transaction || data.data || data;
 }
-async function createPixUnipay({ request: request2, env }, headers6, body) {
+async function createPixUnipay({ request: request3, env }, headers6, body) {
   const amount = Math.round(Number(body.amount) * 100);
   if (!Number.isSafeInteger(amount) || amount <= 0) return reply({ error: "Valor PIX inv\xE1lido." }, 400, headers6);
   const document = digits(body.document);
@@ -90,24 +113,24 @@ async function statusPixUnipay({ env }, headers6, transactionId) {
   const result = await call(env, `/charges/${encodeURIComponent(String(transactionId))}`);
   if (result.error) return reply(result, result.status, headers6);
   const tx = transaction(result.data);
-  const status = String(tx.status || "").toLowerCase();
-  if (String(tx.id || "") !== String(transactionId) || !STATUSES.has(status)) {
+  const status2 = String(tx.status || "").toLowerCase();
+  if (String(tx.id || "") !== String(transactionId) || !STATUSES.has(status2)) {
     return reply({ error: "Resposta de consulta inv\xE1lida da UniPay." }, 502, headers6);
   }
   return reply({
     transactionId: String(transactionId),
     gateway: "unipay",
-    status,
-    isPaid: status === "captured",
-    isRefunded: status === "refunded",
-    isExpired: ["failed", "expired", "voided"].includes(status),
+    status: status2,
+    isPaid: status2 === "captured",
+    isRefunded: status2 === "refunded",
+    isExpired: ["failed", "expired", "voided"].includes(status2),
     paidAt: tx.captured_at || null
   }, 200, headers6);
 }
 
 // worker-src/providers/invictuspay.js
 var BASE2 = "https://api.invictuspayv2.com.br/api/v1";
-var reply2 = (value, status, headers6) => new Response(JSON.stringify(value), { status, headers: headers6 });
+var reply2 = (value, status2, headers6) => new Response(JSON.stringify(value), { status: status2, headers: headers6 });
 var digits2 = (value) => String(value || "").replace(/\D/g, "");
 var STATUSES2 = /* @__PURE__ */ new Set(["pending", "processing", "antifraud", "paid", "failed", "refused", "expired", "cancelled", "refunded", "in_dispute", "pre_chargeback", "chargeback"]);
 async function call2(env, path, payload) {
@@ -152,7 +175,7 @@ function cpfValido(value) {
   for (let i = 0; i < 10; i++) s2 += Number(value[i]) * (11 - i);
   return s2 * 10 % 11 % 10 === Number(value[10]);
 }
-async function createPixInvictuspay({ request: request2, env }, headers6, body) {
+async function createPixInvictuspay({ request: request3, env }, headers6, body) {
   const amount = Math.round(Number(body.amount) * 100);
   if (!Number.isSafeInteger(amount) || amount <= 0) return reply2({ error: "Valor PIX inv\xE1lido." }, 400, headers6);
   const docDigits = digits2(body.document);
@@ -173,9 +196,9 @@ async function createPixInvictuspay({ request: request2, env }, headers6, body) 
     }],
     pix: { expirationInSeconds: 1800 }
   };
-  if (request2?.url) {
-    const prefix = new URL(request2.url).pathname.startsWith("/video/") ? "/video" : "";
-    const url = new URL(`${prefix}/api/pix/webhook`, request2.url);
+  if (request3?.url) {
+    const prefix = new URL(request3.url).pathname.startsWith("/video/") ? "/video" : "";
+    const url = new URL(`${prefix}/api/pix/webhook`, request3.url);
     if (url.protocol === "https:") payload.postbackUrl = url.toString();
   }
   const result = await call2(env, "/transactions", payload);
@@ -198,17 +221,17 @@ async function statusPixInvictuspay({ env }, headers6, transactionId) {
   const result = await call2(env, `/transactions/${encodeURIComponent(String(transactionId))}`);
   if (result.error) return reply2(result, result.status, headers6);
   const tx = transaction2(result.data);
-  const status = String(tx.status || "").toLowerCase();
-  if (String(tx.id || tx.transactionId || "") !== String(transactionId) || !STATUSES2.has(status)) {
+  const status2 = String(tx.status || "").toLowerCase();
+  if (String(tx.id || tx.transactionId || "") !== String(transactionId) || !STATUSES2.has(status2)) {
     return reply2({ error: "Resposta de consulta inv\xE1lida da InvictusPay." }, 502, headers6);
   }
   return reply2({
     transactionId: String(transactionId),
     gateway: "invictuspay",
-    status,
-    isPaid: status === "paid",
-    isRefunded: status === "refunded",
-    isExpired: ["failed", "refused", "expired", "cancelled"].includes(status),
+    status: status2,
+    isPaid: status2 === "paid",
+    isRefunded: status2 === "refunded",
+    isExpired: ["failed", "refused", "expired", "cancelled"].includes(status2),
     paidAt: tx.paid_at || null
   }, 200, headers6);
 }
@@ -594,9 +617,9 @@ async function createCardMasterfy(context, corsHeaders10, body) {
     }
     const transactionId = data.id || null;
     const rawStatus = String(data.status || "").toUpperCase();
-    const status = rawStatus === "PAID" ? "approved" : ["REFUSED", "CHARGEDBACK", "MED", "REFUNDED"].includes(rawStatus) ? "declined" : transactionId ? "processing" : "error";
+    const status2 = rawStatus === "PAID" ? "approved" : ["REFUSED", "CHARGEDBACK", "MED", "REFUNDED"].includes(rawStatus) ? "declined" : transactionId ? "processing" : "error";
     return new Response(
-      JSON.stringify({ transactionId, status, rawStatus: rawStatus.toLowerCase(), gateway: "masterfy_card", amount: Number(amount), installments: numParcelas }),
+      JSON.stringify({ transactionId, status: status2, rawStatus: rawStatus.toLowerCase(), gateway: "masterfy_card", amount: Number(amount), installments: numParcelas }),
       { status: 200, headers: corsHeaders10 }
     );
   } catch (error) {
@@ -655,7 +678,7 @@ function extractPixCode(data) {
   return null;
 }
 async function createPixUmbrellapag(context, corsHeaders10, body) {
-  const { request: request2, env } = context;
+  const { request: request3, env } = context;
   const apiKey = env.UMBRELLAPAG_API_KEY;
   if (!apiKey) {
     return new Response(
@@ -676,7 +699,7 @@ async function createPixUmbrellapag(context, corsHeaders10, body) {
   const customerAddress = buildAddress(address);
   const siteUrl = (env.SITE_URL || "").trim().replace(/\/+$/, "");
   const postbackUrl = siteUrl ? `${siteUrl}/api/pix/webhook` : void 0;
-  const clientIp = request2.headers.get("CF-Connecting-IP") || request2.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() || "127.0.0.1";
+  const clientIp = request3.headers.get("CF-Connecting-IP") || request3.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() || "127.0.0.1";
   const payload = {
     amount: amountInCents,
     currency: "BRL",
@@ -1004,7 +1027,7 @@ async function statusPixVenuspay(context, corsHeaders10, transactionId) {
 
 // worker-src/providers/flevopay.js
 var BASE3 = "https://app.flevopag.com/api/v1";
-var reply3 = (data, status, headers6) => new Response(JSON.stringify(data), { status, headers: headers6 });
+var reply3 = (data, status2, headers6) => new Response(JSON.stringify(data), { status: status2, headers: headers6 });
 function gerarCpfAleatorio6() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
@@ -1014,7 +1037,7 @@ function gerarCpfAleatorio6() {
   d.push(s2 * 10 % 11 % 10);
   return d.join("");
 }
-async function createPixFlevopay({ request: request2, env }, headers6, body) {
+async function createPixFlevopay({ request: request3, env }, headers6, body) {
   const key = String(env.FLEVOPAY_API_KEY || "").trim();
   if (!key) return reply3({ error: "FlevoPay n\xE3o configurada." }, 503, headers6);
   const amount = Math.round(Number(body.amount) * 100);
@@ -1044,9 +1067,9 @@ async function createPixFlevopay({ request: request2, env }, headers6, body) {
       zipcode: String(address.zipCode || address.zipcode || "").replace(/\D/g, "")
     }
   };
-  if (request2?.url) {
-    const prefix = new URL(request2.url).pathname.startsWith("/video/") ? "/video" : "";
-    payload.postback_url = new URL(`${prefix}/api/pix/webhook`, request2.url).toString();
+  if (request3?.url) {
+    const prefix = new URL(request3.url).pathname.startsWith("/video/") ? "/video" : "";
+    payload.postback_url = new URL(`${prefix}/api/pix/webhook`, request3.url).toString();
   }
   let response;
   try {
@@ -1086,15 +1109,15 @@ async function statusPixFlevopay({ env }, headers6, transactionId) {
   }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) return reply3({ error: "FlevoPay n\xE3o confirmou a transa\xE7\xE3o.", upstreamStatus: response.status }, 502, headers6);
-  const status = String(data.status || data.transaction?.status || "").toLowerCase();
-  if (!status) return reply3({ error: "Status ausente na resposta da FlevoPay." }, 502, headers6);
+  const status2 = String(data.status || data.transaction?.status || "").toLowerCase();
+  if (!status2) return reply3({ error: "Status ausente na resposta da FlevoPay." }, 502, headers6);
   return reply3({
     transactionId: String(transactionId),
     gateway: "flevopay",
-    status,
-    isPaid: status === "approved" || status === "paid",
-    isRefunded: status === "refunded",
-    isExpired: ["failed", "expired", "cancelled", "canceled"].includes(status),
+    status: status2,
+    isPaid: status2 === "approved" || status2 === "paid",
+    isRefunded: status2 === "refunded",
+    isExpired: ["failed", "expired", "cancelled", "canceled"].includes(status2),
     paidAt: data.paid_at || data.payed_at || null
   }, 200, headers6);
 }
@@ -1150,7 +1173,7 @@ async function mirrorVerdefy(env, order, kind = "paid", opts = {}, query = query
   const source = verdefySource(env);
   if (!source) throw Error("VERDEFY_SALES_SOURCE inv\xE1lido.");
   if (order.tracking?.manualExternal || !gateways.has(order.gateway)) return { state: "ineligible" };
-  const common = { source, orderId: String(order.id), currency: "BRL", amount: Math.round(Number(order.amount) * 100), netAmount: null, gateway: order.gateway, eventId: "pix_" + order.id, tracking: trackingPayload(order.tracking), items: (order.products || []).map((p) => ({ productId: p.id ? String(p.id) : "", title: p.name, quantity: p.quantity })) };
+  const common = { source, orderId: String(order.id), currency: "BRL", amount: Math.round(Number(order.amount) * 100), netAmount: null, gateway: order.gateway, eventId: order.serverEventId || "pix_" + order.id, tracking: trackingPayload(order.tracking), items: (order.products || []).map((p) => ({ productId: p.id ? String(p.id) : "", title: p.name, quantity: p.quantity })) };
   const pixAt = opts.pixAt || order.tracking?._verdefy_pending?.pix_at || order.created_at;
   let payload;
   if (kind === "pending") {
@@ -1204,7 +1227,7 @@ async function deliverVerdefy(env, db2, orderId, mirror = mirrorVerdefy, kind = 
     if (Date.parse(prior.retry_at) > Date.now() || Date.parse(prior.lease_until) > Date.now()) return { state: "retry_pending" };
     const pending = { state: "sending", attempts: (Number(prior.attempts) || 0) + 1, lease_until: new Date(Date.now() + 12e4).toISOString(), ...opts.pixAt || prior.pix_at ? { pix_at: opts.pixAt || prior.pix_at } : {} };
     const tracking = { ...order.tracking, [key]: pending };
-    const swap = async (before, after) => db2(env, "gokoco_orders", `?id=eq.${encodeURIComponent(order.id)}${filter}&tracking=eq.${encodeURIComponent(JSON.stringify(before || {}))}&select=*`, "PATCH", { tracking: after });
+    const swap = async (before, after) => db2(env, "gokoco_orders", `?id=eq.${encodeURIComponent(order.id)}${filter}&tracking=${before == null ? "is.null" : "eq." + encodeURIComponent(JSON.stringify(before))}&select=*`, "PATCH", { tracking: after });
     if (!(await swap(order.tracking, tracking))?.[0]) continue;
     let result;
     try {
@@ -1246,151 +1269,17 @@ async function retryVerdefy(env, db2) {
   return summary;
 }
 
-// worker-src/admin-login.js
-var CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Content-Type": "application/json"
-};
-var TOKEN_TTL_MS = 8 * 60 * 60 * 1e3;
-async function hmacSign(payload, secret) {
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(payload));
-  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-function timingSafeEqual(a, b) {
-  if (typeof a !== "string" || typeof b !== "string") return false;
-  if (a.length !== b.length) {
-    let dummy = 0;
-    for (let i = 0; i < a.length; i++) dummy |= a.charCodeAt(i);
-    return false;
-  }
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) {
-    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return diff === 0;
-}
-async function onRequest(context) {
-  const { request: request2, env } = context;
-  if (request2.method === "OPTIONS") {
-    return new Response("", { status: 204, headers: CORS });
-  }
-  if (request2.method !== "POST") {
-    return new Response(
-      JSON.stringify({ error: "Method not allowed" }),
-      { status: 405, headers: CORS }
-    );
-  }
-  const ADMIN_USER = env.ADMIN_USER;
-  const ADMIN_PASS = env.ADMIN_PASS;
-  const ADMIN_SESSION_SECRET = env.ADMIN_SESSION_SECRET;
-  if (!ADMIN_USER || !ADMIN_PASS || !ADMIN_SESSION_SECRET) {
-    console.error("[admin-login] Vari\xE1veis de ambiente n\xE3o configuradas.");
-    return new Response(
-      JSON.stringify({ error: "Servidor n\xE3o configurado corretamente." }),
-      { status: 500, headers: CORS }
-    );
-  }
-  let body;
-  try {
-    body = await request2.json();
-  } catch {
-    return new Response(
-      JSON.stringify({ error: "JSON inv\xE1lido" }),
-      { status: 400, headers: CORS }
-    );
-  }
-  const { usuario, senha } = body ?? {};
-  const userOk = timingSafeEqual(String(usuario ?? ""), ADMIN_USER);
-  const passOk = timingSafeEqual(String(senha ?? ""), ADMIN_PASS);
-  if (!userOk || !passOk) {
-    await new Promise((r) => setTimeout(r, 1500));
-    return new Response(
-      JSON.stringify({ error: "Usu\xE1rio ou senha incorretos." }),
-      { status: 401, headers: CORS }
-    );
-  }
-  const exp = Date.now() + TOKEN_TTL_MS;
-  const payload = JSON.stringify({ exp });
-  const payloadB64 = btoa(payload);
-  const sig = await hmacSign(payloadB64, ADMIN_SESSION_SECRET);
-  const token = `${payloadB64}.${sig}`;
-  return new Response(JSON.stringify({ token }), { status: 200, headers: CORS });
-}
-
-// worker-src/upsell-catalog.js
-var upsellCatalog = [
-  { id: "popozuda", step: 2, name: "Popozuda Creme Modelador Corporal 200g", price: 31.96, oldFactor: 1.5, rating: 4.6, sourceId: "1731410956394792439", folder: "01 - Popozuda Creme Modelador Corporal", category: "Cuidados com o corpo", description: "Creme modelador corporal Popozuda, embalagem de 200g.", contents: "1 frasco de 200g" },
-  { id: "liso-obrigatorio", step: 3, name: "Kit Profissional Liso Obrigat\xF3rio 1L + \xD3leo Ativador de Escova", price: 38.36, oldFactor: 1.65, rating: 4.8, sourceId: "1737439077064541825", folder: "02 - Kit Liso Obrigatorio", category: "Cuidados com os cabelos", description: "Kit capilar profissional com 3 itens da linha Liso Obrigat\xF3rio e \xF3leo ativador de escova.", contents: "Kit com 3 itens" },
-  { id: "ultra-bond", step: 4, name: "Eudora Si\xE0ge Ultra Bond Reset \u2014 Kit Completo", price: 103.96, oldFactor: 1.8, rating: 4.9, sourceId: "1737119339326637650", folder: "03 - Eudora Siage Ultra Bond Reset", category: "Cuidados com os cabelos", description: "Kit completo Eudora Si\xE0ge Ultra Bond Reset com 4 itens para a rotina de cuidados capilares.", contents: "Kit com 4 itens" },
-  { id: "pro-cronology", step: 5, name: "Eudora Si\xE0ge Pro Cronology \u2014 Shampoo + Condicionador", price: 27.2, oldFactor: 1.95, rating: 4.7, sourceId: "1737278707688638076", folder: "04 - Eudora Siage Pro Cronology", category: "Cuidados com os cabelos", description: "Kit Eudora Si\xE0ge Pro Cronology com shampoo de 250ml e condicionador de 200ml.", contents: "Shampoo 250ml + condicionador 200ml" },
-  { id: "principia-glow", step: 6, name: "Principia Kit Essencial Glow GL-02 + CH + VC + PS", price: 63.24, oldFactor: 1.6, rating: 4.9, sourceId: "1736972891285063316", folder: "05 - Principia Kit Essencial Glow", category: "Cuidados com a pele", description: "Kit de cuidados com a pele Principia Essencial Glow com os produtos GL-02, CH, VC e PS.", contents: "Kit GL-02 + CH + VC + PS" }
-];
-
-// worker-src/admin-auth.js
-async function hmacSign2(payload, secret) {
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(payload));
-  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-function timingSafeEqual2(a, b) {
-  if (typeof a !== "string" || typeof b !== "string") return false;
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
-async function verifyAdminToken(request2, env) {
-  const secret = env.ADMIN_SESSION_SECRET;
-  if (!secret) return { valid: false, error: "Servidor n\xE3o configurado." };
-  const auth = request2.headers.get("Authorization") ?? "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : null;
-  if (!token) return { valid: false, error: "N\xE3o autorizado." };
-  const dot = token.lastIndexOf(".");
-  if (dot === -1) return { valid: false, error: "Token inv\xE1lido." };
-  const payloadB64 = token.slice(0, dot);
-  const providedSig = token.slice(dot + 1);
-  const expectedSig = await hmacSign2(payloadB64, secret);
-  if (!timingSafeEqual2(expectedSig, providedSig)) {
-    return { valid: false, error: "Token inv\xE1lido." };
-  }
-  let payload;
-  try {
-    payload = JSON.parse(atob(payloadB64));
-  } catch {
-    return { valid: false, error: "Token inv\xE1lido." };
-  }
-  if (!payload.exp || Date.now() > payload.exp) {
-    return { valid: false, error: "Sess\xE3o expirada." };
-  }
-  return { valid: true };
-}
-
 // worker-src/purchase-tracking.js
 var ATTRIBUTION_KEYS = ["src", "sck", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "utm_id", "fbclid", "gclid", "ttclid"];
 var text = (value, limit = 500) => typeof value === "string" ? value.slice(0, limit) : "";
 var utc = (value) => new Date(value).toISOString().slice(0, 19).replace("T", " ");
-function capturePurchaseTracking(request2, body) {
+function capturePurchaseTracking(request3, body) {
   const tracking = Object.fromEntries(ATTRIBUTION_KEYS.map((key) => [key, text(body.tracking?.[key]) || null]));
   if (/^[-a-f0-9]{36}$/.test(body.tracking?.verdefy_pixel || "")) tracking.verdefy_pixel = body.tracking.verdefy_pixel;
-  const fb = body.fb || {};
+  const fb = body.fb || { fbp: body.tracking?.fbp, fbc: body.tracking?.fbc };
   const fbp = text(fb.fbp, 200);
   const fbc = text(fb.fbc, 300);
-  const origin = new URL(request2.url).origin;
+  const origin = new URL(request3.url).origin;
   let sourceUrl = `${origin}/pagamento`;
   try {
     const url = new URL(body.tracking?.event_source_url);
@@ -1400,8 +1289,8 @@ function capturePurchaseTracking(request2, body) {
   tracking._browser = {
     fbp: /^fb\.\d+\.\d+\./.test(fbp) ? fbp : null,
     fbc: /^fb\.\d+\.\d+\./.test(fbc) ? fbc : tracking.fbclid ? `fb.1.${Date.now()}.${tracking.fbclid}` : null,
-    ip: request2.headers.get("CF-Connecting-IP") || null,
-    user_agent: request2.headers.get("User-Agent") || null,
+    ip: request3.headers.get("CF-Connecting-IP") || null,
+    user_agent: request3.headers.get("User-Agent") || null,
     source_url: sourceUrl
   };
   return tracking;
@@ -1428,6 +1317,7 @@ async function recoverCustomerAttribution(env, db2, tracking, buyer) {
 }
 function purchaseDestination(env) {
   const mode = String(env.PURCHASE_DELIVERY_MODE || "auto").trim().toLowerCase();
+  if (mode === "verdefy") return "verdefy";
   if (mode === "utmify") return "utmify";
   if (mode === "meta") return "meta";
   if (mode !== "auto") return null;
@@ -1437,7 +1327,7 @@ function purchaseDestination(env) {
 }
 function purchaseSummary(env, order) {
   const destination = purchaseDestination(env);
-  const state = destination ? order.tracking?._purchase?.[destination] : null;
+  const state = destination === "verdefy" ? order.tracking?._verdefy : destination ? order.tracking?._purchase?.[destination] : null;
   return {
     destination,
     state: destination ? state?.state || "pending" : "not_configured",
@@ -1458,7 +1348,7 @@ function products(order) {
   if (rows.length && rows.reduce((sum, p) => sum + p.priceInCents * p.quantity, 0) === Math.round(Number(order.amount) * 100)) return rows;
   return [{ id: "gokoco_escova", name: "Escova Modeladora GOKOCO", planId: null, planName: null, quantity: 1, priceInCents: Math.round(Number(order.amount) * 100) }];
 }
-async function sendUtmify(env, order, status, paidAt = null) {
+async function sendUtmify(env, order, status2, paidAt = null) {
   const token = String(env.UTMIFY_API_TOKEN || "").trim();
   if (!token) throw new Error("UTMIFY_API_TOKEN n\xE3o configurado.");
   const cents = Math.round(Number(order.amount) * 100);
@@ -1466,7 +1356,7 @@ async function sendUtmify(env, order, status, paidAt = null) {
     orderId: String(order.transaction_id || order.id),
     platform: "BellaMix",
     paymentMethod: "pix",
-    status,
+    status: status2,
     createdAt: utc(order.created_at),
     approvedDate: paidAt ? utc(paidAt) : null,
     refundedAt: null,
@@ -1566,9 +1456,10 @@ async function swapTracking(db2, env, order, tracking) {
   return rows?.[0] || null;
 }
 async function deliverPaidPurchase(env, db2, orderId, paidAt) {
-  await deliverVerdefy(env, db2, orderId).catch(() => console.error("[verdefy] Sync pending."));
+  const mirror = await deliverVerdefy(env, db2, orderId).catch(() => ({ state: "failed" }));
   const destination = purchaseDestination(env);
   if (!destination) return { state: "not_configured" };
+  if (destination === "verdefy") return { ...mirror, destination, event_id: "pix_" + orderId };
   for (let attempt = 0; attempt < 3; attempt++) {
     const rows = await db2(env, "gokoco_orders", `?id=eq.${encodeURIComponent(orderId)}&status=eq.paid&select=*&limit=1`);
     const order = rows?.[0];
@@ -1629,6 +1520,1044 @@ async function deliverReshippingFee(env, db2, orderId) {
   await db2(env, "gokoco_orders", `?id=eq.${encodeURIComponent(orderId)}&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=id`, "PATCH", { tracking });
   return { state: "sent" };
 }
+
+// sites/bella/functions/_lib/gateway-config.js
+var DEFAULT_GATEWAYS = [
+  { id: "unipay", name: "UniPay", method: "pix", enabled: false },
+  { id: "invictuspay", name: "InvictusPay", method: "pix", enabled: false },
+  { id: "ironpay", name: "IronPay", method: "pix", enabled: false },
+  { id: "masterfy", name: "MasterFy", method: "pix", enabled: false },
+  { id: "umbrellapag", name: "UmbrellaPag", method: "pix", enabled: false },
+  { id: "venuspay", name: "Venus Pay", method: "card", enabled: true },
+  { id: "masterfy_card", name: "MasterFy Cart\xE3o", method: "card", enabled: false },
+  { id: "venuspay_pix", name: "Venus Pay", method: "pix", enabled: false },
+  { id: "flevopay", name: "FlevoPay", method: "pix", enabled: false }
+];
+async function supabaseFetch(env, path) {
+  const url = (env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
+  const key = (env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  if (!url || !key) throw new Error("Banco de gateways n\xE3o configurado.");
+  const res = await fetch(`${url}${path}`, {
+    headers: { apikey: key, Authorization: `Bearer ${key}` },
+    signal: AbortSignal.timeout(2e4)
+  });
+  if (!res.ok) throw new Error("N\xE3o foi poss\xEDvel consultar a configura\xE7\xE3o dos gateways.");
+  try {
+    return await res.json();
+  } catch {
+    throw new Error("Resposta inv\xE1lida ao consultar gateways.");
+  }
+}
+function gatewayConfigured(env, id) {
+  if (id === "unipay") return !!(env.UNIPAY_PUBLIC_KEY?.trim() && env.UNIPAY_SECRET_KEY?.trim());
+  if (id === "invictuspay") return !!String(env.INVICTUSPAY_API_KEY || "").trim();
+  if (id === "ironpay") {
+    return [env.IRONPAY_API_TOKEN, env.IRONPAY_OFFER_HASH, env.IRONPAY_PRODUCT_HASH].every((value) => String(value || "").trim());
+  }
+  if (id === "masterfy") {
+    return !!String(env.MASTERFY_API_KEY || "").trim();
+  }
+  if (id === "umbrellapag") {
+    return !!String(env.UMBRELLAPAG_API_KEY || "").trim();
+  }
+  if (id === "flevopay") {
+    return !!String(env.FLEVOPAY_API_KEY || "").trim();
+  }
+  if (id === "venuspay" || id === "venuspay_pix") {
+    return !!String(env.VENUS_PAY_SECRET_KEY || "").trim();
+  }
+  if (id === "masterfy_card") {
+    return !!(String(env.MASTERFY_API_KEY || "").trim() && String(env.MASTERFY_TOKENIZATION_KEY || "").trim());
+  }
+  return false;
+}
+async function listGateways(env) {
+  const rows = await supabaseFetch(env, "/rest/v1/gokoco_gateways?select=id,enabled,updated_at");
+  const saved = Array.isArray(rows) ? rows : [];
+  const savedById = new Map(saved.map((gateway) => [gateway.id, gateway]));
+  return DEFAULT_GATEWAYS.map((g) => {
+    const row = savedById.get(g.id);
+    return {
+      ...g,
+      enabled: row ? !!row.enabled : g.enabled,
+      configured: gatewayConfigured(env, g.id),
+      updated_at: row?.updated_at || null
+    };
+  });
+}
+async function getActivePixGateway(env) {
+  const gateways3 = await listGateways(env);
+  const active = gateways3.filter((g) => g.method === "pix" && g.enabled);
+  if (active.length > 1) throw new Error("Mais de um gateway PIX ativo. Salve novamente a escolha no painel.");
+  if (!active.length) return null;
+  if (!active[0].configured) throw new Error("O gateway PIX selecionado est\xE1 sem credenciais completas.");
+  return active[0].id;
+}
+
+// worker-src/integration-readiness.js
+async function integrationReadiness(request3, env) {
+  const headers6 = { "Cache-Control": "no-store" };
+  if (!(await verifyAdminToken(request3, env)).valid) return Response.json({ error: "N\xE3o autorizado." }, { status: 401, headers: headers6 });
+  if (request3.method !== "GET") return Response.json({ error: "M\xE9todo inv\xE1lido." }, { status: 405, headers: headers6 });
+  let database = false, gateways3 = [], activeGateway = null, receiver = { authorized: false };
+  try {
+    gateways3 = await listGateways(env);
+    activeGateway = await getActivePixGateway(env);
+    const r = await fetch(String(env.SUPABASE_URL || "").trim().replace(/\/+$/, "") + "/rest/v1/gokoco_orders?select=id&limit=1", { headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: "Bearer " + env.SUPABASE_SERVICE_ROLE_KEY }, signal: AbortSignal.timeout(12e3) });
+    database = r.ok;
+    await r.text();
+  } catch {
+  }
+  if (env.VERDEFY_SALES_TOKEN) {
+    try {
+      const r = await fetch("https://verdefy-sales.loja-oficial.workers.dev/v1/connection", { headers: { Authorization: "Bearer " + env.VERDEFY_SALES_TOKEN }, signal: AbortSignal.timeout(12e3) });
+      const d = await r.json();
+      receiver = { authorized: r.ok && d.ok === true, sourceMatches: d.source === String(env.VERDEFY_SALES_SOURCE || "gokoco").trim() };
+    } catch {
+    }
+  }
+  return Response.json({ database, activeGateway, gateways: gateways3.map((g) => ({ name: g.name, enabled: g.enabled, configured: g.configured })), receiver, destination: purchaseDestination(env), loginConfigured: !!(env.ADMIN_USER && env.ADMIN_PASS && env.ADMIN_SESSION_SECRET), noEventsSent: true }, { headers: headers6 });
+}
+
+// sites/bella/functions/_lib/pix-gateways/ironpay.js
+function gerarCpfAleatorio7() {
+  const rand = () => Math.floor(Math.random() * 9);
+  const d = Array.from({ length: 9 }, rand);
+  let sum = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
+  d.push(sum * 10 % 11 % 10);
+  sum = d.reduce((acc, v, i) => acc + v * (11 - i), 0);
+  d.push(sum * 10 % 11 % 10);
+  return d.join("");
+}
+async function createPixIronpay2(context, corsHeaders10, body) {
+  const { env } = context;
+  const apiToken = env.IRONPAY_API_TOKEN;
+  const offerHash = env.IRONPAY_OFFER_HASH;
+  const productHash = env.IRONPAY_PRODUCT_HASH;
+  if (!apiToken || !offerHash || !productHash) {
+    return new Response(JSON.stringify({ error: "Gateway de pagamento nao configurado." }), { status: 500, headers: corsHeaders10 });
+  }
+  const { amount, name, document, productName, email, phone } = body;
+  if (!amount || !name) {
+    return new Response(JSON.stringify({ error: "Campos obrigatorios: amount, name." }), { status: 400, headers: corsHeaders10 });
+  }
+  const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
+  const payerDocument = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio7();
+  const siteUrl = env.SITE_URL || "";
+  const webhookUrl = siteUrl ? `${siteUrl}/api/pix/webhook` : void 0;
+  const amountInCents = Math.round(Number(amount) * 100);
+  const payload = {
+    amount: amountInCents,
+    offer_hash: offerHash,
+    payment_method: "pix",
+    customer: {
+      name: String(name),
+      email: email ? String(email) : "cliente@email.com",
+      phone_number: phone ? String(phone).replace(/\D/g, "") || "00000000000" : "00000000000",
+      document: payerDocument
+    },
+    cart: [
+      {
+        product_hash: productHash,
+        title: productName || "Kit Escova Secadora 7 em 1",
+        cover: null,
+        price: amountInCents,
+        quantity: 1,
+        operation_type: 1,
+        tangible: true
+      }
+    ],
+    expire_in_days: 1,
+    transaction_origin: "api",
+    ...webhookUrl ? { postback_url: webhookUrl } : {}
+  };
+  try {
+    const res = await fetch(
+      `https://api.ironpayapp.com.br/api/public/v1/transactions?api_token=${encodeURIComponent(apiToken)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      }
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      return new Response(JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: data }), { status: 502, headers: corsHeaders10 });
+    }
+    const transactionId = data.hash || data.transaction_hash;
+    if (!transactionId) {
+      return new Response(JSON.stringify({ error: "Resposta invalida do gateway: hash ausente.", rawResponse: data }), { status: 502, headers: corsHeaders10 });
+    }
+    const pix = data.pix || {};
+    const pixCode = pix.pix_qr_code || pix.qr_code || pix.code || pix.copy_paste || null;
+    const qrCodeBase64 = pix.qr_code_base64 || pix.base64 || null;
+    const qrCodeImage = pixCode ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}` : pix.pix_url || null;
+    if (!pixCode) {
+      return new Response(JSON.stringify({ error: "QR Code PIX nao gerado.", rawResponse: data }), { status: 502, headers: corsHeaders10 });
+    }
+    return new Response(
+      JSON.stringify({
+        transactionId,
+        gateway: "ironpay",
+        status: data.payment_status || "PENDENTE",
+        pixCode,
+        qrCodeBase64: qrCodeBase64 || null,
+        qrCodeImage: qrCodeImage || null
+      }),
+      { status: 200, headers: corsHeaders10 }
+    );
+  } catch {
+    return new Response(JSON.stringify({ error: "Erro de comunicacao com o gateway." }), { status: 502, headers: corsHeaders10 });
+  }
+}
+async function statusPixIronpay2(context, corsHeaders10, transactionId) {
+  const { env } = context;
+  const apiToken = env.IRONPAY_API_TOKEN;
+  if (!apiToken) {
+    return new Response(JSON.stringify({ error: "Gateway nao configurado" }), { status: 500, headers: corsHeaders10 });
+  }
+  try {
+    const res = await fetch(
+      `https://api.ironpayapp.com.br/api/public/v1/transactions/${encodeURIComponent(transactionId)}?api_token=${encodeURIComponent(apiToken)}`,
+      { method: "GET", headers: { "Content-Type": "application/json" } }
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      return new Response(JSON.stringify({ error: "Erro ao consultar gateway.", details: data }), { status: 502, headers: corsHeaders10 });
+    }
+    const rawStatus = (data.payment_status || data.status || "").toUpperCase();
+    const isPaid = rawStatus === "PAID";
+    const isExpired = rawStatus === "CANCELED" || rawStatus === "REFUNDED";
+    return new Response(
+      JSON.stringify({
+        transactionId,
+        gateway: "ironpay",
+        status: rawStatus.toLowerCase(),
+        isPaid,
+        isExpired,
+        payedAt: data.paid_at || null
+      }),
+      { status: 200, headers: corsHeaders10 }
+    );
+  } catch {
+    return new Response(JSON.stringify({ error: "Erro ao consultar status do pagamento." }), { status: 502, headers: corsHeaders10 });
+  }
+}
+
+// sites/bella/functions/_lib/pix-gateways/masterfy.js
+function gerarCpfAleatorio8() {
+  const rand = () => Math.floor(Math.random() * 9);
+  const d = Array.from({ length: 9 }, rand);
+  let s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
+  d.push(s1 * 10 % 11 % 10);
+  let s2 = d.reduce((acc, v, i) => acc + v * (11 - i), 0);
+  d.push(s2 * 10 % 11 % 10);
+  return d.join("");
+}
+async function createPixMasterfy2(context, corsHeaders10, body) {
+  const { env } = context;
+  const apiKey = env.MASTERFY_API_KEY;
+  if (!apiKey) {
+    return new Response(
+      JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado. Configure MASTERFY_API_KEY no Cloudflare." }),
+      { status: 500, headers: corsHeaders10 }
+    );
+  }
+  const { amount, name, email, phone, productName, address, document } = body;
+  if (!amount || !name) {
+    return new Response(
+      JSON.stringify({ error: "Campos obrigat\xF3rios: amount, name." }),
+      { status: 400, headers: corsHeaders10 }
+    );
+  }
+  const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
+  const taxId = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio8();
+  const siteUrl = env.SITE_URL || "";
+  const notificationUrl = siteUrl ? `${siteUrl}/api/pix/webhook` : void 0;
+  const amountInCents = Math.round(Number(amount) * 100);
+  const hasAddress = address && address.street && address.city;
+  const delivery = hasAddress ? {
+    fee: 0,
+    address: {
+      street: String(address.street),
+      number: String(address.number || "S/N"),
+      complement: String(address.complement || ""),
+      district: String(address.neighborhood || address.district || ""),
+      city: String(address.city),
+      state: String(address.state || ""),
+      zipCode: String(address.zipCode || address.cep || "").replace(/\D/g, ""),
+      country: "BR"
+    }
+  } : void 0;
+  const payload = {
+    amount: amountInCents,
+    currency: "BRL",
+    method: "PIX",
+    description: productName || "Pedido",
+    ...notificationUrl ? { notificationUrl } : {},
+    payer: {
+      name: String(name),
+      taxId,
+      email: email ? String(email) : "cliente@email.com",
+      phone: phone ? String(phone).replace(/\D/g, "") || "00000000000" : "00000000000"
+    },
+    items: [
+      {
+        name: productName || "Pedido",
+        quantity: 1,
+        price: amountInCents,
+        type: hasAddress ? "PHYSICAL" : "DIGITAL"
+      }
+    ],
+    ...delivery ? { delivery } : {}
+  };
+  try {
+    const res = await fetch("https://api.masterfypagamentos.com/v1/payment", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return new Response(
+        JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: data }),
+        { status: 502, headers: corsHeaders10 }
+      );
+    }
+    const transactionId = data.id;
+    if (!transactionId) {
+      return new Response(
+        JSON.stringify({ error: "Resposta inv\xE1lida do gateway: id ausente.", rawResponse: data }),
+        { status: 502, headers: corsHeaders10 }
+      );
+    }
+    const pixCode = data.data && data.data.copypaste || null;
+    if (!pixCode) {
+      return new Response(
+        JSON.stringify({ error: "QR Code PIX n\xE3o gerado.", rawResponse: data }),
+        { status: 502, headers: corsHeaders10 }
+      );
+    }
+    const qrCodeImage = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`;
+    return new Response(
+      JSON.stringify({
+        transactionId,
+        gateway: "masterfy",
+        status: data.status || "PENDING",
+        pixCode,
+        qrCodeBase64: null,
+        qrCodeImage
+      }),
+      { status: 200, headers: corsHeaders10 }
+    );
+  } catch {
+    return new Response(
+      JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway." }),
+      { status: 502, headers: corsHeaders10 }
+    );
+  }
+}
+async function statusPixMasterfy2(context, corsHeaders10, transactionId) {
+  const { env } = context;
+  const apiKey = env.MASTERFY_API_KEY;
+  if (!apiKey) {
+    return new Response(
+      JSON.stringify({ error: "Gateway n\xE3o configurado. Configure MASTERFY_API_KEY no Cloudflare." }),
+      { status: 500, headers: corsHeaders10 }
+    );
+  }
+  try {
+    const res = await fetch(
+      `https://api.masterfypagamentos.com/v1/payment/${encodeURIComponent(transactionId)}`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`
+        }
+      }
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      return new Response(
+        JSON.stringify({ error: "Erro ao consultar gateway.", details: data }),
+        { status: 502, headers: corsHeaders10 }
+      );
+    }
+    const rawStatus = (data.status || "").toUpperCase();
+    const isPaid = rawStatus === "PAID";
+    const isExpired = rawStatus === "CANCELLED" || rawStatus === "EXPIRED" || rawStatus === "REFUNDED";
+    return new Response(
+      JSON.stringify({
+        transactionId,
+        gateway: "masterfy",
+        status: rawStatus.toLowerCase(),
+        isPaid,
+        isExpired,
+        payedAt: data.paidAt || null
+      }),
+      { status: 200, headers: corsHeaders10 }
+    );
+  } catch {
+    return new Response(
+      JSON.stringify({ error: "Erro ao consultar status do pagamento." }),
+      { status: 502, headers: corsHeaders10 }
+    );
+  }
+}
+
+// sites/bella/functions/_lib/pix-gateways/umbrellapag.js
+var API_BASE2 = "https://api-gateway.umbrellapag.com/api";
+function apiHeaders2(apiKey) {
+  return {
+    "Content-Type": "application/json",
+    "x-api-key": apiKey,
+    "User-Agent": "UMBRELLAB2B/1.0"
+  };
+}
+function gerarCpfAleatorio9() {
+  const rand = () => Math.floor(Math.random() * 9);
+  const d = Array.from({ length: 9 }, rand);
+  let s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
+  d.push(s1 * 10 % 11 % 10);
+  let s2 = d.reduce((acc, v, i) => acc + v * (11 - i), 0);
+  d.push(s2 * 10 % 11 % 10);
+  return d.join("");
+}
+function buildAddress2(address) {
+  const hasStreet = address && address.street;
+  return {
+    street: hasStreet ? String(address.street) : "Rua Principal",
+    streetNumber: String(address?.number || address?.streetNumber || "S/N"),
+    complement: String(address?.complement || ""),
+    zipCode: String(address?.zipCode || address?.cep || "01001000").replace(/\D/g, ""),
+    neighborhood: String(address?.neighborhood || address?.district || "Centro"),
+    city: String(address?.city || "Sao Paulo"),
+    state: String(address?.state || "SP").slice(0, 2).toUpperCase(),
+    country: "BR"
+  };
+}
+function extractPixCode3(data) {
+  if (!data || typeof data !== "object") return null;
+  if (typeof data.qrCode === "string" && data.qrCode.startsWith("00020")) {
+    return data.qrCode;
+  }
+  const pix = data.pix;
+  if (pix && typeof pix === "object") {
+    const fromPix = pix.qrCode || pix.copyPaste || pix.copypaste || pix.emv || pix.code || null;
+    if (fromPix) return String(fromPix);
+  }
+  if (typeof data.qrCode === "string" && data.qrCode.length > 20) {
+    return data.qrCode;
+  }
+  return null;
+}
+async function createPixUmbrellapag2(context, corsHeaders10, body) {
+  const { request: request3, env } = context;
+  const apiKey = env.UMBRELLAPAG_API_KEY;
+  if (!apiKey) {
+    return new Response(
+      JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado. Configure UMBRELLAPAG_API_KEY no Cloudflare." }),
+      { status: 500, headers: corsHeaders10 }
+    );
+  }
+  const { amount, name, email, phone, productName, address, document } = body;
+  if (!amount || !name) {
+    return new Response(
+      JSON.stringify({ error: "Campos obrigat\xF3rios: amount, name." }),
+      { status: 400, headers: corsHeaders10 }
+    );
+  }
+  const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
+  const taxId = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio9();
+  const amountInCents = Math.round(Number(amount) * 100);
+  const customerAddress = buildAddress2(address);
+  const siteUrl = (env.SITE_URL || "").trim().replace(/\/+$/, "");
+  const postbackUrl = siteUrl ? `${siteUrl}/api/pix/webhook` : void 0;
+  const clientIp = request3.headers.get("CF-Connecting-IP") || request3.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() || "127.0.0.1";
+  const payload = {
+    amount: amountInCents,
+    currency: "BRL",
+    paymentMethod: "PIX",
+    installments: 1,
+    ...postbackUrl ? { postbackUrl } : {},
+    metadata: JSON.stringify({ source: "loja-bella-mix", product: productName || "Pedido" }),
+    traceable: true,
+    ip: clientIp,
+    customer: {
+      name: String(name),
+      email: email ? String(email) : "cliente@email.com",
+      document: {
+        number: taxId,
+        type: "CPF"
+      },
+      phone: phone ? String(phone).replace(/\D/g, "") || "11999999999" : "11999999999",
+      externalRef: email ? String(email) : taxId,
+      address: customerAddress
+    },
+    shipping: {
+      fee: 0,
+      address: customerAddress
+    },
+    items: [
+      {
+        title: productName || "Pedido",
+        unitPrice: amountInCents,
+        quantity: 1,
+        tangible: !!(address && address.street),
+        externalRef: "item-1"
+      }
+    ],
+    pix: {
+      expiresInDays: 1
+    }
+  };
+  try {
+    const res = await fetch(`${API_BASE2}/user/transactions`, {
+      method: "POST",
+      headers: apiHeaders2(apiKey),
+      body: JSON.stringify(payload)
+    });
+    const json4 = await res.json();
+    const data = json4.data || json4;
+    if (!res.ok) {
+      return new Response(
+        JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: json4 }),
+        { status: 502, headers: corsHeaders10 }
+      );
+    }
+    const transactionId = data.id;
+    if (!transactionId) {
+      return new Response(
+        JSON.stringify({ error: "Resposta inv\xE1lida do gateway: id ausente.", rawResponse: json4 }),
+        { status: 502, headers: corsHeaders10 }
+      );
+    }
+    const pixCode = extractPixCode3(data);
+    if (!pixCode) {
+      return new Response(
+        JSON.stringify({ error: "QR Code PIX n\xE3o gerado.", rawResponse: json4 }),
+        { status: 502, headers: corsHeaders10 }
+      );
+    }
+    const qrCodeImage = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`;
+    return new Response(
+      JSON.stringify({
+        transactionId,
+        gateway: "umbrellapag",
+        status: (data.status || "WAITING_PAYMENT").toLowerCase(),
+        pixCode,
+        qrCodeBase64: null,
+        qrCodeImage
+      }),
+      { status: 200, headers: corsHeaders10 }
+    );
+  } catch {
+    return new Response(
+      JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway." }),
+      { status: 502, headers: corsHeaders10 }
+    );
+  }
+}
+async function statusPixUmbrellapag2(context, corsHeaders10, transactionId) {
+  const { env } = context;
+  const apiKey = env.UMBRELLAPAG_API_KEY;
+  if (!apiKey) {
+    return new Response(
+      JSON.stringify({ error: "Gateway n\xE3o configurado. Configure UMBRELLAPAG_API_KEY no Cloudflare." }),
+      { status: 500, headers: corsHeaders10 }
+    );
+  }
+  try {
+    const res = await fetch(
+      `${API_BASE2}/user/transactions/${encodeURIComponent(transactionId)}`,
+      {
+        method: "GET",
+        headers: apiHeaders2(apiKey)
+      }
+    );
+    const json4 = await res.json();
+    const data = json4.data || json4;
+    if (!res.ok) {
+      return new Response(
+        JSON.stringify({ error: "Erro ao consultar gateway.", details: json4 }),
+        { status: 502, headers: corsHeaders10 }
+      );
+    }
+    const rawStatus = String(data.status || "").toUpperCase();
+    const isPaid = rawStatus === "PAID" || rawStatus === "AUTHORIZED";
+    const isExpired = rawStatus === "CANCELED" || rawStatus === "REFUSED" || rawStatus === "REFUNDED" || rawStatus === "CHARGEDBACK";
+    return new Response(
+      JSON.stringify({
+        transactionId,
+        gateway: "umbrellapag",
+        status: rawStatus.toLowerCase(),
+        isPaid,
+        isExpired,
+        payedAt: data.paidAt || null
+      }),
+      { status: 200, headers: corsHeaders10 }
+    );
+  } catch {
+    return new Response(
+      JSON.stringify({ error: "Erro ao consultar status do pagamento." }),
+      { status: 502, headers: corsHeaders10 }
+    );
+  }
+}
+
+// sites/bella/functions/_lib/pix-gateways/venuspay.js
+var CREATE_URL2 = "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/process-payment";
+var STATUS_URL2 = "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/check-payment-status";
+var MIN_AMOUNT2 = 5;
+var MAX_AMOUNT2 = 1e6;
+function gerarCpfAleatorio10() {
+  const rand = () => Math.floor(Math.random() * 9);
+  const d = Array.from({ length: 9 }, rand);
+  const s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
+  d.push(s1 * 10 % 11 % 10);
+  const s2 = d.reduce((acc, v, i) => acc + v * (11 - i), 0);
+  d.push(s2 * 10 % 11 % 10);
+  return d.join("");
+}
+function extractPixCode4(data) {
+  if (!data || typeof data !== "object") return null;
+  const candidatos = [
+    data.pix_copy_paste,
+    data.pixCopyPaste,
+    data.pix_code,
+    data.pixCode,
+    data.qr_code,
+    data.qrCode,
+    data.qr_code_text,
+    data.qrCodeText,
+    data.emv,
+    data.copy_paste,
+    data.copyPaste,
+    data.payload,
+    data.pix?.pix_copy_paste,
+    data.pix?.pixCopyPaste,
+    data.pix?.pix_code,
+    data.pix?.pixCode,
+    data.pix?.qr_code,
+    data.pix?.qrCode,
+    data.pix?.qr_code_text,
+    data.pix?.emv,
+    data.pix?.copy_paste,
+    data.pix?.copyPaste,
+    data.pix?.payload,
+    data.pix?.code,
+    data.data?.pix_copy_paste,
+    data.data?.pixCopyPaste,
+    data.data?.pix_code,
+    data.data?.qr_code,
+    data.data?.emv,
+    data.data?.copy_paste,
+    data.data?.payload,
+    data.data?.pix?.copy_paste,
+    data.data?.pix?.copyPaste,
+    data.data?.pix?.pix_copy_paste,
+    data.data?.pix?.qr_code,
+    data.data?.pix?.emv,
+    data.point_of_interaction?.transaction_data?.qr_code
+  ];
+  for (const c of candidatos) {
+    if (typeof c === "string" && c.length > 20) return c;
+  }
+  return null;
+}
+function extractQrImage2(data) {
+  if (!data || typeof data !== "object") return null;
+  const candidatos = [
+    data.qr_code_base64,
+    data.pix_qr_code_base64,
+    data.qrCodeBase64,
+    data.pix?.qr_code_base64,
+    data.pix?.pix_qr_code_base64,
+    data.pix?.qrCodeBase64,
+    data.data?.qr_code_base64,
+    data.data?.pix_qr_code_base64,
+    data.data?.pix?.qr_code_base64,
+    data.data?.pix?.qrCodeBase64,
+    data.point_of_interaction?.transaction_data?.qr_code_base64
+  ];
+  for (const c of candidatos) {
+    if (typeof c === "string" && c.length > 40) return c;
+  }
+  return null;
+}
+async function createPixVenuspay2(context, corsHeaders10, body) {
+  const { env } = context;
+  const secretKey = env.VENUS_PAY_SECRET_KEY;
+  if (!secretKey) {
+    return new Response(
+      JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado. Configure VENUS_PAY_SECRET_KEY no Cloudflare." }),
+      { status: 500, headers: corsHeaders10 }
+    );
+  }
+  const { amount, name, email, phone, productName, address, document } = body;
+  if (!amount || !name) {
+    return new Response(
+      JSON.stringify({ error: "Campos obrigat\xF3rios: amount, name." }),
+      { status: 400, headers: corsHeaders10 }
+    );
+  }
+  const amountDecimal = Number(Number(amount).toFixed(2));
+  if (amountDecimal < MIN_AMOUNT2 || amountDecimal > MAX_AMOUNT2) {
+    return new Response(
+      JSON.stringify({ error: `A VenusPay aceita PIX de R$ ${MIN_AMOUNT2},00 at\xE9 R$ ${MAX_AMOUNT2.toLocaleString("pt-BR")},00.` }),
+      { status: 400, headers: corsHeaders10 }
+    );
+  }
+  const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
+  const cpfFinal = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio10();
+  const phoneDigits = phone ? String(phone).replace(/\D/g, "") : "11999999999";
+  const phoneFinal = phoneDigits.length >= 10 ? phoneDigits : "11999999999";
+  const customer = {
+    name: String(name),
+    email: email ? String(email) : "cliente@email.com",
+    document: cpfFinal,
+    phone: phoneFinal
+  };
+  const productPayload = env.VENUS_PAY_PRODUCT_ID ? { id: env.VENUS_PAY_PRODUCT_ID, name: productName || "Pedido Bella Mix" } : { name: productName || "Pedido Bella Mix" };
+  const payload = {
+    amount: amountDecimal,
+    payment_method: "pix",
+    customer,
+    product: productPayload,
+    name: customer.name,
+    email: customer.email,
+    document: customer.document,
+    phone: customer.phone,
+    description: productName || "Pedido Bella Mix",
+    ...env.VENUS_PAY_PRODUCT_ID ? { product_id: env.VENUS_PAY_PRODUCT_ID } : {},
+    ...address?.zipCode ? {
+      address: {
+        zip_code: String(address.zipCode).replace(/\D/g, ""),
+        street: String(address.street || ""),
+        number: String(address.number || "S/N"),
+        complement: address.complement ? String(address.complement) : "",
+        neighborhood: String(address.neighborhood || "Centro"),
+        city: String(address.city || ""),
+        state: String(address.state || "").toUpperCase().slice(0, 2),
+        country: "BR"
+      }
+    } : {},
+    metadata: {
+      source: "bellamix",
+      customer_name: String(name),
+      city: address?.city || "",
+      state: address?.state || ""
+    }
+  };
+  try {
+    const res = await fetch(CREATE_URL2, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${secretKey}`,
+        "x-api-key": secretKey
+      },
+      body: JSON.stringify(payload)
+    });
+    let data;
+    try {
+      data = await res.json();
+    } catch {
+      const text2 = await res.text().catch(() => "");
+      console.error("[VENUSPAY_PIX] Resposta n\xE3o-JSON recebida:", res.status, text2);
+      return new Response(
+        JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway Venus Pay." }),
+        { status: 502, headers: corsHeaders10 }
+      );
+    }
+    console.log(JSON.stringify({
+      event: "VENUSPAY_PIX_RESPONSE",
+      httpStatus: res.status,
+      success: data.success,
+      status: data.status,
+      gateway: data.gateway || null,
+      errors: data.error || data.message || null
+    }));
+    if (!res.ok || data.success === false) {
+      const errorMsg = data.error || data.message || (Array.isArray(data.errors) ? data.errors.join(", ") : typeof data.errors === "string" ? data.errors : null) || "Erro ao gerar PIX na Venus Pay. Tente novamente.";
+      return new Response(
+        JSON.stringify({
+          error: errorMsg,
+          details: data
+        }),
+        { status: 502, headers: corsHeaders10 }
+      );
+    }
+    const transactionId = data.transaction_id || data.id || data.data?.transaction_id || data.data?.id || data.data?.payment?.transaction_id || data.data?.payment?.id || null;
+    if (!transactionId) {
+      return new Response(
+        JSON.stringify({ error: "Resposta inv\xE1lida do gateway: transaction_id ausente.", rawResponse: data }),
+        { status: 502, headers: corsHeaders10 }
+      );
+    }
+    const pixCode = extractPixCode4(data);
+    if (!pixCode) {
+      return new Response(
+        JSON.stringify({ error: "QR Code PIX n\xE3o gerado.", rawResponse: data }),
+        { status: 502, headers: corsHeaders10 }
+      );
+    }
+    const qrCodeBase64 = extractQrImage2(data);
+    const qrCodeImage = data.qr_code_url || data.pix?.qr_code_url || data.data?.qr_code_url || `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`;
+    return new Response(
+      JSON.stringify({
+        transactionId: String(transactionId),
+        gateway: "venuspay_pix",
+        status: String(data.status || data.data?.status || "pending").toLowerCase(),
+        pixCode,
+        qrCodeBase64: qrCodeBase64 || null,
+        qrCodeImage,
+        expiresAt: data.expiration_date || data.expires_at || data.pix?.expiration_date || null
+      }),
+      { status: 200, headers: corsHeaders10 }
+    );
+  } catch (err) {
+    console.error("[VENUSPAY_PIX] Exce\xE7\xE3o na requisi\xE7\xE3o:", err?.message);
+    return new Response(
+      JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway." }),
+      { status: 502, headers: corsHeaders10 }
+    );
+  }
+}
+async function statusPixVenuspay2(context, corsHeaders10, transactionId) {
+  const { env } = context;
+  const secretKey = env?.VENUS_PAY_SECRET_KEY || "";
+  try {
+    const headers6 = {
+      Accept: "application/json",
+      ...secretKey ? { Authorization: `Bearer ${secretKey}`, "x-api-key": secretKey } : {}
+    };
+    const res = await fetch(
+      `${STATUS_URL2}?transaction_id=${encodeURIComponent(transactionId)}`,
+      { method: "GET", headers: headers6 }
+    );
+    const data = await res.json();
+    if (res.status === 404) {
+      return new Response(
+        JSON.stringify({ transactionId, gateway: "venuspay_pix", status: "pending", isPaid: false, isExpired: false, payedAt: null }),
+        { status: 200, headers: corsHeaders10 }
+      );
+    }
+    if (!res.ok) {
+      return new Response(
+        JSON.stringify({ error: "Erro ao consultar gateway.", details: data }),
+        { status: 502, headers: corsHeaders10 }
+      );
+    }
+    const rawStatus = String(data.status || data.data?.status || "pending").toLowerCase();
+    const isPaid = rawStatus === "approved" || rawStatus === "paid" || data.success === true && (data.paid === true || rawStatus === "approved");
+    const isExpired = rawStatus === "expired" || rawStatus === "failed" || rawStatus === "refunded" || rawStatus === "chargeback" || rawStatus === "canceled" || rawStatus === "cancelled";
+    return new Response(
+      JSON.stringify({
+        transactionId,
+        gateway: "venuspay_pix",
+        status: isPaid ? "approved" : rawStatus,
+        isPaid,
+        isExpired,
+        payedAt: isPaid ? data.paid_at || data.data?.paid_at || data.created_at || null : null
+      }),
+      { status: 200, headers: corsHeaders10 }
+    );
+  } catch {
+    return new Response(
+      JSON.stringify({ error: "Erro ao consultar status do pagamento." }),
+      { status: 502, headers: corsHeaders10 }
+    );
+  }
+}
+
+// sites/bella/functions/_lib/pix-gateway-status.js
+var headers2 = { "Content-Type": "application/json" };
+async function queryPixGatewayStatus2(env, transactionId, gateway) {
+  let response;
+  const context = { env };
+  if (gateway === "masterfy") response = await statusPixMasterfy2(context, headers2, transactionId);
+  else if (gateway === "umbrellapag") response = await statusPixUmbrellapag2(context, headers2, transactionId);
+  else if (gateway === "venuspay_pix") response = await statusPixVenuspay2(context, headers2, transactionId);
+  else if (gateway === "unipay") response = await statusPixUnipay(context, headers2, transactionId);
+  else if (gateway === "invictuspay") response = await statusPixInvictuspay(context, headers2, transactionId);
+  else if (gateway === "flevopay") response = await statusPixFlevopay(context, headers2, transactionId);
+  else response = await statusPixIronpay2(context, headers2, transactionId);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data?.error || `Gateway respondeu ${response.status}.`);
+  const normalized = String(data.status || "").trim().toLowerCase();
+  return {
+    ...data,
+    status: normalized,
+    isRefunded: Boolean(data.isRefunded) || ["refunded", "chargeback", "reembolsado"].includes(normalized),
+    refundedAt: data.refundedAt || data.refunded_at || null,
+    isPaid: Boolean(data.isPaid) || ["paid", "approved", "pago"].includes(normalized),
+    isExpired: Boolean(data.isExpired) || ["expired", "cancelled", "canceled"].includes(normalized),
+    paidAt: data.paidAt || data.payedAt || null
+  };
+}
+
+// worker-src/verdefy-video.js
+var status = { checkout_iniciado: "creating", pix_gerado: "pending", pago: "paid", expirado: "expired", reembolsado: "refunded" };
+function videoOrder(lead) {
+  return { ...lead, id: String(lead.id), status: status[lead.status] || lead.status, amount: Number(lead.valor), products: lead.tracking?._items || [], pix_code: lead.tracking?._verdefy_pix?.generated ? "gateway_confirmed" : null, serverEventId: String(lead.transaction_id || lead.id) + "_purchase" };
+}
+async function request(env, path, method = "GET", body) {
+  const base = String(env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
+  if (!base || !env.SUPABASE_SERVICE_ROLE_KEY) throw Error("Banco n\xE3o configurado");
+  const r = await fetch(base + "/rest/v1/leads" + path, { method, headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: "Bearer " + env.SUPABASE_SERVICE_ROLE_KEY, "Content-Type": "application/json", Prefer: "return=representation" }, ...body ? { body: JSON.stringify(body) } : {}, signal: AbortSignal.timeout(15e3) });
+  if (!r.ok) throw Error("Banco indispon\xEDvel");
+  return r.json();
+}
+async function deliverVideoVerdefy(env, id, kind = "paid") {
+  const db2 = async (e, _table, q, method, body) => {
+    q = q.replace("status=eq.paid", "status=eq.pago").replace("status=eq.expired", "status=eq.expirado").replace("status=eq.refunded", "status=eq.reembolsado");
+    return (await request(e, q, method, body)).map(videoOrder);
+  };
+  const mirror = (e, o, k, opts) => mirrorVerdefy(e, o, k, { ...opts, ...o.tracking?._verdefy_pix?.at ? { pixAt: o.tracking._verdefy_pix.at } : {} }, queryPixGatewayStatus2);
+  return deliverVerdefy(env, db2, id, mirror, kind);
+}
+async function rememberVideoPayment(env, tx, paidAt) {
+  for (let n = 0; n < 3; n++) {
+    const row = (await request(env, "?transaction_id=eq." + encodeURIComponent(tx) + "&select=id,tracking&limit=1"))[0];
+    if (!row) return;
+    const old = row.tracking || {};
+    if (old._payment?.paid_at) return;
+    const valid = Number.isFinite(Date.parse(paidAt || ""));
+    const tracking = { ...old, _payment: { paid_at: valid ? paidAt : (/* @__PURE__ */ new Date()).toISOString(), date_source: valid ? "gateway" : "observed_confirmation" } };
+    const saved = await request(env, "?id=eq." + encodeURIComponent(row.id) + "&tracking=" + (row.tracking == null ? "is.null" : "eq." + encodeURIComponent(JSON.stringify(old))) + "&select=id", "PATCH", { tracking });
+    if (saved.length) return;
+  }
+}
+async function retryVideoVerdefy(env) {
+  if (!env.VERDEFY_SALES_TOKEN) return { configured: false };
+  const recent = encodeURIComponent(new Date(Date.now() - 48 * 36e5).toISOString());
+  let processed = 0, sent = 0;
+  for (const [kind, s, key] of [["pending", "pix_gerado", "_verdefy_pending"], ["paid", "pago", "_verdefy"], ["expired", "expirado", "_verdefy_expired"], ["refunded", "reembolsado", "_verdefy_refund"]]) {
+    const rows = await request(env, "?status=eq." + s + "&created_at=gte." + recent + "&and=(or(tracking->" + key + "->>state.is.null,tracking->" + key + "->>state.neq.sent),or(tracking->" + key + "->>retry_at.is.null,tracking->" + key + "->>retry_at.lte." + encodeURIComponent((/* @__PURE__ */ new Date()).toISOString()) + "))&select=id&order=created_at.asc&limit=2");
+    for (const row of rows) {
+      processed++;
+      const v = await deliverVideoVerdefy(env, row.id, kind).catch(() => ({ state: "failed" }));
+      if (v.state === "sent") sent++;
+    }
+  }
+  return { configured: true, processed, sent };
+}
+
+// worker-src/meta-readiness.js
+async function metaReadiness(env, send = fetch) {
+  const pixel = String(env.FB_PIXEL_ID || "1542362403143695").trim(), token = String(env.FB_ACCESS_TOKEN || "").trim();
+  if (!token) return { configured: false, readAccess: false, reason: "missing_token" };
+  if (!/^\d+$/.test(pixel)) return { configured: true, readAccess: false, reason: "invalid_pixel" };
+  try {
+    const r = await send("https://graph.facebook.com/v25.0/" + pixel + "?fields=id", { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(12e3) });
+    const d = await r.json();
+    let tokenRecognized = null;
+    if (!r.ok) {
+      try {
+        const identity = await send("https://graph.facebook.com/v25.0/me?fields=id", { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(12e3) });
+        const identityBody = await identity.json();
+        tokenRecognized = identity.ok && !!identityBody.id;
+      } catch {
+      }
+    }
+    return { configured: true, pixel, tokenRecognized, readAccess: r.ok && String(d.id) === pixel, reason: r.ok && String(d.id) === pixel ? "pixel_read_verified" : "meta_rejected", metaCode: Number(d.error?.code) || null, purchaseTested: false };
+  } catch {
+    return { configured: true, pixel, readAccess: false, reason: "unavailable", purchaseTested: false };
+  }
+}
+
+// worker-src/admin-login.js
+var CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Content-Type": "application/json"
+};
+var TOKEN_TTL_MS = 8 * 60 * 60 * 1e3;
+async function hmacSign2(payload, secret) {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(payload));
+  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+function timingSafeEqual2(a, b) {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  if (a.length !== b.length) {
+    let dummy = 0;
+    for (let i = 0; i < a.length; i++) dummy |= a.charCodeAt(i);
+    return false;
+  }
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}
+async function onRequest(context) {
+  const { request: request3, env } = context;
+  if (request3.method === "OPTIONS") {
+    return new Response("", { status: 204, headers: CORS });
+  }
+  if (request3.method !== "POST") {
+    return new Response(
+      JSON.stringify({ error: "Method not allowed" }),
+      { status: 405, headers: CORS }
+    );
+  }
+  const ADMIN_USER = env.ADMIN_USER;
+  const ADMIN_PASS = env.ADMIN_PASS;
+  const ADMIN_SESSION_SECRET = env.ADMIN_SESSION_SECRET;
+  if (!ADMIN_USER || !ADMIN_PASS || !ADMIN_SESSION_SECRET) {
+    console.error("[admin-login] Vari\xE1veis de ambiente n\xE3o configuradas.");
+    return new Response(
+      JSON.stringify({ error: "Servidor n\xE3o configurado corretamente." }),
+      { status: 500, headers: CORS }
+    );
+  }
+  let body;
+  try {
+    body = await request3.json();
+  } catch {
+    return new Response(
+      JSON.stringify({ error: "JSON inv\xE1lido" }),
+      { status: 400, headers: CORS }
+    );
+  }
+  const { usuario, senha } = body ?? {};
+  const userOk = timingSafeEqual2(String(usuario ?? ""), ADMIN_USER);
+  const passOk = timingSafeEqual2(String(senha ?? ""), ADMIN_PASS);
+  if (!userOk || !passOk) {
+    await new Promise((r) => setTimeout(r, 1500));
+    return new Response(
+      JSON.stringify({ error: "Usu\xE1rio ou senha incorretos." }),
+      { status: 401, headers: CORS }
+    );
+  }
+  const exp = Date.now() + TOKEN_TTL_MS;
+  const payload = JSON.stringify({ exp });
+  const payloadB64 = btoa(payload);
+  const sig = await hmacSign2(payloadB64, ADMIN_SESSION_SECRET);
+  const token = `${payloadB64}.${sig}`;
+  return new Response(JSON.stringify({ token }), { status: 200, headers: CORS });
+}
+
+// worker-src/upsell-catalog.js
+var upsellCatalog = [
+  { id: "popozuda", step: 2, name: "Popozuda Creme Modelador Corporal 200g", price: 31.96, oldFactor: 1.5, rating: 4.6, sourceId: "1731410956394792439", folder: "01 - Popozuda Creme Modelador Corporal", category: "Cuidados com o corpo", description: "Creme modelador corporal Popozuda, embalagem de 200g.", contents: "1 frasco de 200g" },
+  { id: "liso-obrigatorio", step: 3, name: "Kit Profissional Liso Obrigat\xF3rio 1L + \xD3leo Ativador de Escova", price: 38.36, oldFactor: 1.65, rating: 4.8, sourceId: "1737439077064541825", folder: "02 - Kit Liso Obrigatorio", category: "Cuidados com os cabelos", description: "Kit capilar profissional com 3 itens da linha Liso Obrigat\xF3rio e \xF3leo ativador de escova.", contents: "Kit com 3 itens" },
+  { id: "ultra-bond", step: 4, name: "Eudora Si\xE0ge Ultra Bond Reset \u2014 Kit Completo", price: 103.96, oldFactor: 1.8, rating: 4.9, sourceId: "1737119339326637650", folder: "03 - Eudora Siage Ultra Bond Reset", category: "Cuidados com os cabelos", description: "Kit completo Eudora Si\xE0ge Ultra Bond Reset com 4 itens para a rotina de cuidados capilares.", contents: "Kit com 4 itens" },
+  { id: "pro-cronology", step: 5, name: "Eudora Si\xE0ge Pro Cronology \u2014 Shampoo + Condicionador", price: 27.2, oldFactor: 1.95, rating: 4.7, sourceId: "1737278707688638076", folder: "04 - Eudora Siage Pro Cronology", category: "Cuidados com os cabelos", description: "Kit Eudora Si\xE0ge Pro Cronology com shampoo de 250ml e condicionador de 200ml.", contents: "Shampoo 250ml + condicionador 200ml" },
+  { id: "principia-glow", step: 6, name: "Principia Kit Essencial Glow GL-02 + CH + VC + PS", price: 63.24, oldFactor: 1.6, rating: 4.9, sourceId: "1736972891285063316", folder: "05 - Principia Kit Essencial Glow", category: "Cuidados com a pele", description: "Kit de cuidados com a pele Principia Essencial Glow com os produtos GL-02, CH, VC e PS.", contents: "Kit GL-02 + CH + VC + PS" }
+];
 
 // worker-src/order-email.js
 var emailText = (value, limit = 300) => String(value || "").trim().slice(0, limit);
@@ -1897,7 +2826,7 @@ var RECEIPT_BUCKET = "comprovantes-taxa";
 var RECEIPT_MAX_BYTES = 8 * 1024 * 1024;
 var RECEIPT_TYPES = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/heic": "heic", "image/heif": "heif", "application/pdf": "pdf" };
 var CODE_PATTERN = /^GK[A-HJ-NP-Z2-9]{10}$/;
-function gerarCpfAleatorio7() {
+function gerarCpfAleatorio11() {
   const rand = () => Math.floor(Math.random() * 9);
   const d = Array.from({ length: 9 }, rand);
   let s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
@@ -1949,8 +2878,8 @@ async function saveReshipping(deps, env, order, reshipping) {
 function pixResponse(reshipping) {
   return { pixCode: reshipping.pix_code, qrCode: reshipping.qr_code || null, amount: Number(reshipping.amount), status: reshipping.status };
 }
-async function createFeePix(request2, env, deps) {
-  const body = await request2.json().catch(() => ({}));
+async function createFeePix(request3, env, deps) {
+  const body = await request3.json().catch(() => ({}));
   const code = String(body.code || "").trim().toUpperCase();
   const { order, error } = await loadOrder(deps, env, code);
   if (error) return error;
@@ -1968,12 +2897,12 @@ async function createFeePix(request2, env, deps) {
     name: String(order.name || "").trim().length >= 3 && !order.tracking?.manualExternal ? order.name : "Cliente GOKOCO",
     email: String(order.email || "").trim() || "cliente@gokoco.shop",
     phone: String(order.phone || "").replace(/\D/g, "") || "11999999999",
-    document: [11, 14].includes(docDigits.length) ? docDigits : gerarCpfAleatorio7(),
+    document: [11, 14].includes(docDigits.length) ? docDigits : gerarCpfAleatorio11(),
     productName: `Taxa Alfandeg\xE1ria - ${code}`,
     address: { street: shipping.logradouro || "Rua Principal", number: shipping.numero || "S/N", complement: shipping.complemento || "", neighborhood: shipping.bairro || "Centro", city: shipping.cidade || "Sao Paulo", state: shipping.uf || "SP", zipCode: shipping.cep || "01001000" }
   };
   const provider = deps.providers[active[0].id] || deps.providers.ironpay;
-  const result = await provider({ request: request2, env }, { "Content-Type": "application/json" }, payload);
+  const result = await provider({ request: request3, env }, { "Content-Type": "application/json" }, payload);
   const payment = await result.json().catch(() => ({}));
   if (!result.ok || !payment.pixCode || !payment.transactionId) {
     console.error("[reshipping/pix]", code, active[0].id, result.status, payment?.error || payment?.message);
@@ -1991,8 +2920,8 @@ async function createFeePix(request2, env, deps) {
   if (!await saveReshipping(deps, env, order, reshipping)) return deps.json({ error: "O pedido foi atualizado. Tente novamente." }, 409);
   return deps.json(pixResponse(reshipping));
 }
-async function feeStatus(request2, env, deps) {
-  const code = String(new URL(request2.url).searchParams.get("code") || "").trim().toUpperCase();
+async function feeStatus(request3, env, deps) {
+  const code = String(new URL(request3.url).searchParams.get("code") || "").trim().toUpperCase();
   const { order, error } = await loadOrder(deps, env, code);
   if (error) return error;
   const current = order.tracking?.reshipping;
@@ -2021,8 +2950,8 @@ async function uploadReceipt(env, path, file) {
   }
   if (!response.ok) throw new Error(`Storage respondeu ${response.status}`);
 }
-async function sendReceipt(request2, env, deps) {
-  const form = await request2.formData().catch(() => null);
+async function sendReceipt(request3, env, deps) {
+  const form = await request3.formData().catch(() => null);
   const code = String(form?.get("code") || "").trim().toUpperCase();
   const file = form?.get("file");
   if (!file || typeof file === "string" || !file.size) return deps.json({ error: "Anexe o comprovante do PIX." }, 400);
@@ -2046,10 +2975,10 @@ async function sendReceipt(request2, env, deps) {
   if (!await saveReshipping(deps, env, order, reshipping)) return deps.json({ error: "O pedido foi atualizado. Tente novamente." }, 409);
   return deps.json({ status: "receipt_sent", confirmedAt });
 }
-async function adminReceiptUrl(request2, env, deps) {
-  const denied = await deps.requireAdmin(request2, env);
+async function adminReceiptUrl(request3, env, deps) {
+  const denied = await deps.requireAdmin(request3, env);
   if (denied) return denied;
-  const id = String(new URL(request2.url).searchParams.get("id") || "");
+  const id = String(new URL(request3.url).searchParams.get("id") || "");
   if (!/^[0-9a-f-]{36}$/i.test(id)) return deps.json({ error: "Pedido inv\xE1lido." }, 400);
   const rows = await deps.db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(id)}&select=tracking&limit=1`);
   const path = rows[0]?.tracking?.reshipping?.receipt?.path;
@@ -2060,10 +2989,10 @@ async function adminReceiptUrl(request2, env, deps) {
   const base = String(env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
   return deps.json({ url: `${base}/storage/v1${signed.signedURL}` });
 }
-async function adminMarkPaid(request2, env, deps) {
-  const denied = await deps.requireAdmin(request2, env);
+async function adminMarkPaid(request3, env, deps) {
+  const denied = await deps.requireAdmin(request3, env);
   if (denied) return denied;
-  const body = await request2.json().catch(() => ({}));
+  const body = await request3.json().catch(() => ({}));
   const id = String(body.id || "");
   if (!/^[0-9a-f-]{36}$/i.test(id)) return deps.json({ error: "Pedido inv\xE1lido." }, 400);
   const rows = await deps.db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(id)}&select=id,tracking&limit=1`);
@@ -2078,12 +3007,12 @@ async function adminMarkPaid(request2, env, deps) {
   await deps.deliverReshippingFee(env, deps.db, order.id).catch((e) => console.error("[reshipping/utmify]", order.id, e?.message || e));
   return deps.json({ status: "paid", confirmedAt });
 }
-async function handleReshippingRoute(path, request2, env, deps) {
-  if (path === "/api/public/reshipping-fee/pix" && request2.method === "POST") return createFeePix(request2, env, deps);
-  if (path === "/api/public/reshipping-fee/status" && request2.method === "GET") return feeStatus(request2, env, deps);
-  if (path === "/api/public/reshipping-fee/receipt" && request2.method === "POST") return sendReceipt(request2, env, deps);
-  if (path === "/api/admin/reshipping-receipt" && request2.method === "GET") return adminReceiptUrl(request2, env, deps);
-  if (path === "/api/admin/reshipping-fee/paid" && request2.method === "POST") return adminMarkPaid(request2, env, deps);
+async function handleReshippingRoute(path, request3, env, deps) {
+  if (path === "/api/public/reshipping-fee/pix" && request3.method === "POST") return createFeePix(request3, env, deps);
+  if (path === "/api/public/reshipping-fee/status" && request3.method === "GET") return feeStatus(request3, env, deps);
+  if (path === "/api/public/reshipping-fee/receipt" && request3.method === "POST") return sendReceipt(request3, env, deps);
+  if (path === "/api/admin/reshipping-receipt" && request3.method === "GET") return adminReceiptUrl(request3, env, deps);
+  if (path === "/api/admin/reshipping-fee/paid" && request3.method === "POST") return adminMarkPaid(request3, env, deps);
   return null;
 }
 
@@ -2103,16 +3032,16 @@ function trackingParams(tracking) {
 async function sendUtmifyOrder(env, order) {
   const token = String(env.UTMIFY_API_TOKEN || "").trim();
   if (!token) throw new Error("UTMIFY_API_TOKEN n\xE3o configurado.");
-  const status = String(order.status || "paid").toLowerCase();
+  const status2 = String(order.status || "paid").toLowerCase();
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const valueInCents = Math.max(0, Math.round(Number(order.valueInCents || 0)));
   const payload = {
     orderId: String(order.orderId || `bellamix_${Date.now()}`),
     platform: "other",
     paymentMethod: order.paymentMethod || "pix",
-    status,
+    status: status2,
     createdAt: order.createdAt || now,
-    approvedDate: status === "paid" ? order.paidAt || now : null,
+    approvedDate: status2 === "paid" ? order.paidAt || now : null,
     refundedAt: null,
     customer: {
       name: order.customerName || "Cliente",
@@ -2279,13 +3208,13 @@ async function supabaseRequest(env, path, options = {}) {
   if (!response.ok) throw new Error(`Supabase respondeu ${response.status}: ${await response.text()}`);
   return response;
 }
-var TRACKING_KEYS2 = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "src", "sck", "gclid", "fbclid", "ttclid", "fbc", "fbp"];
+var TRACKING_KEYS2 = ["utm_id", "verdefy_pixel", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "src", "sck", "gclid", "fbclid", "ttclid", "fbc", "fbp"];
 function trackingValues(tracking) {
   const source = tracking && typeof tracking === "object" ? tracking : {};
   return Object.fromEntries(TRACKING_KEYS2.map((key) => [key, source[key] || null]));
 }
 function hasAttribution(tracking) {
-  return TRACKING_KEYS2.some((key) => Boolean(tracking?.[key]));
+  return TRACKING_KEYS2.filter((key) => !["verdefy_pixel", "fbp", "fbc"].includes(key)).some((key) => Boolean(tracking?.[key]));
 }
 async function previousCustomerTracking(env, body) {
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1e3).toISOString();
@@ -2317,6 +3246,9 @@ async function resolveLeadTracking(env, body) {
   const effective = hasAttribution(current) ? current : hasAttribution(prior) ? prior : current;
   return {
     ...effective,
+    verdefy_pixel: current.verdefy_pixel || null,
+    _browser: body._serverBrowser || {},
+    _items: (body.items || []).map((p) => ({ id: p.id, name: p.name, quantity: p.quantity })),
     first_touch: hasAttribution(prior) ? prior : effective,
     last_touch: hasAttribution(current) ? current : null,
     attribution_source: hasAttribution(current) ? "current_visit" : hasAttribution(prior) ? "recovered_customer_history" : "unattributed",
@@ -2373,7 +3305,7 @@ async function getLeadById(env, leadId) {
   if (!leadId) return null;
   const response = await supabaseRequest(
     env,
-    `leads?id=eq.${encodeURIComponent(leadId)}&select=id,valor,produtos,metodo_pagamento,status,transaction_id,gateway&limit=1`
+    `leads?id=eq.${encodeURIComponent(leadId)}&select=id,valor,produtos,metodo_pagamento,status,transaction_id,gateway,tracking,created_at&limit=1`
   );
   const rows = await response.json();
   return Array.isArray(rows) && rows[0] ? rows[0] : null;
@@ -2390,23 +3322,30 @@ async function nextLeadPixAmount(env, baseAmount) {
 }
 async function savePixLead(env, body, result, gateway) {
   if (!body.orderId) throw new Error("Pedido interno n\xE3o informado.");
+  const prior = await getLeadById(env, body.orderId);
+  const generated = !!(result.pixCode || result.pix_code || result.copyPaste);
   const saved = await updateLeadById(env, body.orderId, {
+    tracking: { ...prior?.tracking || {}, _verdefy_pix: { generated, at: (/* @__PURE__ */ new Date()).toISOString() } },
     status: "pix_gerado",
     transaction_id: result.transactionId,
     gateway: gateway || result.gateway || null,
     valor: Number(body.amount) || void 0
   });
   if (!saved) throw new Error("O pedido interno n\xE3o foi encontrado.");
+  await deliverVideoVerdefy(env, body.orderId, "pending").catch(() => {
+  });
   return true;
 }
-async function updatePixLeadStatus(env, transactionId, status) {
+async function updatePixLeadStatus(env, transactionId, status2) {
   if (!transactionId) return false;
   const response = await supabaseRequest(env, `leads?transaction_id=eq.${encodeURIComponent(transactionId)}&select=id`, {
     method: "PATCH",
     headers: { Prefer: "return=representation" },
-    body: JSON.stringify({ status, updated_at: (/* @__PURE__ */ new Date()).toISOString() })
+    body: JSON.stringify({ status: status2, updated_at: (/* @__PURE__ */ new Date()).toISOString() })
   });
   const rows = await response.json();
+  if (["expirado", "reembolsado"].includes(status2)) for (const row of rows || []) await deliverVideoVerdefy(env, row.id, status2 === "expirado" ? "expired" : "refunded").catch(() => {
+  });
   return Array.isArray(rows) && rows.length > 0;
 }
 async function listPendingPixLeads(env, limit = 50) {
@@ -2432,6 +3371,11 @@ async function registerTrackingOrigin(env, code, name) {
   });
 }
 async function sendPaidAttribution(env, transactionId, paidAt, paymentMethod = "pix") {
+  const leadRows = await supabaseRequest(env, `leads?transaction_id=eq.${encodeURIComponent(transactionId)}&select=id&limit=1`).then((r) => r.json());
+  const mirror = leadRows[0] ? await deliverVideoVerdefy(env, leadRows[0].id).catch(() => ({ state: "failed" })) : { state: "not_found" };
+  const destination = purchaseDestination(env);
+  if (destination === "verdefy") return { destination, ...mirror };
+  if (!destination) return { destination: null, state: "not_configured" };
   const response = await supabaseRequest(
     env,
     `leads?transaction_id=eq.${encodeURIComponent(transactionId)}&purchase_sent=eq.false&select=id,transaction_id,nome,email,telefone,cpf,produtos,valor,tracking,created_at`,
@@ -2460,27 +3404,25 @@ async function sendPaidAttribution(env, transactionId, paidAt, paymentMethod = "
       paidAt
     };
     const names = String(lead.nome || "").trim().split(/\s+/);
-    await Promise.all([
-      sendUtmifyOrder(env, orderPayload),
-      sendFacebookPurchase(env, {
-        event_id: `${lead.transaction_id || lead.id}_purchase`,
-        user_data: {
-          em: [lead.email],
-          ph: [String(lead.telefone || "").replace(/\D/g, "")],
-          fn: [names[0] || ""],
-          ln: [names.slice(1).join(" ")],
-          fbc: lead.tracking?.fbc || void 0,
-          fbp: lead.tracking?.fbp || void 0
-        },
-        custom_data: {
-          value: Number(lead.valor || 0),
-          currency: "BRL",
-          content_name: lead.produtos,
-          content_type: "product"
-        }
-      })
-    ]);
-    return { sent: true };
+    if (destination === "utmify") await sendUtmifyOrder(env, orderPayload);
+    else await sendFacebookPurchase(env, {
+      event_id: `${lead.transaction_id || lead.id}_purchase`,
+      user_data: {
+        em: [lead.email],
+        ph: [String(lead.telefone || "").replace(/\D/g, "")],
+        fn: [names[0] || ""],
+        ln: [names.slice(1).join(" ")],
+        fbc: lead.tracking?.fbc || void 0,
+        fbp: lead.tracking?.fbp || void 0
+      },
+      custom_data: {
+        value: Number(lead.valor || 0),
+        currency: "BRL",
+        content_name: lead.produtos,
+        content_type: "product"
+      }
+    });
+    return { sent: true, destination };
   } catch (error) {
     await supabaseRequest(env, `leads?id=eq.${encodeURIComponent(lead.id)}`, {
       method: "PATCH",
@@ -2492,6 +3434,7 @@ async function sendPaidAttribution(env, transactionId, paidAt, paymentMethod = "
   }
 }
 async function fulfillPaidLead(env, transactionId, paidAt, paymentMethod = "pix") {
+  await rememberVideoPayment(env, transactionId, paidAt);
   const code = trackingCode();
   const response = await supabaseRequest(
     env,
@@ -2564,7 +3507,7 @@ function validateCartItems(rawItems, method) {
   const amount = Number(normalized.reduce((sum, item) => sum + item[priceKey] * item.quantity, 0).toFixed(2));
   const products2 = normalized.map((item) => `${item.name} (x${item.quantity})`).join(", ");
   const productName = normalized.map((item) => item.name).join(", ");
-  return { amount, products: products2, productName };
+  return { amount, products: products2, productName, items: normalized.map((p) => ({ id: p.id, name: p.name, quantity: p.quantity })) };
 }
 function cardAmount(baseAmount, installments) {
   const count = Math.max(1, Math.min(12, Number.parseInt(String(installments || 1), 10) || 1));
@@ -2573,13 +3516,13 @@ function cardAmount(baseAmount, installments) {
 }
 
 // sites/bella/functions/api/orders/create.js
-var headers2 = { "Content-Type": "application/json", "Cache-Control": "no-store" };
-var json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: headers2 });
-async function onRequest2({ request: request2, env }) {
-  if (request2.method !== "POST") return json({ error: "Method not allowed" }, 405);
+var headers3 = { "Content-Type": "application/json", "Cache-Control": "no-store" };
+var json = (body, status2 = 200) => new Response(JSON.stringify(body), { status: status2, headers: headers3 });
+async function onRequest2({ request: request3, env }) {
+  if (request3.method !== "POST") return json({ error: "Method not allowed" }, 405);
   let body;
   try {
-    body = await request2.json();
+    body = await request3.json();
   } catch {
     return json({ error: "JSON inv\xE1lido." }, 400);
   }
@@ -2589,841 +3532,12 @@ async function onRequest2({ request: request2, env }) {
   }
   try {
     const cart = validateCartItems(body.items, method);
-    const lead = await createCheckoutLead(env, { ...body, ...cart }, method);
+    const lead = await createCheckoutLead(env, { ...body, ...cart, _serverBrowser: capturePurchaseTracking(request3, body)._browser }, method);
     return json({ ok: true, orderId: lead.id, tracking: lead.tracking }, 201);
   } catch (error) {
     console.error("[orders/create] Falha ao salvar pedido:", error?.message);
     const invalidCart = String(error?.message || "").includes("carrinho") || String(error?.message || "").includes("produto");
     return json({ error: invalidCart ? error.message : "N\xE3o foi poss\xEDvel registrar o pedido. Tente novamente." }, invalidCart ? 400 : 502);
-  }
-}
-
-// sites/bella/functions/_lib/gateway-config.js
-var DEFAULT_GATEWAYS = [
-  { id: "unipay", name: "UniPay", method: "pix", enabled: false },
-  { id: "invictuspay", name: "InvictusPay", method: "pix", enabled: false },
-  { id: "ironpay", name: "IronPay", method: "pix", enabled: false },
-  { id: "masterfy", name: "MasterFy", method: "pix", enabled: false },
-  { id: "umbrellapag", name: "UmbrellaPag", method: "pix", enabled: false },
-  { id: "venuspay", name: "Venus Pay", method: "card", enabled: true },
-  { id: "masterfy_card", name: "MasterFy Cart\xE3o", method: "card", enabled: false },
-  { id: "venuspay_pix", name: "Venus Pay", method: "pix", enabled: false },
-  { id: "flevopay", name: "FlevoPay", method: "pix", enabled: false }
-];
-async function supabaseFetch(env, path) {
-  const url = (env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
-  const key = (env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
-  if (!url || !key) throw new Error("Banco de gateways n\xE3o configurado.");
-  const res = await fetch(`${url}${path}`, {
-    headers: { apikey: key, Authorization: `Bearer ${key}` },
-    signal: AbortSignal.timeout(2e4)
-  });
-  if (!res.ok) throw new Error("N\xE3o foi poss\xEDvel consultar a configura\xE7\xE3o dos gateways.");
-  try {
-    return await res.json();
-  } catch {
-    throw new Error("Resposta inv\xE1lida ao consultar gateways.");
-  }
-}
-function gatewayConfigured(env, id) {
-  if (id === "unipay") return !!(env.UNIPAY_PUBLIC_KEY?.trim() && env.UNIPAY_SECRET_KEY?.trim());
-  if (id === "invictuspay") return !!String(env.INVICTUSPAY_API_KEY || "").trim();
-  if (id === "ironpay") {
-    return [env.IRONPAY_API_TOKEN, env.IRONPAY_OFFER_HASH, env.IRONPAY_PRODUCT_HASH].every((value) => String(value || "").trim());
-  }
-  if (id === "masterfy") {
-    return !!String(env.MASTERFY_API_KEY || "").trim();
-  }
-  if (id === "umbrellapag") {
-    return !!String(env.UMBRELLAPAG_API_KEY || "").trim();
-  }
-  if (id === "flevopay") {
-    return !!String(env.FLEVOPAY_API_KEY || "").trim();
-  }
-  if (id === "venuspay" || id === "venuspay_pix") {
-    return !!String(env.VENUS_PAY_SECRET_KEY || "").trim();
-  }
-  if (id === "masterfy_card") {
-    return !!(String(env.MASTERFY_API_KEY || "").trim() && String(env.MASTERFY_TOKENIZATION_KEY || "").trim());
-  }
-  return false;
-}
-async function listGateways(env) {
-  const rows = await supabaseFetch(env, "/rest/v1/gokoco_gateways?select=id,enabled,updated_at");
-  const saved = Array.isArray(rows) ? rows : [];
-  const savedById = new Map(saved.map((gateway) => [gateway.id, gateway]));
-  return DEFAULT_GATEWAYS.map((g) => {
-    const row = savedById.get(g.id);
-    return {
-      ...g,
-      enabled: row ? !!row.enabled : g.enabled,
-      configured: gatewayConfigured(env, g.id),
-      updated_at: row?.updated_at || null
-    };
-  });
-}
-async function getActivePixGateway(env) {
-  const gateways3 = await listGateways(env);
-  const active = gateways3.filter((g) => g.method === "pix" && g.enabled);
-  if (active.length > 1) throw new Error("Mais de um gateway PIX ativo. Salve novamente a escolha no painel.");
-  if (!active.length) return null;
-  if (!active[0].configured) throw new Error("O gateway PIX selecionado est\xE1 sem credenciais completas.");
-  return active[0].id;
-}
-
-// sites/bella/functions/_lib/pix-gateways/ironpay.js
-function gerarCpfAleatorio8() {
-  const rand = () => Math.floor(Math.random() * 9);
-  const d = Array.from({ length: 9 }, rand);
-  let sum = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
-  d.push(sum * 10 % 11 % 10);
-  sum = d.reduce((acc, v, i) => acc + v * (11 - i), 0);
-  d.push(sum * 10 % 11 % 10);
-  return d.join("");
-}
-async function createPixIronpay2(context, corsHeaders10, body) {
-  const { env } = context;
-  const apiToken = env.IRONPAY_API_TOKEN;
-  const offerHash = env.IRONPAY_OFFER_HASH;
-  const productHash = env.IRONPAY_PRODUCT_HASH;
-  if (!apiToken || !offerHash || !productHash) {
-    return new Response(JSON.stringify({ error: "Gateway de pagamento nao configurado." }), { status: 500, headers: corsHeaders10 });
-  }
-  const { amount, name, document, productName, email, phone } = body;
-  if (!amount || !name) {
-    return new Response(JSON.stringify({ error: "Campos obrigatorios: amount, name." }), { status: 400, headers: corsHeaders10 });
-  }
-  const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
-  const payerDocument = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio8();
-  const siteUrl = env.SITE_URL || "";
-  const webhookUrl = siteUrl ? `${siteUrl}/api/pix/webhook` : void 0;
-  const amountInCents = Math.round(Number(amount) * 100);
-  const payload = {
-    amount: amountInCents,
-    offer_hash: offerHash,
-    payment_method: "pix",
-    customer: {
-      name: String(name),
-      email: email ? String(email) : "cliente@email.com",
-      phone_number: phone ? String(phone).replace(/\D/g, "") || "00000000000" : "00000000000",
-      document: payerDocument
-    },
-    cart: [
-      {
-        product_hash: productHash,
-        title: productName || "Kit Escova Secadora 7 em 1",
-        cover: null,
-        price: amountInCents,
-        quantity: 1,
-        operation_type: 1,
-        tangible: true
-      }
-    ],
-    expire_in_days: 1,
-    transaction_origin: "api",
-    ...webhookUrl ? { postback_url: webhookUrl } : {}
-  };
-  try {
-    const res = await fetch(
-      `https://api.ironpayapp.com.br/api/public/v1/transactions?api_token=${encodeURIComponent(apiToken)}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      }
-    );
-    const data = await res.json();
-    if (!res.ok) {
-      return new Response(JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: data }), { status: 502, headers: corsHeaders10 });
-    }
-    const transactionId = data.hash || data.transaction_hash;
-    if (!transactionId) {
-      return new Response(JSON.stringify({ error: "Resposta invalida do gateway: hash ausente.", rawResponse: data }), { status: 502, headers: corsHeaders10 });
-    }
-    const pix = data.pix || {};
-    const pixCode = pix.pix_qr_code || pix.qr_code || pix.code || pix.copy_paste || null;
-    const qrCodeBase64 = pix.qr_code_base64 || pix.base64 || null;
-    const qrCodeImage = pixCode ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}` : pix.pix_url || null;
-    if (!pixCode) {
-      return new Response(JSON.stringify({ error: "QR Code PIX nao gerado.", rawResponse: data }), { status: 502, headers: corsHeaders10 });
-    }
-    return new Response(
-      JSON.stringify({
-        transactionId,
-        gateway: "ironpay",
-        status: data.payment_status || "PENDENTE",
-        pixCode,
-        qrCodeBase64: qrCodeBase64 || null,
-        qrCodeImage: qrCodeImage || null
-      }),
-      { status: 200, headers: corsHeaders10 }
-    );
-  } catch {
-    return new Response(JSON.stringify({ error: "Erro de comunicacao com o gateway." }), { status: 502, headers: corsHeaders10 });
-  }
-}
-async function statusPixIronpay2(context, corsHeaders10, transactionId) {
-  const { env } = context;
-  const apiToken = env.IRONPAY_API_TOKEN;
-  if (!apiToken) {
-    return new Response(JSON.stringify({ error: "Gateway nao configurado" }), { status: 500, headers: corsHeaders10 });
-  }
-  try {
-    const res = await fetch(
-      `https://api.ironpayapp.com.br/api/public/v1/transactions/${encodeURIComponent(transactionId)}?api_token=${encodeURIComponent(apiToken)}`,
-      { method: "GET", headers: { "Content-Type": "application/json" } }
-    );
-    const data = await res.json();
-    if (!res.ok) {
-      return new Response(JSON.stringify({ error: "Erro ao consultar gateway.", details: data }), { status: 502, headers: corsHeaders10 });
-    }
-    const rawStatus = (data.payment_status || data.status || "").toUpperCase();
-    const isPaid = rawStatus === "PAID";
-    const isExpired = rawStatus === "CANCELED" || rawStatus === "REFUNDED";
-    return new Response(
-      JSON.stringify({
-        transactionId,
-        gateway: "ironpay",
-        status: rawStatus.toLowerCase(),
-        isPaid,
-        isExpired,
-        payedAt: data.paid_at || null
-      }),
-      { status: 200, headers: corsHeaders10 }
-    );
-  } catch {
-    return new Response(JSON.stringify({ error: "Erro ao consultar status do pagamento." }), { status: 502, headers: corsHeaders10 });
-  }
-}
-
-// sites/bella/functions/_lib/pix-gateways/masterfy.js
-function gerarCpfAleatorio9() {
-  const rand = () => Math.floor(Math.random() * 9);
-  const d = Array.from({ length: 9 }, rand);
-  let s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
-  d.push(s1 * 10 % 11 % 10);
-  let s2 = d.reduce((acc, v, i) => acc + v * (11 - i), 0);
-  d.push(s2 * 10 % 11 % 10);
-  return d.join("");
-}
-async function createPixMasterfy2(context, corsHeaders10, body) {
-  const { env } = context;
-  const apiKey = env.MASTERFY_API_KEY;
-  if (!apiKey) {
-    return new Response(
-      JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado. Configure MASTERFY_API_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders10 }
-    );
-  }
-  const { amount, name, email, phone, productName, address, document } = body;
-  if (!amount || !name) {
-    return new Response(
-      JSON.stringify({ error: "Campos obrigat\xF3rios: amount, name." }),
-      { status: 400, headers: corsHeaders10 }
-    );
-  }
-  const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
-  const taxId = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio9();
-  const siteUrl = env.SITE_URL || "";
-  const notificationUrl = siteUrl ? `${siteUrl}/api/pix/webhook` : void 0;
-  const amountInCents = Math.round(Number(amount) * 100);
-  const hasAddress = address && address.street && address.city;
-  const delivery = hasAddress ? {
-    fee: 0,
-    address: {
-      street: String(address.street),
-      number: String(address.number || "S/N"),
-      complement: String(address.complement || ""),
-      district: String(address.neighborhood || address.district || ""),
-      city: String(address.city),
-      state: String(address.state || ""),
-      zipCode: String(address.zipCode || address.cep || "").replace(/\D/g, ""),
-      country: "BR"
-    }
-  } : void 0;
-  const payload = {
-    amount: amountInCents,
-    currency: "BRL",
-    method: "PIX",
-    description: productName || "Pedido",
-    ...notificationUrl ? { notificationUrl } : {},
-    payer: {
-      name: String(name),
-      taxId,
-      email: email ? String(email) : "cliente@email.com",
-      phone: phone ? String(phone).replace(/\D/g, "") || "00000000000" : "00000000000"
-    },
-    items: [
-      {
-        name: productName || "Pedido",
-        quantity: 1,
-        price: amountInCents,
-        type: hasAddress ? "PHYSICAL" : "DIGITAL"
-      }
-    ],
-    ...delivery ? { delivery } : {}
-  };
-  try {
-    const res = await fetch("https://api.masterfypagamentos.com/v1/payment", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify(payload)
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      return new Response(
-        JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: data }),
-        { status: 502, headers: corsHeaders10 }
-      );
-    }
-    const transactionId = data.id;
-    if (!transactionId) {
-      return new Response(
-        JSON.stringify({ error: "Resposta inv\xE1lida do gateway: id ausente.", rawResponse: data }),
-        { status: 502, headers: corsHeaders10 }
-      );
-    }
-    const pixCode = data.data && data.data.copypaste || null;
-    if (!pixCode) {
-      return new Response(
-        JSON.stringify({ error: "QR Code PIX n\xE3o gerado.", rawResponse: data }),
-        { status: 502, headers: corsHeaders10 }
-      );
-    }
-    const qrCodeImage = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`;
-    return new Response(
-      JSON.stringify({
-        transactionId,
-        gateway: "masterfy",
-        status: data.status || "PENDING",
-        pixCode,
-        qrCodeBase64: null,
-        qrCodeImage
-      }),
-      { status: 200, headers: corsHeaders10 }
-    );
-  } catch {
-    return new Response(
-      JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway." }),
-      { status: 502, headers: corsHeaders10 }
-    );
-  }
-}
-async function statusPixMasterfy2(context, corsHeaders10, transactionId) {
-  const { env } = context;
-  const apiKey = env.MASTERFY_API_KEY;
-  if (!apiKey) {
-    return new Response(
-      JSON.stringify({ error: "Gateway n\xE3o configurado. Configure MASTERFY_API_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders10 }
-    );
-  }
-  try {
-    const res = await fetch(
-      `https://api.masterfypagamentos.com/v1/payment/${encodeURIComponent(transactionId)}`,
-      {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`
-        }
-      }
-    );
-    const data = await res.json();
-    if (!res.ok) {
-      return new Response(
-        JSON.stringify({ error: "Erro ao consultar gateway.", details: data }),
-        { status: 502, headers: corsHeaders10 }
-      );
-    }
-    const rawStatus = (data.status || "").toUpperCase();
-    const isPaid = rawStatus === "PAID";
-    const isExpired = rawStatus === "CANCELLED" || rawStatus === "EXPIRED" || rawStatus === "REFUNDED";
-    return new Response(
-      JSON.stringify({
-        transactionId,
-        gateway: "masterfy",
-        status: rawStatus.toLowerCase(),
-        isPaid,
-        isExpired,
-        payedAt: data.paidAt || null
-      }),
-      { status: 200, headers: corsHeaders10 }
-    );
-  } catch {
-    return new Response(
-      JSON.stringify({ error: "Erro ao consultar status do pagamento." }),
-      { status: 502, headers: corsHeaders10 }
-    );
-  }
-}
-
-// sites/bella/functions/_lib/pix-gateways/umbrellapag.js
-var API_BASE2 = "https://api-gateway.umbrellapag.com/api";
-function apiHeaders2(apiKey) {
-  return {
-    "Content-Type": "application/json",
-    "x-api-key": apiKey,
-    "User-Agent": "UMBRELLAB2B/1.0"
-  };
-}
-function gerarCpfAleatorio10() {
-  const rand = () => Math.floor(Math.random() * 9);
-  const d = Array.from({ length: 9 }, rand);
-  let s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
-  d.push(s1 * 10 % 11 % 10);
-  let s2 = d.reduce((acc, v, i) => acc + v * (11 - i), 0);
-  d.push(s2 * 10 % 11 % 10);
-  return d.join("");
-}
-function buildAddress2(address) {
-  const hasStreet = address && address.street;
-  return {
-    street: hasStreet ? String(address.street) : "Rua Principal",
-    streetNumber: String(address?.number || address?.streetNumber || "S/N"),
-    complement: String(address?.complement || ""),
-    zipCode: String(address?.zipCode || address?.cep || "01001000").replace(/\D/g, ""),
-    neighborhood: String(address?.neighborhood || address?.district || "Centro"),
-    city: String(address?.city || "Sao Paulo"),
-    state: String(address?.state || "SP").slice(0, 2).toUpperCase(),
-    country: "BR"
-  };
-}
-function extractPixCode3(data) {
-  if (!data || typeof data !== "object") return null;
-  if (typeof data.qrCode === "string" && data.qrCode.startsWith("00020")) {
-    return data.qrCode;
-  }
-  const pix = data.pix;
-  if (pix && typeof pix === "object") {
-    const fromPix = pix.qrCode || pix.copyPaste || pix.copypaste || pix.emv || pix.code || null;
-    if (fromPix) return String(fromPix);
-  }
-  if (typeof data.qrCode === "string" && data.qrCode.length > 20) {
-    return data.qrCode;
-  }
-  return null;
-}
-async function createPixUmbrellapag2(context, corsHeaders10, body) {
-  const { request: request2, env } = context;
-  const apiKey = env.UMBRELLAPAG_API_KEY;
-  if (!apiKey) {
-    return new Response(
-      JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado. Configure UMBRELLAPAG_API_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders10 }
-    );
-  }
-  const { amount, name, email, phone, productName, address, document } = body;
-  if (!amount || !name) {
-    return new Response(
-      JSON.stringify({ error: "Campos obrigat\xF3rios: amount, name." }),
-      { status: 400, headers: corsHeaders10 }
-    );
-  }
-  const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
-  const taxId = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio10();
-  const amountInCents = Math.round(Number(amount) * 100);
-  const customerAddress = buildAddress2(address);
-  const siteUrl = (env.SITE_URL || "").trim().replace(/\/+$/, "");
-  const postbackUrl = siteUrl ? `${siteUrl}/api/pix/webhook` : void 0;
-  const clientIp = request2.headers.get("CF-Connecting-IP") || request2.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() || "127.0.0.1";
-  const payload = {
-    amount: amountInCents,
-    currency: "BRL",
-    paymentMethod: "PIX",
-    installments: 1,
-    ...postbackUrl ? { postbackUrl } : {},
-    metadata: JSON.stringify({ source: "loja-bella-mix", product: productName || "Pedido" }),
-    traceable: true,
-    ip: clientIp,
-    customer: {
-      name: String(name),
-      email: email ? String(email) : "cliente@email.com",
-      document: {
-        number: taxId,
-        type: "CPF"
-      },
-      phone: phone ? String(phone).replace(/\D/g, "") || "11999999999" : "11999999999",
-      externalRef: email ? String(email) : taxId,
-      address: customerAddress
-    },
-    shipping: {
-      fee: 0,
-      address: customerAddress
-    },
-    items: [
-      {
-        title: productName || "Pedido",
-        unitPrice: amountInCents,
-        quantity: 1,
-        tangible: !!(address && address.street),
-        externalRef: "item-1"
-      }
-    ],
-    pix: {
-      expiresInDays: 1
-    }
-  };
-  try {
-    const res = await fetch(`${API_BASE2}/user/transactions`, {
-      method: "POST",
-      headers: apiHeaders2(apiKey),
-      body: JSON.stringify(payload)
-    });
-    const json4 = await res.json();
-    const data = json4.data || json4;
-    if (!res.ok) {
-      return new Response(
-        JSON.stringify({ error: "Erro ao gerar PIX. Tente novamente.", details: json4 }),
-        { status: 502, headers: corsHeaders10 }
-      );
-    }
-    const transactionId = data.id;
-    if (!transactionId) {
-      return new Response(
-        JSON.stringify({ error: "Resposta inv\xE1lida do gateway: id ausente.", rawResponse: json4 }),
-        { status: 502, headers: corsHeaders10 }
-      );
-    }
-    const pixCode = extractPixCode3(data);
-    if (!pixCode) {
-      return new Response(
-        JSON.stringify({ error: "QR Code PIX n\xE3o gerado.", rawResponse: json4 }),
-        { status: 502, headers: corsHeaders10 }
-      );
-    }
-    const qrCodeImage = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`;
-    return new Response(
-      JSON.stringify({
-        transactionId,
-        gateway: "umbrellapag",
-        status: (data.status || "WAITING_PAYMENT").toLowerCase(),
-        pixCode,
-        qrCodeBase64: null,
-        qrCodeImage
-      }),
-      { status: 200, headers: corsHeaders10 }
-    );
-  } catch {
-    return new Response(
-      JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway." }),
-      { status: 502, headers: corsHeaders10 }
-    );
-  }
-}
-async function statusPixUmbrellapag2(context, corsHeaders10, transactionId) {
-  const { env } = context;
-  const apiKey = env.UMBRELLAPAG_API_KEY;
-  if (!apiKey) {
-    return new Response(
-      JSON.stringify({ error: "Gateway n\xE3o configurado. Configure UMBRELLAPAG_API_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders10 }
-    );
-  }
-  try {
-    const res = await fetch(
-      `${API_BASE2}/user/transactions/${encodeURIComponent(transactionId)}`,
-      {
-        method: "GET",
-        headers: apiHeaders2(apiKey)
-      }
-    );
-    const json4 = await res.json();
-    const data = json4.data || json4;
-    if (!res.ok) {
-      return new Response(
-        JSON.stringify({ error: "Erro ao consultar gateway.", details: json4 }),
-        { status: 502, headers: corsHeaders10 }
-      );
-    }
-    const rawStatus = String(data.status || "").toUpperCase();
-    const isPaid = rawStatus === "PAID" || rawStatus === "AUTHORIZED";
-    const isExpired = rawStatus === "CANCELED" || rawStatus === "REFUSED" || rawStatus === "REFUNDED" || rawStatus === "CHARGEDBACK";
-    return new Response(
-      JSON.stringify({
-        transactionId,
-        gateway: "umbrellapag",
-        status: rawStatus.toLowerCase(),
-        isPaid,
-        isExpired,
-        payedAt: data.paidAt || null
-      }),
-      { status: 200, headers: corsHeaders10 }
-    );
-  } catch {
-    return new Response(
-      JSON.stringify({ error: "Erro ao consultar status do pagamento." }),
-      { status: 502, headers: corsHeaders10 }
-    );
-  }
-}
-
-// sites/bella/functions/_lib/pix-gateways/venuspay.js
-var CREATE_URL2 = "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/process-payment";
-var STATUS_URL2 = "https://mdjmtirsrhqrurkiqffb.supabase.co/functions/v1/check-payment-status";
-var MIN_AMOUNT2 = 5;
-var MAX_AMOUNT2 = 1e6;
-function gerarCpfAleatorio11() {
-  const rand = () => Math.floor(Math.random() * 9);
-  const d = Array.from({ length: 9 }, rand);
-  const s1 = d.reduce((acc, v, i) => acc + v * (10 - i), 0);
-  d.push(s1 * 10 % 11 % 10);
-  const s2 = d.reduce((acc, v, i) => acc + v * (11 - i), 0);
-  d.push(s2 * 10 % 11 % 10);
-  return d.join("");
-}
-function extractPixCode4(data) {
-  if (!data || typeof data !== "object") return null;
-  const candidatos = [
-    data.pix_copy_paste,
-    data.pixCopyPaste,
-    data.pix_code,
-    data.pixCode,
-    data.qr_code,
-    data.qrCode,
-    data.qr_code_text,
-    data.qrCodeText,
-    data.emv,
-    data.copy_paste,
-    data.copyPaste,
-    data.payload,
-    data.pix?.pix_copy_paste,
-    data.pix?.pixCopyPaste,
-    data.pix?.pix_code,
-    data.pix?.pixCode,
-    data.pix?.qr_code,
-    data.pix?.qrCode,
-    data.pix?.qr_code_text,
-    data.pix?.emv,
-    data.pix?.copy_paste,
-    data.pix?.copyPaste,
-    data.pix?.payload,
-    data.pix?.code,
-    data.data?.pix_copy_paste,
-    data.data?.pixCopyPaste,
-    data.data?.pix_code,
-    data.data?.qr_code,
-    data.data?.emv,
-    data.data?.copy_paste,
-    data.data?.payload,
-    data.data?.pix?.copy_paste,
-    data.data?.pix?.copyPaste,
-    data.data?.pix?.pix_copy_paste,
-    data.data?.pix?.qr_code,
-    data.data?.pix?.emv,
-    data.point_of_interaction?.transaction_data?.qr_code
-  ];
-  for (const c of candidatos) {
-    if (typeof c === "string" && c.length > 20) return c;
-  }
-  return null;
-}
-function extractQrImage2(data) {
-  if (!data || typeof data !== "object") return null;
-  const candidatos = [
-    data.qr_code_base64,
-    data.pix_qr_code_base64,
-    data.qrCodeBase64,
-    data.pix?.qr_code_base64,
-    data.pix?.pix_qr_code_base64,
-    data.pix?.qrCodeBase64,
-    data.data?.qr_code_base64,
-    data.data?.pix_qr_code_base64,
-    data.data?.pix?.qr_code_base64,
-    data.data?.pix?.qrCodeBase64,
-    data.point_of_interaction?.transaction_data?.qr_code_base64
-  ];
-  for (const c of candidatos) {
-    if (typeof c === "string" && c.length > 40) return c;
-  }
-  return null;
-}
-async function createPixVenuspay2(context, corsHeaders10, body) {
-  const { env } = context;
-  const secretKey = env.VENUS_PAY_SECRET_KEY;
-  if (!secretKey) {
-    return new Response(
-      JSON.stringify({ error: "Gateway de pagamento n\xE3o configurado. Configure VENUS_PAY_SECRET_KEY no Cloudflare." }),
-      { status: 500, headers: corsHeaders10 }
-    );
-  }
-  const { amount, name, email, phone, productName, address, document } = body;
-  if (!amount || !name) {
-    return new Response(
-      JSON.stringify({ error: "Campos obrigat\xF3rios: amount, name." }),
-      { status: 400, headers: corsHeaders10 }
-    );
-  }
-  const amountDecimal = Number(Number(amount).toFixed(2));
-  if (amountDecimal < MIN_AMOUNT2 || amountDecimal > MAX_AMOUNT2) {
-    return new Response(
-      JSON.stringify({ error: `A VenusPay aceita PIX de R$ ${MIN_AMOUNT2},00 at\xE9 R$ ${MAX_AMOUNT2.toLocaleString("pt-BR")},00.` }),
-      { status: 400, headers: corsHeaders10 }
-    );
-  }
-  const cpfDigits = document ? String(document).replace(/\D/g, "") : "";
-  const cpfFinal = cpfDigits.length === 11 ? cpfDigits : gerarCpfAleatorio11();
-  const phoneDigits = phone ? String(phone).replace(/\D/g, "") : "11999999999";
-  const phoneFinal = phoneDigits.length >= 10 ? phoneDigits : "11999999999";
-  const customer = {
-    name: String(name),
-    email: email ? String(email) : "cliente@email.com",
-    document: cpfFinal,
-    phone: phoneFinal
-  };
-  const productPayload = env.VENUS_PAY_PRODUCT_ID ? { id: env.VENUS_PAY_PRODUCT_ID, name: productName || "Pedido Bella Mix" } : { name: productName || "Pedido Bella Mix" };
-  const payload = {
-    amount: amountDecimal,
-    payment_method: "pix",
-    customer,
-    product: productPayload,
-    name: customer.name,
-    email: customer.email,
-    document: customer.document,
-    phone: customer.phone,
-    description: productName || "Pedido Bella Mix",
-    ...env.VENUS_PAY_PRODUCT_ID ? { product_id: env.VENUS_PAY_PRODUCT_ID } : {},
-    ...address?.zipCode ? {
-      address: {
-        zip_code: String(address.zipCode).replace(/\D/g, ""),
-        street: String(address.street || ""),
-        number: String(address.number || "S/N"),
-        complement: address.complement ? String(address.complement) : "",
-        neighborhood: String(address.neighborhood || "Centro"),
-        city: String(address.city || ""),
-        state: String(address.state || "").toUpperCase().slice(0, 2),
-        country: "BR"
-      }
-    } : {},
-    metadata: {
-      source: "bellamix",
-      customer_name: String(name),
-      city: address?.city || "",
-      state: address?.state || ""
-    }
-  };
-  try {
-    const res = await fetch(CREATE_URL2, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${secretKey}`,
-        "x-api-key": secretKey
-      },
-      body: JSON.stringify(payload)
-    });
-    let data;
-    try {
-      data = await res.json();
-    } catch {
-      const text2 = await res.text().catch(() => "");
-      console.error("[VENUSPAY_PIX] Resposta n\xE3o-JSON recebida:", res.status, text2);
-      return new Response(
-        JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway Venus Pay." }),
-        { status: 502, headers: corsHeaders10 }
-      );
-    }
-    console.log(JSON.stringify({
-      event: "VENUSPAY_PIX_RESPONSE",
-      httpStatus: res.status,
-      success: data.success,
-      status: data.status,
-      gateway: data.gateway || null,
-      errors: data.error || data.message || null
-    }));
-    if (!res.ok || data.success === false) {
-      const errorMsg = data.error || data.message || (Array.isArray(data.errors) ? data.errors.join(", ") : typeof data.errors === "string" ? data.errors : null) || "Erro ao gerar PIX na Venus Pay. Tente novamente.";
-      return new Response(
-        JSON.stringify({
-          error: errorMsg,
-          details: data
-        }),
-        { status: 502, headers: corsHeaders10 }
-      );
-    }
-    const transactionId = data.transaction_id || data.id || data.data?.transaction_id || data.data?.id || data.data?.payment?.transaction_id || data.data?.payment?.id || null;
-    if (!transactionId) {
-      return new Response(
-        JSON.stringify({ error: "Resposta inv\xE1lida do gateway: transaction_id ausente.", rawResponse: data }),
-        { status: 502, headers: corsHeaders10 }
-      );
-    }
-    const pixCode = extractPixCode4(data);
-    if (!pixCode) {
-      return new Response(
-        JSON.stringify({ error: "QR Code PIX n\xE3o gerado.", rawResponse: data }),
-        { status: 502, headers: corsHeaders10 }
-      );
-    }
-    const qrCodeBase64 = extractQrImage2(data);
-    const qrCodeImage = data.qr_code_url || data.pix?.qr_code_url || data.data?.qr_code_url || `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`;
-    return new Response(
-      JSON.stringify({
-        transactionId: String(transactionId),
-        gateway: "venuspay_pix",
-        status: String(data.status || data.data?.status || "pending").toLowerCase(),
-        pixCode,
-        qrCodeBase64: qrCodeBase64 || null,
-        qrCodeImage,
-        expiresAt: data.expiration_date || data.expires_at || data.pix?.expiration_date || null
-      }),
-      { status: 200, headers: corsHeaders10 }
-    );
-  } catch (err) {
-    console.error("[VENUSPAY_PIX] Exce\xE7\xE3o na requisi\xE7\xE3o:", err?.message);
-    return new Response(
-      JSON.stringify({ error: "Erro de comunica\xE7\xE3o com o gateway." }),
-      { status: 502, headers: corsHeaders10 }
-    );
-  }
-}
-async function statusPixVenuspay2(context, corsHeaders10, transactionId) {
-  const { env } = context;
-  const secretKey = env?.VENUS_PAY_SECRET_KEY || "";
-  try {
-    const headers6 = {
-      Accept: "application/json",
-      ...secretKey ? { Authorization: `Bearer ${secretKey}`, "x-api-key": secretKey } : {}
-    };
-    const res = await fetch(
-      `${STATUS_URL2}?transaction_id=${encodeURIComponent(transactionId)}`,
-      { method: "GET", headers: headers6 }
-    );
-    const data = await res.json();
-    if (res.status === 404) {
-      return new Response(
-        JSON.stringify({ transactionId, gateway: "venuspay_pix", status: "pending", isPaid: false, isExpired: false, payedAt: null }),
-        { status: 200, headers: corsHeaders10 }
-      );
-    }
-    if (!res.ok) {
-      return new Response(
-        JSON.stringify({ error: "Erro ao consultar gateway.", details: data }),
-        { status: 502, headers: corsHeaders10 }
-      );
-    }
-    const rawStatus = String(data.status || data.data?.status || "pending").toLowerCase();
-    const isPaid = rawStatus === "approved" || rawStatus === "paid" || data.success === true && (data.paid === true || rawStatus === "approved");
-    const isExpired = rawStatus === "expired" || rawStatus === "failed" || rawStatus === "refunded" || rawStatus === "chargeback" || rawStatus === "canceled" || rawStatus === "cancelled";
-    return new Response(
-      JSON.stringify({
-        transactionId,
-        gateway: "venuspay_pix",
-        status: isPaid ? "approved" : rawStatus,
-        isPaid,
-        isExpired,
-        payedAt: isPaid ? data.paid_at || data.data?.paid_at || data.created_at || null : null
-      }),
-      { status: 200, headers: corsHeaders10 }
-    );
-  } catch {
-    return new Response(
-      JSON.stringify({ error: "Erro ao consultar status do pagamento." }),
-      { status: 502, headers: corsHeaders10 }
-    );
   }
 }
 
@@ -3435,16 +3549,16 @@ var corsHeaders = {
 var LIMITE_TENTATIVAS = 5;
 var JANELA_SEGUNDOS = 3600;
 async function onRequest3(context) {
-  const { request: request2, env } = context;
-  if (request2.method === "OPTIONS") {
+  const { request: request3, env } = context;
+  if (request3.method === "OPTIONS") {
     return new Response("", { status: 204, headers: corsHeaders });
   }
-  if (request2.method !== "POST") {
+  if (request3.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: corsHeaders });
   }
   let body;
   try {
-    body = await request2.json();
+    body = await request3.json();
   } catch {
     return new Response(JSON.stringify({ error: "JSON invalido." }), { status: 400, headers: corsHeaders });
   }
@@ -3476,7 +3590,7 @@ async function onRequest3(context) {
       { status: 503, headers: corsHeaders }
     );
   }
-  const ip = request2.headers.get("CF-Connecting-IP") || request2.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() || "unknown";
+  const ip = request3.headers.get("CF-Connecting-IP") || request3.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() || "unknown";
   const kvKey = `ratelimit:pix:v2:${ip}`;
   let currentCount = 0;
   if (env.PIX_RATELIMIT) {
@@ -3513,7 +3627,7 @@ async function onRequest3(context) {
       }
     }
     try {
-      await sendUtmifyOrder(env, {
+      if (purchaseDestination(env) === "utmify") await sendUtmifyOrder(env, {
         orderId: result.transactionId,
         status: "waiting_payment",
         paymentMethod: "pix",
@@ -3535,44 +3649,20 @@ async function onRequest3(context) {
   return response;
 }
 
-// sites/bella/functions/_lib/pix-gateway-status.js
-var headers3 = { "Content-Type": "application/json" };
-async function queryPixGatewayStatus2(env, transactionId, gateway) {
-  let response;
-  const context = { env };
-  if (gateway === "masterfy") response = await statusPixMasterfy2(context, headers3, transactionId);
-  else if (gateway === "umbrellapag") response = await statusPixUmbrellapag2(context, headers3, transactionId);
-  else if (gateway === "venuspay_pix") response = await statusPixVenuspay2(context, headers3, transactionId);
-  else if (gateway === "unipay") response = await statusPixUnipay(context, headers3, transactionId);
-  else if (gateway === "invictuspay") response = await statusPixInvictuspay(context, headers3, transactionId);
-  else if (gateway === "flevopay") response = await statusPixFlevopay(context, headers3, transactionId);
-  else response = await statusPixIronpay2(context, headers3, transactionId);
-  const data = await response.json();
-  if (!response.ok) throw new Error(data?.error || `Gateway respondeu ${response.status}.`);
-  const normalized = String(data.status || "").trim().toLowerCase();
-  return {
-    ...data,
-    status: normalized,
-    isPaid: Boolean(data.isPaid) || ["paid", "approved", "pago"].includes(normalized),
-    isExpired: Boolean(data.isExpired) || ["expired", "cancelled", "canceled", "refunded"].includes(normalized),
-    paidAt: data.paidAt || data.payedAt || null
-  };
-}
-
 // sites/bella/functions/api/pix/status.js
 var corsHeaders2 = {
   "Access-Control-Allow-Origin": "*",
   "Content-Type": "application/json"
 };
 async function onRequest4(context) {
-  const { request: request2 } = context;
-  if (request2.method === "OPTIONS") {
+  const { request: request3 } = context;
+  if (request3.method === "OPTIONS") {
     return new Response("", { status: 204, headers: corsHeaders2 });
   }
-  if (request2.method !== "GET") {
+  if (request3.method !== "GET") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: corsHeaders2 });
   }
-  const url = new URL(request2.url);
+  const url = new URL(request3.url);
   const transactionId = url.searchParams.get("transactionId") || url.searchParams.get("id");
   if (!transactionId) {
     return new Response(JSON.stringify({ error: "transactionId obrigatorio" }), { status: 400, headers: corsHeaders2 });
@@ -3584,9 +3674,13 @@ async function onRequest4(context) {
   }
   try {
     const verified = await queryPixGatewayStatus2(context.env, transactionId, activeGateway);
+    if (verified.isRefunded) {
+      await updatePixLeadStatus(context.env, transactionId, "reembolsado");
+      return Response.json({ status: "refunded", isPaid: false }, { headers: corsHeaders2 });
+    }
     if (verified.isPaid) {
       const fulfillment = await fulfillPaidPixLead(context.env, transactionId, verified.paidAt);
-      return new Response(JSON.stringify({ ...verified, status: "paid", ...fulfillment }), { status: 200, headers: corsHeaders2 });
+      return new Response(JSON.stringify({ ...verified, status: "paid", ...fulfillment, purchaseDestination: purchaseDestination(context.env), eventId: transactionId + "_purchase" }), { status: 200, headers: corsHeaders2 });
     }
     if (verified.isExpired) {
       await updatePixLeadStatus(context.env, transactionId, "expirado");
@@ -3606,15 +3700,15 @@ var corsHeaders3 = {
   "Content-Type": "application/json"
 };
 async function onRequest5(context) {
-  const { request: request2 } = context;
-  if (request2.method === "OPTIONS") {
+  const { request: request3 } = context;
+  if (request3.method === "OPTIONS") {
     return new Response("", { status: 204, headers: corsHeaders3 });
   }
-  if (request2.method !== "POST") {
+  if (request3.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: corsHeaders3 });
   }
   try {
-    const notification = await request2.json();
+    const notification = await request3.json();
     const isUnipay = String(notification.event || "").startsWith("charge.") && !!notification.charge?.id;
     const isInvictuspay = String(notification.event || "").startsWith("EVENT:CHARGE_") && !!notification.transaction?.id;
     const isIronpay = !!(notification.transaction_hash || notification.payment_status);
@@ -3633,7 +3727,8 @@ async function onRequest5(context) {
     if (paymentId) {
       try {
         const verified = await queryPixGatewayStatus2(context.env, String(paymentId), gateway);
-        if (verified.isPaid) await fulfillPaidPixLead(context.env, String(paymentId), verified.paidAt);
+        if (verified.isRefunded) await updatePixLeadStatus(context.env, String(paymentId), "reembolsado");
+        else if (verified.isPaid) await fulfillPaidPixLead(context.env, String(paymentId), verified.paidAt);
         else if (verified.isExpired) await updatePixLeadStatus(context.env, String(paymentId), "expirado");
       } catch (error) {
         console.error("[pix/webhook] Falha ao validar pagamento no gateway:", error?.message);
@@ -3666,11 +3761,11 @@ var corsHeaders4 = {
   "Content-Type": "application/json"
 };
 async function onRequest6(context) {
-  const { request: request2, env } = context;
-  if (request2.method === "OPTIONS") {
+  const { request: request3, env } = context;
+  if (request3.method === "OPTIONS") {
     return new Response("", { status: 204, headers: corsHeaders4 });
   }
-  if (request2.method !== "POST") {
+  if (request3.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
       headers: corsHeaders4
@@ -3701,7 +3796,7 @@ async function onRequest6(context) {
   }
   let body;
   try {
-    body = await request2.json();
+    body = await request3.json();
   } catch {
     return new Response(JSON.stringify({ error: "JSON inv\xE1lido." }), {
       status: 400,
@@ -3740,7 +3835,7 @@ async function onRequest6(context) {
     return new Response(JSON.stringify({ error: "Pedido inv\xE1lido ou j\xE1 processado." }), { status: 409, headers: corsHeaders4 });
   }
   if (useMasterfy) {
-    const clientIp = request2.headers.get("cf-connecting-ip") || "";
+    const clientIp = request3.headers.get("cf-connecting-ip") || "";
     return processCardMasterfy(env, corsHeaders4, order, body, { cpfFinal, phoneFinal, numParcelas, clientIp });
   }
   const expMonthRaw = String(card.expiryMonth || "").padStart(2, "0");
@@ -4008,11 +4103,11 @@ var corsHeaders5 = {
   "Content-Type": "application/json"
 };
 async function onRequest7(context) {
-  const { request: request2, env } = context;
-  if (request2.method === "OPTIONS") {
+  const { request: request3, env } = context;
+  if (request3.method === "OPTIONS") {
     return new Response("", { status: 204, headers: corsHeaders5 });
   }
-  const url = new URL(request2.url);
+  const url = new URL(request3.url);
   const id = url.searchParams.get("id");
   if (!id) {
     return new Response(JSON.stringify({ error: "id obrigat\xF3rio" }), {
@@ -4046,21 +4141,21 @@ async function onRequest7(context) {
     }
     const leads = await res.json();
     const leadStatus = Array.isArray(leads) && leads.length > 0 ? String(leads[0].status || "") : "";
-    let status;
+    let status2;
     if (leadStatus === "pago") {
-      status = "paid";
+      status2 = "paid";
     } else if (leadStatus === "cartao_recusado") {
-      status = "declined";
+      status2 = "declined";
     } else {
-      status = "pending";
+      status2 = "pending";
     }
     console.log(JSON.stringify({
       event: "VENUS_PAY_CARD_STATUS_CHECK",
       transactionId: id,
       leadStatus,
-      mappedStatus: status
+      mappedStatus: status2
     }));
-    return new Response(JSON.stringify({ status, rawStatus: leadStatus }), {
+    return new Response(JSON.stringify({ status: status2, rawStatus: leadStatus }), {
       status: 200,
       headers: corsHeaders5
     });
@@ -4075,9 +4170,9 @@ async function onRequest7(context) {
 // sites/bella/functions/api/card/config.js
 var corsHeaders6 = { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" };
 async function onRequest8(context) {
-  const { request: request2, env } = context;
-  if (request2.method === "OPTIONS") return new Response("", { status: 204, headers: corsHeaders6 });
-  if (request2.method !== "GET") return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: corsHeaders6 });
+  const { request: request3, env } = context;
+  if (request3.method === "OPTIONS") return new Response("", { status: 204, headers: corsHeaders6 });
+  if (request3.method !== "GET") return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: corsHeaders6 });
   try {
     const gateways3 = await listGateways(env);
     const cardGw = gateways3.find((g) => g.method === "card" && g.enabled) || null;
@@ -4099,7 +4194,7 @@ function settings(env) {
     key: String(env.SUPABASE_SERVICE_ROLE_KEY || "").trim()
   };
 }
-async function request(env, path, options = {}) {
+async function request2(env, path, options = {}) {
   const { url, key } = settings(env);
   if (!url || !key) throw new Error("Rastreamento n\xE3o configurado.");
   const response = await fetch(`${url}${path}`, {
@@ -4118,8 +4213,8 @@ async function onRequest9({ request: incoming, env }) {
       const codigo = new URL(incoming.url).searchParams.get("codigo")?.trim().toUpperCase().replace(/[-\s]/g, "") || "";
       if (!validCode(codigo)) return new Response(JSON.stringify({ error: "C\xF3digo inv\xE1lido." }), { status: 400, headers: HEADERS });
       const [originResponse, leadResponse] = await Promise.all([
-        request(env, `/rest/v1/rastreio_origem?codigo=eq.${encodeURIComponent(codigo)}&select=origem_at&limit=1`),
-        request(env, `/rest/v1/leads?codigo_rastreio=eq.${encodeURIComponent(codigo)}&select=nome,cidade,estado,cep,rua,numero,complemento,bairro&limit=1`)
+        request2(env, `/rest/v1/rastreio_origem?codigo=eq.${encodeURIComponent(codigo)}&select=origem_at&limit=1`),
+        request2(env, `/rest/v1/leads?codigo_rastreio=eq.${encodeURIComponent(codigo)}&select=nome,cidade,estado,cep,rua,numero,complemento,bairro&limit=1`)
       ]);
       const [origins, leads] = await Promise.all([originResponse.json(), leadResponse.json()]);
       if (!origins?.[0]?.origem_at) return new Response(JSON.stringify({ found: false }), { headers: HEADERS });
@@ -4136,13 +4231,13 @@ async function onRequest9({ request: incoming, env }) {
       const objectPath = `${codigo}/${Date.now()}-${safeName}`;
       const encodedPath = objectPath.split("/").map(encodeURIComponent).join("/");
       const { url } = settings(env);
-      await request(env, `/storage/v1/object/comprovantes/${encodedPath}`, {
+      await request2(env, `/storage/v1/object/comprovantes/${encodedPath}`, {
         method: "POST",
         headers: { "Content-Type": file.type || "application/octet-stream", "x-upsert": "true" },
         body: file
       });
       const publicUrl = `${url}/storage/v1/object/public/comprovantes/${encodedPath}`;
-      await request(env, "/rest/v1/comprovantes_taxa", {
+      await request2(env, "/rest/v1/comprovantes_taxa", {
         method: "POST",
         headers: { "Content-Type": "application/json", Prefer: "return=minimal" },
         body: JSON.stringify({ tracking_code: codigo, file_url: publicUrl, file_name: file.name })
@@ -4156,9 +4251,9 @@ async function onRequest9({ request: incoming, env }) {
 }
 
 // sites/bella/functions/api/marketing-config.js
-function onRequest10({ request: request2, env }) {
+function onRequest10({ request: request3, env }) {
   const headers6 = { "Content-Type": "application/json", "Cache-Control": "no-store" };
-  if (request2.method !== "GET") {
+  if (request3.method !== "GET") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: headers6 });
   }
   const pixelId = FACEBOOK_PIXEL_ID;
@@ -4170,8 +4265,8 @@ var headers4 = {
   "Content-Type": "application/json",
   "Cache-Control": "no-store"
 };
-async function onRequest11({ request: request2, env }) {
-  if (request2.method !== "GET") {
+async function onRequest11({ request: request3, env }) {
+  if (request3.method !== "GET") {
     return new Response(JSON.stringify({ ok: false, error: "Method not allowed" }), { status: 405, headers: headers4 });
   }
   const requiredServerConfig = {
@@ -4213,9 +4308,9 @@ var corsHeaders7 = {
   "Content-Type": "application/json"
 };
 async function onRequest12(context) {
-  const { request: request2, env } = context;
-  if (request2.method === "OPTIONS") return new Response("", { status: 204, headers: corsHeaders7 });
-  if (request2.method !== "POST") return new Response(JSON.stringify({ error: "POST only" }), { status: 405, headers: corsHeaders7 });
+  const { request: request3, env } = context;
+  if (request3.method === "OPTIONS") return new Response("", { status: 204, headers: corsHeaders7 });
+  if (request3.method !== "POST") return new Response(JSON.stringify({ error: "POST only" }), { status: 405, headers: corsHeaders7 });
   const RESEND_API_KEY = env.RESEND_API_KEY;
   const RESEND_FROM_EMAIL = env.RESEND_FROM_EMAIL;
   if (!RESEND_API_KEY) {
@@ -4226,7 +4321,7 @@ async function onRequest12(context) {
   }
   let payload;
   try {
-    payload = await request2.json();
+    payload = await request3.json();
   } catch {
     return new Response(JSON.stringify({ error: "JSON invalido" }), { status: 400, headers: corsHeaders7 });
   }
@@ -4324,8 +4419,8 @@ var corsHeaders8 = {
   "Access-Control-Allow-Origin": "*",
   "Content-Type": "application/json"
 };
-function buildEmail1(primeiroNome, localidade, cidadeFormatada, produtos, valorFormatado, ctaLabel, storeUrl, status) {
-  const introducao = status === "pix_gerado" ? "Seu PIX foi gerado, mas o pagamento ainda n\xE3o caiu. Seu pedido continua reservado \u2014 mas s\xF3 por pouco tempo." : "Voc\xEA quase finalizou. Seu pedido ainda est\xE1 guardado aqui pra voc\xEA.";
+function buildEmail1(primeiroNome, localidade, cidadeFormatada, produtos, valorFormatado, ctaLabel, storeUrl, status2) {
+  const introducao = status2 === "pix_gerado" ? "Seu PIX foi gerado, mas o pagamento ainda n\xE3o caiu. Seu pedido continua reservado \u2014 mas s\xF3 por pouco tempo." : "Voc\xEA quase finalizou. Seu pedido ainda est\xE1 guardado aqui pra voc\xEA.";
   const desejoComCidade = cidadeFormatada ? `Confirme agora e seu kit sai daqui direto pra <strong>${cidadeFormatada}</strong> \u2014 entrega garantida em <strong>at\xE9 2 dias \xFAteis</strong>, com rastreio do come\xE7o ao fim.` : `Confirme agora e seu kit chega onde voc\xEA est\xE1 \u2014 entrega garantida em <strong>at\xE9 2 dias \xFAteis</strong>, com rastreio do come\xE7o ao fim.`;
   return `
     <p style="margin:0 0 16px;font-size:15px;color:#111827;font-weight:700;">Oi, ${primeiroNome}! \u{1F44B}</p>
@@ -4423,9 +4518,9 @@ function buildEmail3(primeiroNome, localidade, cidadeFormatada, produtos, valorF
   `;
 }
 async function onRequest13(context) {
-  const { request: request2, env } = context;
-  if (request2.method === "OPTIONS") return new Response("", { status: 204, headers: corsHeaders8 });
-  if (request2.method !== "POST") return new Response(JSON.stringify({ error: "POST only" }), { status: 405, headers: corsHeaders8 });
+  const { request: request3, env } = context;
+  if (request3.method === "OPTIONS") return new Response("", { status: 204, headers: corsHeaders8 });
+  if (request3.method !== "POST") return new Response(JSON.stringify({ error: "POST only" }), { status: 405, headers: corsHeaders8 });
   const RESEND_API_KEY = env.RESEND_API_KEY;
   const RESEND_FROM_EMAIL = env.RESEND_FROM_EMAIL;
   if (!RESEND_API_KEY) {
@@ -4436,7 +4531,7 @@ async function onRequest13(context) {
   }
   let body;
   try {
-    body = await request2.json();
+    body = await request3.json();
   } catch {
     return new Response(JSON.stringify({ error: "JSON invalido" }), { status: 400, headers: corsHeaders8 });
   }
@@ -4448,7 +4543,7 @@ async function onRequest13(context) {
     produtos,
     valor,
     emailNum,
-    status,
+    status: status2,
     storeUrl
   } = body;
   if (!emailCliente) {
@@ -4474,7 +4569,7 @@ async function onRequest13(context) {
     corpoHtml = buildEmail2(primeiroNome, localidade, cidadeFormatada, produtos, valorFormatado, ctaLabel, url);
   } else {
     assunto = cidadeFormatada ? `\u2728 ${primeiroNome}, falta 1 minuto \u2014 seu kit chega em 2 dias em ${cidadeFormatada}!` : `\u2728 ${primeiroNome}, seu kit chega em 2 dias \u2014 garanta agora!`;
-    corpoHtml = buildEmail1(primeiroNome, localidade, cidadeFormatada, produtos, valorFormatado, ctaLabel, url, status);
+    corpoHtml = buildEmail1(primeiroNome, localidade, cidadeFormatada, produtos, valorFormatado, ctaLabel, url, status2);
   }
   const headerSubtitles = {
     1: cidadeFormatada ? `Seu kit chega em ${cidadeFormatada} em 2 dias. \u26A1` : "Entrega em 2 dias, garantida. S\xF3 falta 1 clique. \u26A1",
@@ -4583,13 +4678,13 @@ async function supabaseFetch2(supabaseUrl, supabaseKey, path, options = {}) {
   }
 }
 async function claim(supabaseUrl, supabaseKey, leadId, conditionQs, patch) {
-  const { status, body } = await supabaseFetch2(
+  const { status: status2, body } = await supabaseFetch2(
     supabaseUrl,
     supabaseKey,
     `/rest/v1/leads?id=eq.${leadId}&${conditionQs}`,
     { method: "PATCH", body: JSON.stringify(patch) }
   );
-  return status < 400 && Array.isArray(body) && body.length > 0;
+  return status2 < 400 && Array.isArray(body) && body.length > 0;
 }
 async function enviarEmail(SITE_URL, lead, emailNum) {
   try {
@@ -4614,12 +4709,12 @@ async function enviarEmail(SITE_URL, lead, emailNum) {
   }
 }
 async function onRequest14(context) {
-  const { request: request2, env } = context;
-  if (request2.method === "OPTIONS") return new Response("", { status: 204, headers: corsHeaders9 });
+  const { request: request3, env } = context;
+  if (request3.method === "OPTIONS") return new Response("", { status: 204, headers: corsHeaders9 });
   try {
     const CRON_SECRET = env.CRON_SECRET;
     if (CRON_SECRET) {
-      const provided = request2.headers.get("x-cron-secret");
+      const provided = request3.headers.get("x-cron-secret");
       if (provided !== CRON_SECRET) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders9 });
       }
@@ -4789,10 +4884,10 @@ function timingSafeEqual3(a, b) {
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
 }
-async function verifyAdminToken2(request2, env) {
+async function verifyAdminToken2(request3, env) {
   const secret = env.ADMIN_SESSION_SECRET;
   if (!secret) return { valid: false, error: "Servidor n\xE3o configurado." };
-  const auth = request2.headers.get("Authorization") ?? "";
+  const auth = request3.headers.get("Authorization") ?? "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : null;
   if (!token) return { valid: false, error: "N\xE3o autorizado." };
   const dot = token.lastIndexOf(".");
@@ -4817,11 +4912,11 @@ async function verifyAdminToken2(request2, env) {
 
 // sites/bella/functions/api/reconcile-payments.js
 var headers5 = { "Content-Type": "application/json", "Cache-Control": "no-store" };
-var json2 = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: headers5 });
-async function onRequest15({ request: request2, env }) {
-  if (request2.method !== "POST") return json2({ error: "Method not allowed" }, 405);
-  const cronAuthorized = Boolean(env.CRON_SECRET && request2.headers.get("x-cron-secret") === env.CRON_SECRET);
-  const adminAuthorized = (await verifyAdminToken2(request2, env)).valid;
+var json2 = (body, status2 = 200) => new Response(JSON.stringify(body), { status: status2, headers: headers5 });
+async function onRequest15({ request: request3, env }) {
+  if (request3.method !== "POST") return json2({ error: "Method not allowed" }, 405);
+  const cronAuthorized = Boolean(env.CRON_SECRET && request3.headers.get("x-cron-secret") === env.CRON_SECRET);
+  const adminAuthorized = (await verifyAdminToken2(request3, env)).valid;
   if (!cronAuthorized && !adminAuthorized) return json2({ error: "N\xE3o autorizado." }, 401);
   try {
     const leads = await listPendingPixLeads(env, 50);
@@ -4832,11 +4927,13 @@ async function onRequest15({ request: request2, env }) {
     for (const lead of leads) {
       try {
         const result = await queryPixGatewayStatus2(env, lead.transaction_id, lead.gateway || "ironpay");
-        if (result.isPaid) {
+        if (result.isRefunded) {
+          await updatePixLeadStatus(env, lead.transaction_id, "reembolsado");
+        } else if (result.isPaid) {
           await fulfillPaidPixLead(env, lead.transaction_id, result.paidAt);
           paid++;
         } else if (result.isExpired) {
-          await updateLeadById(env, lead.id, { status: "expirado" });
+          await updatePixLeadStatus(env, lead.transaction_id, "expirado");
           expired++;
         } else {
           pending++;
@@ -4875,7 +4972,7 @@ var gateways2 = [
   { id: "venuspay", name: "Venus Pay Cart\xE3o", method: "card" },
   { id: "masterfy_card", name: "MasterFy Cart\xE3o", method: "card" }
 ];
-var json3 = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
+var json3 = (data, status2 = 200) => new Response(JSON.stringify(data), { status: status2, headers: JSON_HEADERS });
 var digits3 = (value) => String(value || "").replace(/\D/g, "");
 var BUMPS = { necessaire: 19.47, siage: 32.63, wella: 45.7 };
 var COLORS = { Preta: 37.9, Branca: 37.9, Rosa: 37.9 };
@@ -4952,8 +5049,8 @@ async function listGateways2(env) {
     return { ...g, enabled: saved ? !!saved.enabled : g.id === "venuspay", configured: configured(env, g.id), updated_at: saved?.updated_at || null };
   });
 }
-async function requireAdmin(request2, env) {
-  const auth = await verifyAdminToken(request2, env);
+async function requireAdmin(request3, env) {
+  const auth = await verifyAdminToken(request3, env);
   return auth.valid ? null : json3({ error: auth.error || "N\xE3o autorizado." }, 401);
 }
 function validateBuyer(body) {
@@ -4981,22 +5078,22 @@ function validateShipping(shipping) {
   if (!/^[A-Za-z]{2}$/.test(String(address.uf || "").trim())) return "Informe a UF com duas letras.";
   return null;
 }
-function maskedGatewayContact(env, orderId, order, request2) {
+function maskedGatewayContact(env, orderId, order, request3) {
   if (String(env.GATEWAY_MASK_CUSTOMER || "").toLowerCase() === "false") return { email: order.email, phone: order.phone };
   let domain = String(env.GATEWAY_MASK_EMAIL_DOMAIN || "").trim().replace(/^@/, "");
   if (!domain) {
     try {
       domain = new URL(env.SITE_URL).hostname;
     } catch {
-      domain = new URL(request2.url).hostname;
+      domain = new URL(request3.url).hostname;
     }
   }
   const ref = String(orderId).replace(/[^a-z0-9]/gi, "").slice(0, 12).toLowerCase() || "cliente";
   const phone = digits3(env.GATEWAY_MASK_PHONE) || "11999999999";
   return { email: `pedido-${ref}@${domain}`, phone };
 }
-async function createPix(request2, env, ctx, siteVariant = "gokoco") {
-  const body = await request2.json().catch(() => null);
+async function createPix(request3, env, ctx, siteVariant = "gokoco") {
+  const body = await request3.json().catch(() => null);
   if (body?.client) body.client.email = normalizeBuyerEmail(body.client.email);
   const invalid = validateBuyer(body);
   if (invalid) return json3({ message: invalid, code: "invalid_document" }, 400);
@@ -5029,7 +5126,7 @@ async function createPix(request2, env, ctx, siteVariant = "gokoco") {
   const active = (await listGateways2(env)).filter((g) => g.enabled && g.method === "pix");
   if (active.length !== 1) return json3({ message: "Selecione um gateway PIX no painel admin." }, 503);
   if (!active[0].configured) return json3({ message: "O gateway PIX selecionado precisa de uma chave de API." }, 503);
-  const ip = request2.headers.get("CF-Connecting-IP") || "unknown";
+  const ip = request3.headers.get("CF-Connecting-IP") || "unknown";
   const ipKey = `pix:${ip}`;
   const hashBytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${env.ADMIN_SESSION_SECRET || ""}:${ip}`));
   const ipHash = Array.from(new Uint8Array(hashBytes), (b) => b.toString(16).padStart(2, "0")).join("");
@@ -5051,7 +5148,7 @@ async function createPix(request2, env, ctx, siteVariant = "gokoco") {
     amount: await nextPixAmount(env, cartTotal(body.cart)),
     products: Array.isArray(body.products) ? body.products.slice(0, 10) : [],
     shipping,
-    tracking: { ...await recoverCustomerAttribution(env, db, capturePurchaseTracking(request2, body), body.client), site_variant: siteVariant },
+    tracking: { ...await recoverCustomerAttribution(env, db, capturePurchaseTracking(request3, body), body.client), site_variant: siteVariant },
     gateway: active[0].id,
     client_ip_hash: ipHash,
     status: "creating"
@@ -5059,7 +5156,7 @@ async function createPix(request2, env, ctx, siteVariant = "gokoco") {
   const saved = previous[0] ? await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(previous[0].id)}&status=eq.failed&select=id`, "PATCH", { ...order, updated_at: (/* @__PURE__ */ new Date()).toISOString() }) : await db(env, "gokoco_orders", "?select=id", "POST", order);
   const id = saved?.[0]?.id;
   if (!id) return json3({ message: "A cobran\xE7a j\xE1 est\xE1 em processamento. Aguarde um momento." }, 409);
-  const gatewayContact = maskedGatewayContact(env, id, order, request2);
+  const gatewayContact = maskedGatewayContact(env, id, order, request3);
   const payload = {
     amount: order.amount,
     name: order.name,
@@ -5078,7 +5175,7 @@ async function createPix(request2, env, ctx, siteVariant = "gokoco") {
       zipCode: shipping.cep
     }
   };
-  const context = { request: request2, env };
+  const context = { request: request3, env };
   const headers6 = { "Content-Type": "application/json" };
   const provider = active[0].id;
   const result = provider === "masterfy" ? await createPixMasterfy(context, headers6, payload) : provider === "umbrellapag" ? await createPixUmbrellapag(context, headers6, payload) : provider === "venuspay_pix" ? await createPixVenuspay(context, headers6, payload) : provider === "unipay" ? await createPixUnipay(context, headers6, payload) : provider === "invictuspay" ? await createPixInvictuspay(context, headers6, payload) : provider === "flevopay" ? await createPixFlevopay(context, headers6, payload) : await createPixIronpay(context, headers6, payload);
@@ -5113,8 +5210,8 @@ async function createPix(request2, env, ctx, siteVariant = "gokoco") {
   }
   return json3({ copyPaste: payment.pixCode, qrCode: qr, transactionId: payment.transactionId, gatewayTransactionId: payment.transactionId, orderId: id, amount: order.amount });
 }
-async function createMarketPix(request2, env, ctx) {
-  const body = await request2.json().catch(() => null);
+async function createMarketPix(request3, env, ctx) {
+  const body = await request3.json().catch(() => null);
   const quantity = Number(body?.quantity);
   if (!body || !Number.isInteger(quantity) || quantity < 1 || quantity > 10) return json3({ error: "Quantidade inv\xE1lida." }, 400);
   const adapted = {
@@ -5135,7 +5232,7 @@ async function createMarketPix(request2, env, ctx) {
     tracking: body.tracking || {},
     fb: body.fb || {}
   };
-  const internal = new Request(request2, { body: JSON.stringify(adapted) });
+  const internal = new Request(request3, { body: JSON.stringify(adapted) });
   const result = await createPix(internal, env, ctx, "mercado_livre");
   const data = await result.json();
   if (!result.ok) return json3({ error: data.message || data.error || "N\xE3o foi poss\xEDvel gerar o PIX." }, result.status);
@@ -5151,13 +5248,13 @@ function bellaSiteRequest(url, env) {
   const hostname = String(env.BELLA_HOSTNAME || "").trim().toLowerCase();
   return hostname && url.hostname.toLowerCase() === hostname || url.pathname === "/video" || url.pathname.startsWith("/video/");
 }
-function bellaEnvironment(env, request2) {
+function bellaEnvironment(env, request3) {
   const override = Object.fromEntries(Object.keys(env).filter((key) => key.startsWith("BELLA_") && env[key]).map((key) => [key.slice("BELLA_".length), env[key]]));
   return {
     ...env,
     ...override,
     SITE_VARIANT: "video",
-    SITE_URL: env.BELLA_SITE_URL || `${String(env.SITE_URL || new URL(request2.url).origin).replace(/\/+$/, "")}/video`
+    SITE_URL: env.BELLA_SITE_URL || `${String(env.SITE_URL || new URL(request3.url).origin).replace(/\/+$/, "")}/video`
   };
 }
 var bellaRoutes = {
@@ -5178,23 +5275,23 @@ var bellaRoutes = {
   "/api/fb-purchase": retiredPurchaseRoute,
   "/api/utmify-order": retiredPurchaseRoute
 };
-async function bellaRoute(path, request2, env, ctx) {
+async function bellaRoute(path, request3, env, ctx) {
   const handler = bellaRoutes[path];
   if (!handler) return null;
-  const url = new URL(request2.url);
+  const url = new URL(request3.url);
   url.pathname = path;
-  return handler({ request: new Request(url, request2), env: bellaEnvironment(env, request2), waitUntil: ctx?.waitUntil?.bind(ctx) });
+  return handler({ request: new Request(url, request3), env: bellaEnvironment(env, request3), waitUntil: ctx?.waitUntil?.bind(ctx) });
 }
-async function adminBellaOrders(request2, env) {
-  const denied = await requireAdmin(request2, env);
+async function adminBellaOrders(request3, env) {
+  const denied = await requireAdmin(request3, env);
   if (denied) return denied;
-  const bella = bellaEnvironment(env, request2);
+  const bella = bellaEnvironment(env, request3);
   const base = String(bella.SUPABASE_URL || "").replace(/\/+$/, "");
   const key = String(bella.SUPABASE_SERVICE_ROLE_KEY || "");
   if (!base || !key) return json3({ error: "Banco Bella Mix n\xE3o configurado." }, 503);
   const headers6 = { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json", Prefer: "return=representation" };
-  if (request2.method === "GET") {
-    const offset = Number(new URL(request2.url).searchParams.get("offset") || 0);
+  if (request3.method === "GET") {
+    const offset = Number(new URL(request3.url).searchParams.get("offset") || 0);
     if (!Number.isSafeInteger(offset) || offset < 0 || offset > 1e5) return json3({ error: "P\xE1gina inv\xE1lida." }, 400);
     const missing = await fetch(`${base}/rest/v1/leads?status=eq.pago&codigo_rastreio=is.null&produtos=not.ilike.*Taxa*&select=id,nome&order=created_at.desc&limit=5`, { headers: headers6 });
     if (missing.ok) {
@@ -5211,8 +5308,8 @@ async function adminBellaOrders(request2, env) {
     if (!rows.ok) return json3({ error: "N\xE3o foi poss\xEDvel listar os pedidos Bella Mix." }, 502);
     return json3({ orders: (await rows.json()).map(({ card_encriptado, ...order }) => ({ ...order, cardSummary: safeCardSummary(card_encriptado), cardEncrypted: !!card_encriptado && !safeCardSummary(card_encriptado), siteVariant: order.tracking?.site_variant === "video" ? "video" : "bella_legacy" })) });
   }
-  if (request2.method === "PATCH") {
-    const body = await request2.json().catch(() => ({}));
+  if (request3.method === "PATCH") {
+    const body = await request3.json().catch(() => ({}));
     if (!/^[0-9a-f-]{36}$/i.test(String(body.id || ""))) return json3({ error: "Pedido inv\xE1lido." }, 400);
     if (body.mark_paid) {
       const leadRows = await fetch(`${base}/rest/v1/leads?id=eq.${encodeURIComponent(body.id)}&select=id,produtos,status,tracking&limit=1`, { headers: headers6 });
@@ -5235,13 +5332,13 @@ async function adminBellaOrders(request2, env) {
   }
   return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
 }
-async function adminBellaCard(request2, env) {
-  const denied = await requireAdmin(request2, env);
+async function adminBellaCard(request3, env) {
+  const denied = await requireAdmin(request3, env);
   if (denied) return denied;
-  if (request2.method !== "GET") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
-  const id = String(new URL(request2.url).searchParams.get("id") || "");
+  if (request3.method !== "GET") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
+  const id = String(new URL(request3.url).searchParams.get("id") || "");
   if (!/^[0-9a-f-]{36}$/i.test(id)) return json3({ error: "Pedido inv\xE1lido." }, 400);
-  const bella = bellaEnvironment(env, request2);
+  const bella = bellaEnvironment(env, request3);
   const base = String(bella.SUPABASE_URL || "").replace(/\/+$/, "");
   const key = String(bella.SUPABASE_SERVICE_ROLE_KEY || "");
   if (!base || !key) return json3({ error: "Banco Bella Mix n\xE3o configurado." }, 503);
@@ -5268,11 +5365,11 @@ async function adminBellaCard(request2, env) {
     return json3({ error: "N\xE3o foi poss\xEDvel descriptografar o cart\xE3o. O dado pode estar corrompido." }, 422);
   }
 }
-async function adminGokocoCard(request2, env) {
-  const denied = await requireAdmin(request2, env);
+async function adminGokocoCard(request3, env) {
+  const denied = await requireAdmin(request3, env);
   if (denied) return denied;
-  if (request2.method !== "GET") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
-  const id = String(new URL(request2.url).searchParams.get("id") || "");
+  if (request3.method !== "GET") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
+  const id = String(new URL(request3.url).searchParams.get("id") || "");
   if (!/^[0-9a-f-]{36}$/i.test(id)) return json3({ error: "Pedido inv\xE1lido." }, 400);
   const rows = await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(id)}&select=id,card_encriptado&limit=1`);
   const stored = String(rows[0]?.card_encriptado || "");
@@ -5296,13 +5393,13 @@ async function adminGokocoCard(request2, env) {
     return json3({ error: "N\xE3o foi poss\xEDvel descriptografar o cart\xE3o. O dado pode estar corrompido." }, 422);
   }
 }
-async function adminBellaTrackingEmail(request2, env) {
-  const denied = await requireAdmin(request2, env);
+async function adminBellaTrackingEmail(request3, env) {
+  const denied = await requireAdmin(request3, env);
   if (denied) return denied;
-  if (request2.method !== "POST") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
-  const { id } = await request2.json().catch(() => ({}));
+  if (request3.method !== "POST") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
+  const { id } = await request3.json().catch(() => ({}));
   if (!/^[0-9a-f-]{36}$/i.test(String(id || ""))) return json3({ error: "Pedido inv\xE1lido." }, 400);
-  const bella = bellaEnvironment(env, request2);
+  const bella = bellaEnvironment(env, request3);
   const base = String(bella.SUPABASE_URL || "").replace(/\/+$/, "");
   const key = String(bella.SUPABASE_SERVICE_ROLE_KEY || "");
   if (!base || !key) return json3({ error: "Banco Bella Mix n\xE3o configurado." }, 503);
@@ -5310,11 +5407,11 @@ async function adminBellaTrackingEmail(request2, env) {
   if (!found.ok) return json3({ error: "N\xE3o foi poss\xEDvel consultar o pedido." }, 502);
   const order = (await found.json())[0];
   if (!order?.email || !/^BM[A-Z0-9]{6,10}$/.test(String(order.codigo_rastreio || ""))) return json3({ error: "Salve um c\xF3digo de rastreio v\xE1lido antes de enviar o e-mail." }, 400);
-  const mail = new Request(request2, { body: JSON.stringify({ emailCliente: order.email, nomeCliente: order.nome, codigoRastreio: order.codigo_rastreio, numeroPedido: order.id }) });
+  const mail = new Request(request3, { body: JSON.stringify({ emailCliente: order.email, nomeCliente: order.nome, codigoRastreio: order.codigo_rastreio, numeroPedido: order.id }) });
   return onRequest12({ request: mail, env: bella });
 }
-async function siteAsset(request2, env) {
-  const url = new URL(request2.url);
+async function siteAsset(request3, env) {
+  const url = new URL(request3.url);
   const normalizedPath = url.pathname.replace(/\/$/, "").replace(/\.html$/, "");
   const catalogRoutes = {};
   for (const [prefix, theme] of [["", "original"], ["/tl", "tl"], ["/video", "bella"]]) {
@@ -5335,21 +5432,21 @@ async function siteAsset(request2, env) {
     "/video/pagamento-pincel": "pagamento"
   }[normalizedPath];
   if (upsell) {
-    if (!["GET", "HEAD"].includes(request2.method)) return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD" } });
+    if (!["GET", "HEAD"].includes(request3.method)) return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD" } });
     url.pathname = "/upsell-pages/" + upsell + ".txt";
-    const asset2 = await env.ASSETS.fetch(new Request(url, request2));
+    const asset2 = await env.ASSETS.fetch(new Request(url, request3));
     const headers7 = new Headers(asset2.headers);
     headers7.set("Content-Type", "text/html; charset=utf-8");
     headers7.set("X-Robots-Tag", "noindex, nofollow");
     return new Response(asset2.body, { status: asset2.status, headers: headers7 });
   }
   const site = marketSiteRequest(url, env) ? "tl" : bellaSiteRequest(url, env) ? "video" : null;
-  if (!site) return env.ASSETS.fetch(request2);
+  if (!site) return env.ASSETS.fetch(request3);
   let pathname = url.pathname.replace(new RegExp(`^/${site}(?=/|$)`), "") || "/";
   const spaRoute = !/\.[a-z0-9]+$/i.test(pathname) || pathname === "/index.html";
   if (spaRoute) pathname = "/__entry.txt";
   url.pathname = `/${site}${pathname}`;
-  const asset = await env.ASSETS.fetch(new Request(url, request2));
+  const asset = await env.ASSETS.fetch(new Request(url, request3));
   if (!spaRoute) return asset;
   const headers6 = new Headers(asset.headers);
   headers6.set("Content-Type", "text/html; charset=utf-8");
@@ -5391,8 +5488,8 @@ function cardAmountWithInterest(base, installments) {
   const total = n <= 3 ? Number(base) : Number(base) * Math.pow(1.0299, n);
   return Number(total.toFixed(2));
 }
-async function createCard(request2, env, ctx) {
-  const body = await request2.json().catch(() => null);
+async function createCard(request3, env, ctx) {
+  const body = await request3.json().catch(() => null);
   if (body?.client) body.client.email = normalizeBuyerEmail(body.client.email);
   const invalid = validateBuyer(body);
   if (invalid) return json3({ message: invalid, code: "invalid_document" }, 400);
@@ -5405,10 +5502,10 @@ async function createCard(request2, env, ctx) {
   if (!/^[a-f0-9-]{20,50}$/i.test(checkoutId)) return json3({ message: "Identificador de checkout inv\xE1lido." }, 400);
   const previous = await db(env, "gokoco_orders", `?checkout_id=eq.${encodeURIComponent(checkoutId)}&select=*&limit=1`);
   if (previous[0]) {
-    const status = previous[0].status;
+    const status2 = previous[0].status;
     const isPix = previous[0].gateway !== "masterfy_card";
     const age = Date.now() - (Date.parse(previous[0].created_at || "") || 0);
-    const stale = status === "expired" || status === "failed" || isPix && status === "pending" || status === "creating" && age > 2 * 60 * 1e3 || !isPix && status === "pending" && age > 10 * 60 * 1e3;
+    const stale = status2 === "expired" || status2 === "failed" || isPix && status2 === "pending" || status2 === "creating" && age > 2 * 60 * 1e3 || !isPix && status2 === "pending" && age > 10 * 60 * 1e3;
     if (stale) {
       const freed = await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(previous[0].id)}&status=eq.${previous[0].status}&select=id`, "PATCH", { status: "failed", updated_at: (/* @__PURE__ */ new Date()).toISOString() });
       if (freed.length) previous[0].status = "failed";
@@ -5421,7 +5518,7 @@ async function createCard(request2, env, ctx) {
   if (!active.length || active[0].id !== "masterfy_card" || !active[0].configured) {
     return json3({ message: "Pagamento por cart\xE3o indispon\xEDvel no momento." }, 503);
   }
-  const ip = request2.headers.get("CF-Connecting-IP") || "unknown";
+  const ip = request3.headers.get("CF-Connecting-IP") || "unknown";
   const ipKey = `card:${ip}`;
   const hashBytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${env.ADMIN_SESSION_SECRET || ""}:${ip}`));
   const ipHash = Array.from(new Uint8Array(hashBytes), (b) => b.toString(16).padStart(2, "0")).join("");
@@ -5439,7 +5536,7 @@ async function createCard(request2, env, ctx) {
     amount: cardAmountWithInterest(await nextPixAmount(env, cartTotal(body.cart)), body.installments),
     products: Array.isArray(body.products) ? body.products.slice(0, 10) : [],
     shipping,
-    tracking: { ...await recoverCustomerAttribution(env, db, capturePurchaseTracking(request2, body), body.client), site_variant: "gokoco" },
+    tracking: { ...await recoverCustomerAttribution(env, db, capturePurchaseTracking(request3, body), body.client), site_variant: "gokoco" },
     gateway: "masterfy_card",
     client_ip_hash: ipHash,
     status: "creating",
@@ -5462,7 +5559,7 @@ async function createCard(request2, env, ctx) {
   const id = saved?.[0]?.id;
   if (!id) return json3({ message: "A cobran\xE7a j\xE1 est\xE1 em processamento. Aguarde um momento." }, 409);
   if (env.PIX_RATELIMIT) await env.PIX_RATELIMIT.put(ipKey, String(Number(await env.PIX_RATELIMIT.get(ipKey) || 0) + 1), { expirationTtl: 3600 });
-  const gatewayContact = maskedGatewayContact(env, id, order, request2);
+  const gatewayContact = maskedGatewayContact(env, id, order, request3);
   const payload = {
     amount: order.amount,
     name: order.name,
@@ -5483,7 +5580,7 @@ async function createCard(request2, env, ctx) {
     },
     ip: ip !== "unknown" ? ip : void 0
   };
-  const result = await createCardMasterfy({ request: request2, env }, { "Content-Type": "application/json" }, payload);
+  const result = await createCardMasterfy({ request: request3, env }, { "Content-Type": "application/json" }, payload);
   const payment = await result.json().catch(() => ({}));
   const transactionId = payment.transactionId ? String(payment.transactionId) : null;
   if (!transactionId || payment.status === "error") {
@@ -5510,8 +5607,8 @@ async function createCard(request2, env, ctx) {
   }
   return json3({ status: "processing", transactionId, orderId: id, amount: order.amount });
 }
-async function statusPix(request2, env, ctx) {
-  const id = new URL(request2.url).searchParams.get("id");
+async function statusPix(request3, env, ctx) {
+  const id = new URL(request3.url).searchParams.get("id");
   if (!id || id.length > 150) return json3({ error: "Transa\xE7\xE3o inv\xE1lida." }, 400);
   const ids = id.split(",").slice(0, 2);
   let order = null;
@@ -5534,10 +5631,10 @@ async function statusPix(request2, env, ctx) {
     return json3({ status: "paid", isPaid: true, amount: Number(order.amount), trackingCode: shippingTracking2?.code || null, eventId: `pix_${order.id}`, purchaseDestination: purchaseDestination(env) });
   }
   const result = await queryPixGatewayStatus(env, order.transaction_id, order.gateway);
-  const status = result.isPaid ? "paid" : result.isRefunded ? "refunded" : result.isExpired ? "expired" : "pending";
-  if (status !== order.status) await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(order.id)}&status=eq.${encodeURIComponent(order.status)}`, "PATCH", { status, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
+  const status2 = result.isPaid ? "paid" : result.isRefunded ? "refunded" : result.isExpired ? "expired" : "pending";
+  if (status2 !== order.status) await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(order.id)}&status=eq.${encodeURIComponent(order.status)}`, "PATCH", { status: status2, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
   let shippingTracking = null;
-  if (status === "paid") {
+  if (status2 === "paid") {
     shippingTracking = await registerOrderTracking(env, order.id, result.paidAt || (/* @__PURE__ */ new Date()).toISOString()).catch((error) => {
       console.error("[tracking/status]", error.message);
       return null;
@@ -5545,7 +5642,7 @@ async function statusPix(request2, env, ctx) {
     await deliverPaidPurchase(env, db, order.id, result.paidAt || (/* @__PURE__ */ new Date()).toISOString()).catch((error) => console.error("[purchase/status]", error.message));
     await deliverPaidEmail(env, db, order.id, result.paidAt || (/* @__PURE__ */ new Date()).toISOString()).catch((error) => console.error("[email/status]", error.message));
   }
-  return json3({ status, isPaid: status === "paid", isExpired: result.isExpired, amount: Number(order.amount), trackingCode: shippingTracking?.code || null, eventId: `pix_${order.id}`, purchaseDestination: purchaseDestination(env) });
+  return json3({ status: status2, isPaid: status2 === "paid", isExpired: result.isExpired, amount: Number(order.amount), trackingCode: shippingTracking?.code || null, eventId: `pix_${order.id}`, purchaseDestination: purchaseDestination(env) });
 }
 function createTrackingCode() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -5564,8 +5661,8 @@ async function registerOrderTracking(env, orderId, paidAt) {
   const current = await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(orderId)}&select=tracking&limit=1`);
   return current[0]?.tracking?.shipping || null;
 }
-async function webhook(request2, env) {
-  const notification = await request2.json().catch(() => null);
+async function webhook(request3, env) {
+  const notification = await request3.json().catch(() => null);
   if (!notification) return json3({ received: true });
   const ids = [
     notification.charge?.id,
@@ -5611,9 +5708,9 @@ async function webhook(request2, env) {
     const manualRows = await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(order.id)}&select=tracking&limit=1`);
     if (manualRows[0]?.tracking?.manualPayment) continue;
     const verified = await queryPixGatewayStatus(env, order.transaction_id, order.gateway);
-    const status = verified.isRefunded ? "refunded" : verified.isPaid ? "paid" : order.status === "paid" ? "paid" : verified.isExpired ? "expired" : order.status;
-    if (status !== order.status) await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(order.id)}&status=eq.${encodeURIComponent(order.status)}`, "PATCH", { status, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
-    if (status === "paid") {
+    const status2 = verified.isRefunded ? "refunded" : verified.isPaid ? "paid" : order.status === "paid" ? "paid" : verified.isExpired ? "expired" : order.status;
+    if (status2 !== order.status) await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(order.id)}&status=eq.${encodeURIComponent(order.status)}`, "PATCH", { status: status2, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
+    if (status2 === "paid") {
       await registerOrderTracking(env, order.id, verified.paidAt || (order.status === "paid" ? void 0 : (/* @__PURE__ */ new Date()).toISOString()));
       const delivery = await deliverPaidPurchase(env, db, order.id, verified.paidAt || (order.status === "paid" ? void 0 : (/* @__PURE__ */ new Date()).toISOString()));
       await deliverPaidEmail(env, db, order.id, verified.paidAt).catch((error) => console.error("[email/webhook]", error.message));
@@ -5662,8 +5759,8 @@ function publicTrackingProducts(products2) {
   }
   return result;
 }
-async function publicOrderTracking(request2, env) {
-  const code = new URL(request2.url).searchParams.get("code")?.trim().toUpperCase() || "";
+async function publicOrderTracking(request3, env) {
+  const code = new URL(request3.url).searchParams.get("code")?.trim().toUpperCase() || "";
   if (!/^GK[A-HJ-NP-Z2-9]{10}$/.test(code)) return json3({ error: "C\xF3digo inv\xE1lido ou n\xE3o encontrado." }, 404);
   const rows = await db(env, "gokoco_orders", `?tracking->shipping->>code=eq.${encodeURIComponent(code)}&select=id,name,status,created_at,updated_at,products,shipping,tracking&limit=1`);
   const order = rows[0];
@@ -5679,14 +5776,14 @@ async function publicOrderTracking(request2, env) {
     reshipping: publicReshipping(env, order)
   });
 }
-async function adminUpdateOrderTracking(request2, env) {
-  const denied = await requireAdmin(request2, env);
+async function adminUpdateOrderTracking(request3, env) {
+  const denied = await requireAdmin(request3, env);
   if (denied) return denied;
-  if (request2.method !== "PATCH") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
-  const body = await request2.json().catch(() => ({}));
+  if (request3.method !== "PATCH") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
+  const body = await request3.json().catch(() => ({}));
   const id = String(body.id || "");
   const code = String(body.code || "").trim().toUpperCase();
-  const status = String(body.status || "");
+  const status2 = String(body.status || "");
   if (!/^[0-9a-f-]{36}$/i.test(id) || !/^GK[A-HJ-NP-Z2-9]{10}$/.test(code)) return json3({ error: "C\xF3digo de rastreio inv\xE1lido." }, 400);
   const stages = {
     confirmed: { label: "Pedido confirmado", detail: "Pagamento aprovado e pedido confirmado." },
@@ -5695,34 +5792,34 @@ async function adminUpdateOrderTracking(request2, env) {
     out_for_delivery: { label: "Saiu para entrega", detail: "Seu pedido est\xE1 a caminho do endere\xE7o informado." },
     delivered: { label: "Pedido entregue", detail: "A entrega foi conclu\xEDda." }
   };
-  if (!Object.hasOwn(stages, status)) return json3({ error: "Etapa de entrega inv\xE1lida." }, 400);
+  if (!Object.hasOwn(stages, status2)) return json3({ error: "Etapa de entrega inv\xE1lida." }, 400);
   const rows = await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(id)}&status=eq.paid&select=id,tracking&limit=1`);
   const order = rows[0];
   if (!order) return json3({ error: "Pedido pago n\xE3o encontrado." }, 404);
   const previous = order.tracking?.shipping || {};
   const previousStageIndex = ["confirmed", "preparing", "shipped", "out_for_delivery", "delivered"].indexOf(previous.status || "confirmed");
-  const requestedStageIndex = ["confirmed", "preparing", "shipped", "out_for_delivery", "delivered"].indexOf(status);
-  if (status !== "confirmed" && requestedStageIndex < previousStageIndex) return json3({ error: "A etapa s\xF3 pode avan\xE7ar. Escolha a etapa atual ou uma etapa posterior." }, 409);
-  if (status === "confirmed" && previous.status && previous.status !== "confirmed") return json3({ error: "O rastreio j\xE1 avan\xE7ou e n\xE3o pode voltar \xE0 confirma\xE7\xE3o." }, 409);
+  const requestedStageIndex = ["confirmed", "preparing", "shipped", "out_for_delivery", "delivered"].indexOf(status2);
+  if (status2 !== "confirmed" && requestedStageIndex < previousStageIndex) return json3({ error: "A etapa s\xF3 pode avan\xE7ar. Escolha a etapa atual ou uma etapa posterior." }, 409);
+  if (status2 === "confirmed" && previous.status && previous.status !== "confirmed") return json3({ error: "O rastreio j\xE1 avan\xE7ou e n\xE3o pode voltar \xE0 confirma\xE7\xE3o." }, 409);
   const tracking = {
     ...order.tracking || {},
     shipping: {
       ...previous,
       code: previous.code || code,
       created_at: previous.created_at || (/* @__PURE__ */ new Date()).toISOString(),
-      status,
-      events: status === "confirmed" ? [] : [...Array.isArray(previous.events) ? previous.events.filter((event) => event.status !== "confirmed") : [], { status, label: stages[status].label, detail: stages[status].detail, at: (/* @__PURE__ */ new Date()).toISOString() }]
+      status: status2,
+      events: status2 === "confirmed" ? [] : [...Array.isArray(previous.events) ? previous.events.filter((event) => event.status !== "confirmed") : [], { status: status2, label: stages[status2].label, detail: stages[status2].detail, at: (/* @__PURE__ */ new Date()).toISOString() }]
     }
   };
   const saved = await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(id)}&status=eq.paid&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=id`, "PATCH", { tracking, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
   if (!saved.length) return json3({ error: "O pedido mudou durante a atualiza\xE7\xE3o. Atualize a lista e tente novamente." }, 409);
   return json3({ ok: true, shipping: tracking.shipping });
 }
-async function adminManualPayment(request2, env) {
-  const denied = await requireAdmin(request2, env);
+async function adminManualPayment(request3, env) {
+  const denied = await requireAdmin(request3, env);
   if (denied) return denied;
-  if (request2.method !== "POST") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
-  const body = await request2.json().catch(() => ({}));
+  if (request3.method !== "POST") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
+  const body = await request3.json().catch(() => ({}));
   const id = String(body.id || "");
   if (!/^[0-9a-f-]{36}$/i.test(id)) return json3({ error: "Pedido inv\xE1lido." }, 400);
   const rows = await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(id)}&select=id,status,tracking&limit=1`);
@@ -5741,11 +5838,11 @@ async function adminManualPayment(request2, env) {
   await deliverPaidEmail(env, db, id).catch((error) => console.error("[email/admin]", error.message));
   return json3({ ok: true, shipping });
 }
-async function adminGenerateTracking(request2, env) {
-  const denied = await requireAdmin(request2, env);
+async function adminGenerateTracking(request3, env) {
+  const denied = await requireAdmin(request3, env);
   if (denied) return denied;
-  if (request2.method !== "POST") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
-  const body = await request2.json().catch(() => ({}));
+  if (request3.method !== "POST") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
+  const body = await request3.json().catch(() => ({}));
   const id = String(body.id || "");
   if (!/^[0-9a-f-]{36}$/i.test(id)) return json3({ error: "Pedido inv\xE1lido." }, 400);
   const rows = await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(id)}&status=eq.paid&select=id&limit=1`);
@@ -5755,14 +5852,14 @@ async function adminGenerateTracking(request2, env) {
   await deliverPaidEmail(env, db, id).catch((error) => console.error("[email/tracking]", error.message));
   return json3({ ok: true, shipping });
 }
-async function adminCreateExternalTracking(request2, env) {
-  const denied = await requireAdmin(request2, env);
+async function adminCreateExternalTracking(request3, env) {
+  const denied = await requireAdmin(request3, env);
   if (denied) return denied;
-  if (request2.method === "GET") {
+  if (request3.method === "GET") {
     const rows = await db(env, "gokoco_orders", "?gateway=eq.manual_tracking&select=id,created_at,tracking&order=created_at.desc&limit=30");
     return json3({ codes: rows.map((row) => ({ id: row.id, code: row.tracking?.shipping?.code, createdAt: row.created_at })).filter((row) => row.code) });
   }
-  if (request2.method !== "POST") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
+  if (request3.method !== "POST") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const code = createTrackingCode();
   const order = {
@@ -5784,12 +5881,12 @@ async function adminCreateExternalTracking(request2, env) {
   if (!saved.length) return json3({ error: "N\xE3o foi poss\xEDvel salvar o rastreio." }, 500);
   return json3({ ok: true, code, id: saved[0].id }, 201);
 }
-async function adminGateways(request2, env) {
-  const denied = await requireAdmin(request2, env);
+async function adminGateways(request3, env) {
+  const denied = await requireAdmin(request3, env);
   if (denied) return denied;
-  if (request2.method === "GET") return json3({ gateways: await listGateways2(env) });
-  if (request2.method !== "PATCH") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
-  const { id, enabled } = await request2.json().catch(() => ({}));
+  if (request3.method === "GET") return json3({ gateways: await listGateways2(env) });
+  if (request3.method !== "PATCH") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
+  const { id, enabled } = await request3.json().catch(() => ({}));
   if (!gateways2.some((g) => g.id === id) || typeof enabled !== "boolean") return json3({ error: "Gateway inv\xE1lido." }, 400);
   if (enabled && !configured(env, id)) return json3({ error: "Configure a chave deste gateway no Cloudflare antes de ativ\xE1-lo." }, 400);
   const gwMethod = gateways2.find((g) => g.id === id)?.method;
@@ -5802,11 +5899,11 @@ async function adminGateways(request2, env) {
   await db(env, "gokoco_gateways", "?on_conflict=id", "POST", { id, enabled, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
   return json3({ gateways: await listGateways2(env) });
 }
-async function adminOrders(request2, env) {
-  const denied = await requireAdmin(request2, env);
+async function adminOrders(request3, env) {
+  const denied = await requireAdmin(request3, env);
   if (denied) return denied;
-  if (request2.method !== "GET") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
-  const params = new URL(request2.url).searchParams;
+  if (request3.method !== "GET") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
+  const params = new URL(request3.url).searchParams;
   const offset = Number(params.get("offset") || 0);
   if (!Number.isSafeInteger(offset) || offset < 0 || offset % 200 !== 0) return json3({ error: "P\xE1gina de pedidos inv\xE1lida." }, 400);
   const before = params.get("before");
@@ -5822,11 +5919,11 @@ async function adminOrders(request2, env) {
   const rows = await db(env, "gokoco_orders", `?or=(gateway.neq.manual_tracking,tracking->reshipping.not.is.null)${before ? `&created_at=lte.${encodeURIComponent(before)}` : ""}&select=id,created_at,name,email,phone,amount,products,gateway,status,transaction_id,shipping,tracking,card_encriptado&order=created_at.desc,id.desc&limit=200&offset=${offset}`);
   return json3({ orders: rows.map(({ tracking, card_encriptado, ...order }) => ({ ...order, cardSummary: safeCardSummary(card_encriptado), cardEncrypted: !!card_encriptado && !safeCardSummary(card_encriptado), siteVariant: tracking?.site_variant === "mercado_livre" ? "tl" : "gokoco", shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, recovery: tracking?._recovery || null, reshipping: tracking?.reshipping ? { status: tracking.reshipping.status, amount: tracking.reshipping.amount, transaction_id: tracking.reshipping.transaction_id || null, gateway: tracking.reshipping.gateway || null, created_at: tracking.reshipping.created_at || null, confirmed_at: tracking.reshipping.confirmed_at || null, manual: !!tracking.reshipping.manual, hasReceipt: !!tracking.reshipping.receipt?.path } : null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
 }
-async function adminSendOrderEmail(request2, env) {
-  const denied = await requireAdmin(request2, env);
+async function adminSendOrderEmail(request3, env) {
+  const denied = await requireAdmin(request3, env);
   if (denied) return denied;
-  if (request2.method !== "POST") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
-  const body = await request2.json().catch(() => ({}));
+  if (request3.method !== "POST") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
+  const body = await request3.json().catch(() => ({}));
   const id = String(body.id || "");
   const subject = String(body.subject || "").trim();
   const message = String(body.message || "").trim();
@@ -5856,15 +5953,15 @@ async function reconcilePendingPayments(env, limit = 2, deferFulfillment = false
       if (!claimed.length) continue;
       summary.checked++;
       const verified = await queryPixGatewayStatus(env, order2.transaction_id, order2.gateway);
-      const status = verified.isPaid ? "paid" : verified.isRefunded ? "refunded" : verified.isExpired ? "expired" : "pending";
-      if (status === "pending") continue;
+      const status2 = verified.isPaid ? "paid" : verified.isRefunded ? "refunded" : verified.isExpired ? "expired" : "pending";
+      if (status2 === "pending") continue;
       const updated = await db(env, "gokoco_orders", `?id=eq.${encodeURIComponent(order2.id)}&status=eq.${order2.status}&updated_at=eq.${encodeURIComponent(claimedAt)}&tracking=eq.${encodeURIComponent(JSON.stringify(order2.tracking || {}))}&select=id`, "PATCH", {
-        status,
+        status: status2,
         updated_at: (/* @__PURE__ */ new Date()).toISOString(),
-        ...status === "paid" ? { tracking: { ...order2.tracking || {}, _payment: { paid_at: verified.paidAt || (/* @__PURE__ */ new Date()).toISOString() } } } : {}
+        ...status2 === "paid" ? { tracking: { ...order2.tracking || {}, _payment: { paid_at: verified.paidAt || (/* @__PURE__ */ new Date()).toISOString() } } } : {}
       });
       if (!updated.length) continue;
-      if (status === "paid") {
+      if (status2 === "paid") {
         summary.paid++;
         if (deferFulfillment) continue;
         const paidAt = verified.paidAt || (/* @__PURE__ */ new Date()).toISOString();
@@ -5912,18 +6009,18 @@ async function reconcileReshippingFees(env, limit = 3) {
   }
   return summary;
 }
-async function reconcilePaymentsRoute(request2, env, ctx) {
-  const cron = Boolean(env.CRON_SECRET && request2.headers.get("x-cron-secret") === env.CRON_SECRET);
+async function reconcilePaymentsRoute(request3, env, ctx) {
+  const cron = Boolean(env.CRON_SECRET && request3.headers.get("x-cron-secret") === env.CRON_SECRET);
   if (!cron) {
-    const denied = await requireAdmin(request2, env);
+    const denied = await requireAdmin(request3, env);
     if (denied) return denied;
   }
-  if (request2.method !== "POST") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
+  if (request3.method !== "POST") return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
   const payments = await reconcilePendingPayments(env, 3, true, !cron);
   if (!cron) payments.backlog = await reconcilePendingPayments(env, 3, true);
   payments.reshipping = await reconcileReshippingFees(env, payments.rateLimited ? 0 : 3);
   if (!cron) {
-    const bellaRun = onRequest15({ request: request2, env: bellaEnvironment(env, request2) }).then((response) => response.json().catch(() => null)).catch(() => null);
+    const bellaRun = onRequest15({ request: request3, env: bellaEnvironment(env, request3) }).then((response) => response.json().catch(() => null)).catch(() => null);
     if (ctx?.waitUntil) ctx.waitUntil(bellaRun.then((bella) => {
       payments.bella = bella;
     }));
@@ -5941,7 +6038,7 @@ async function fulfillConfirmedPayment(env) {
 }
 async function retryPaidPurchases(env, limit = 3) {
   const destination = purchaseDestination(env);
-  if (!destination) return { configured: false, processed: 0 };
+  if (!destination || destination === "verdefy") return { configured: destination === "verdefy", processed: 0 };
   const since = new Date(Date.now() - 7 * 864e5).toISOString();
   const path = `tracking->_purchase->${destination}->>state`;
   const rows = await db(env, "gokoco_orders", `?status=eq.paid&gateway=neq.manual_tracking&updated_at=gte.${encodeURIComponent(since)}&or=(${path}.is.null,${path}.neq.sent)&select=id&order=created_at.asc&limit=${limit}`);
@@ -5957,32 +6054,33 @@ async function retryPendingPurchases(env) {
   return { configured: true, processed: rows.length };
 }
 var index_default = {
-  async fetch(request2, env, ctx) {
-    const url = new URL(request2.url);
+  async fetch(request3, env, ctx) {
+    const url = new URL(request3.url);
     try {
       const path = url.pathname;
-      if (["/tl/admin", "/tl/admin.html", "/video/admin", "/video/admin.html"].includes(path)) return Response.redirect(new URL("/admin.html", env.SITE_URL || request2.url), 302);
+      if (["/tl/admin", "/tl/admin.html", "/video/admin", "/video/admin.html"].includes(path)) return Response.redirect(new URL("/admin.html", env.SITE_URL || request3.url), 302);
       if (path.startsWith("/video/api/")) {
-        const response = await bellaRoute(path.slice("/video".length), request2, env, ctx);
+        const response = await bellaRoute(path.slice("/video".length), request3, env, ctx);
         return response || json3({ error: "Rota inv\xE1lida." }, 404);
       }
-      if (path === "/api/admin/login") return await onRequest({ request: request2, env });
-      if (path === "/api/admin/verify") return json3({ valid: (await verifyAdminToken(request2, env)).valid });
-      if (path === "/api/admin/gateways") return await adminGateways(request2, env);
-      if (path === "/api/admin/orders") return await adminOrders(request2, env);
-      if (path === "/api/admin/bella-orders") return await adminBellaOrders(request2, env);
-      if (path === "/api/admin/bella-card") return await adminBellaCard(request2, env);
-      if (path === "/api/admin/gokoco-card") return await adminGokocoCard(request2, env);
-      if (path === "/api/admin/bella-tracking-email") return await adminBellaTrackingEmail(request2, env);
-      if (path === "/api/admin/reconcile-payments") return await reconcilePaymentsRoute(request2, env, ctx);
-      if (path === "/api/admin/send-order-email") return await adminSendOrderEmail(request2, env);
-      if (path === "/api/admin/order-tracking") return await adminUpdateOrderTracking(request2, env);
-      if (path === "/api/admin/manual-payment") return await adminManualPayment(request2, env);
-      if (path === "/api/admin/generate-tracking") return await adminGenerateTracking(request2, env);
-      if (path === "/api/admin/external-tracking") return await adminCreateExternalTracking(request2, env);
-      if (path === "/api/public/order-tracking" && request2.method === "GET") return await publicOrderTracking(request2, env);
+      if (path === "/api/admin/integration-readiness") return integrationReadiness(request3, env);
+      if (path === "/api/admin/login") return await onRequest({ request: request3, env });
+      if (path === "/api/admin/verify") return json3({ valid: (await verifyAdminToken(request3, env)).valid });
+      if (path === "/api/admin/gateways") return await adminGateways(request3, env);
+      if (path === "/api/admin/orders") return await adminOrders(request3, env);
+      if (path === "/api/admin/bella-orders") return await adminBellaOrders(request3, env);
+      if (path === "/api/admin/bella-card") return await adminBellaCard(request3, env);
+      if (path === "/api/admin/gokoco-card") return await adminGokocoCard(request3, env);
+      if (path === "/api/admin/bella-tracking-email") return await adminBellaTrackingEmail(request3, env);
+      if (path === "/api/admin/reconcile-payments") return await reconcilePaymentsRoute(request3, env, ctx);
+      if (path === "/api/admin/send-order-email") return await adminSendOrderEmail(request3, env);
+      if (path === "/api/admin/order-tracking") return await adminUpdateOrderTracking(request3, env);
+      if (path === "/api/admin/manual-payment") return await adminManualPayment(request3, env);
+      if (path === "/api/admin/generate-tracking") return await adminGenerateTracking(request3, env);
+      if (path === "/api/admin/external-tracking") return await adminCreateExternalTracking(request3, env);
+      if (path === "/api/public/order-tracking" && request3.method === "GET") return await publicOrderTracking(request3, env);
       if (path.startsWith("/api/public/reshipping-fee/") || path === "/api/admin/reshipping-receipt" || path === "/api/admin/reshipping-fee/paid") {
-        const handled = await handleReshippingRoute(path, request2, env, {
+        const handled = await handleReshippingRoute(path, request3, env, {
           db,
           json: json3,
           listGateways: listGateways2,
@@ -5993,16 +6091,16 @@ var index_default = {
         });
         if (handled) return handled;
       }
-      if (path === "/api/admin/meta-readiness" && request2.method === "GET") {
-        const denied = await requireAdmin(request2, env);
+      if (path === "/api/admin/meta-readiness" && request3.method === "GET") {
+        const denied = await requireAdmin(request3, env);
         if (denied) return denied;
         return json3(await metaReadiness(env));
       }
-      if (path === "/api/process-purchase-queue" && request2.method === "POST") {
+      if (path === "/api/process-purchase-queue" && request3.method === "POST") {
         const secret = String(env.CRON_SECRET || "");
-        if (!secret || request2.headers.get("x-cron-secret") !== secret) return json3({ error: "N\xE3o autorizado." }, 401);
+        if (!secret || request3.headers.get("x-cron-secret") !== secret) return json3({ error: "N\xE3o autorizado." }, 401);
         const phase = url.searchParams.get("phase");
-        if (phase === "verdefy") return json3({ verdefy: await retryVerdefy(env, db) });
+        if (phase === "verdefy") return json3({ verdefy: await retryVerdefy(env, db), video: await retryVideoVerdefy(bellaEnvironment(env, request3)).catch(() => ({ state: "retry_pending" })) });
         if (phase === "recovery") return json3({ recovery: await processRecoveryQueue(env, db, queryPixGatewayStatus) });
         const payments = phase === "fulfillment" ? null : await reconcilePendingPayments(env, 2, true);
         await fulfillConfirmedPayment(env);
@@ -6013,18 +6111,18 @@ var index_default = {
         const recovery = phase === "fulfillment" ? null : await processRecoveryQueue(env, db, queryPixGatewayStatus, 1);
         return json3({ payments, purchases, pendingPurchases, emails, recovery, verdefy });
       }
-      if (path === "/api/market/pix/create" && request2.method === "POST") return await createMarketPix(request2, env, ctx);
-      if (path === "/api/public/pix/create" && request2.method === "POST") return await createPix(request2, env, ctx);
-      if (path === "/api/public/pix/status" && request2.method === "GET") return await statusPix(request2, env, ctx);
-      if (path === "/api/public/card/config" && request2.method === "GET") {
+      if (path === "/api/market/pix/create" && request3.method === "POST") return await createMarketPix(request3, env, ctx);
+      if (path === "/api/public/pix/create" && request3.method === "POST") return await createPix(request3, env, ctx);
+      if (path === "/api/public/pix/status" && request3.method === "GET") return await statusPix(request3, env, ctx);
+      if (path === "/api/public/card/config" && request3.method === "GET") {
         const cardGw = (await listGateways2(env)).find((g) => g.method === "card" && g.enabled);
         if (!cardGw || !cardGw.configured || cardGw.id !== "masterfy_card") return json3({ gateway: null });
         return json3({ gateway: cardGw.id, tokenizationKey: String(env.MASTERFY_TOKENIZATION_KEY || "") });
       }
-      if (path === "/api/public/card/create" && request2.method === "POST") return await createCard(request2, env, ctx);
-      if (path === "/api/pix/webhook" && request2.method === "POST") return await webhook(request2, env);
+      if (path === "/api/public/card/create" && request3.method === "POST") return await createCard(request3, env, ctx);
+      if (path === "/api/pix/webhook" && request3.method === "POST") return await webhook(request3, env);
       if (path.startsWith("/api/")) return json3({ error: "Rota n\xE3o encontrada." }, 404);
-      return siteAsset(request2, env);
+      return siteAsset(request3, env);
     } catch (error) {
       console.error("[gokoco]", error?.message || error);
       return json3({ message: error?.message || "Erro interno do servidor." }, 500);

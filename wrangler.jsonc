@@ -26,5 +26,6 @@
     "CF_ACCESS_TEAM_DOMAIN": "verdefy-wsss.cloudflareaccess.com",
     "SITE_URL": "https://gokoco-tiktok.loja-oficial.workers.dev",
     "BELLA_SITE_URL": "https://gokoco-tiktok.loja-oficial.workers.dev/video"
-  }
+  },
+  "keep_vars": true
 }
