@@ -43,4 +43,6 @@ const upsellScript = fs.readFileSync(upsellScriptPath, 'utf8')
   .replace('href="${key}.html"', 'href="${({original:"/upsell1",bella:"/video/upsell1",tl:"/tl/upsell1"})[key]}"');
 fs.writeFileSync(upsellScriptPath, upsellScript);
 await import('./build-upsell.mjs');
+const { optimizeImages } = await import('./optimize-images.mjs');
+await optimizeImages(output);
 console.log(`Assets de publicação preparados em ${output}`);
