@@ -42,7 +42,7 @@ function setup() {
       if (state.order.status !== 'paid' || state.order.tracking?.shipping?.code !== code) return Response.json([]);
     }
     if (params.has('id') && params.get('id') !== 'eq.' + state.order.id) return Response.json([]);
-    if (params.has('or') && state.order.tracking._purchase?.utmify?.state === 'sent') return Response.json([]);
+    if (params.get('or')?.includes('tracking->_purchase') && state.order.tracking._purchase?.utmify?.state === 'sent') return Response.json([]);
     if (options.method === 'PATCH') {
       if (params.has('tracking') && JSON.stringify(JSON.parse(params.get('tracking').slice(3))) !== JSON.stringify(state.order.tracking)) return Response.json([]);
       Object.assign(state.order, JSON.parse(options.body));
@@ -406,7 +406,8 @@ test('InitiateCheckout permanece apenas após dados preenchidos e transição à
   assert.ok(!fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8').includes('InitiateCheckout'));
   const paidPage = fs.readFileSync(new URL('../pagamento.html', import.meta.url), 'utf8');
   assert.ok(paidPage.includes('j.trackingCode'));
-  assert.ok(paidPage.includes('Acompanhar meu pedido'));
+  assert.ok(paidPage.includes('/rastreio.html?codigo='));
+  assert.match(paidPage, /href="'\+_trackingUrl\+'"/);
   const trackingPage = fs.readFileSync(new URL('../rastreio.html', import.meta.url), 'utf8');
   assert.ok(trackingPage.includes('tracking-stage'));
   assert.ok(trackingPage.includes('data.buyerName'));
@@ -483,7 +484,7 @@ test('rastreio avulso mostra só o código e etapas previstas, sem destinatário
 
 test('bônus antigo de R$ 5 não reduz mais o preço da escova', () => {
   const source = fs.readFileSync(new URL('../worker-src/index.js', import.meta.url), 'utf8');
-  const calculate = vm.runInNewContext(source.slice(source.indexOf('function cartTotal('), source.indexOf('async function db(')) + ';cartTotal', { COLORS: { Preta: 37.90 }, SHIPPING: { 'Frete Grátis': 0 }, BUMPS: {} });
+  const calculate = vm.runInNewContext(source.slice(source.indexOf('function cartTotal('), source.indexOf('async function db(')) + ';cartTotal', { PRODUCTS: { escova: 37.90 }, COLORS: { Preta: 37.90 }, SHIPPING: { 'Frete Grátis': 0 }, BUMPS: {} });
   const cart = { qty: 1, colors: [{ label: 'Preta', quantity: 1 }], shipping: 'Frete Grátis', bumps: [], discount: 1, bonus: 0 };
   assert.equal(calculate(cart), 37.90);
   assert.equal(calculate({ ...cart, bonus: 5 }), 32.90);

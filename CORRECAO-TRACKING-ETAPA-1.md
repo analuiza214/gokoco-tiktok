@@ -13,3 +13,7 @@ Antes da publicação: préviaHTTP isolada sem credenciais confirmou o handler41
 Foram integrados quatro commits remotos até5a964c4, preservando migraçãoWorkers, domínio loja-oficial, otimização de imagens e configuraçãoWorkersBuilds. Testes do reconciliador agora fornecem SITE_URL explicitamente e verificam que sua ausência impede chamadas. Nenhuma mudança na rotina de produção do reconciliador foi publicada por esta etapa.
 
 O proprietário confirmou que usa https://gokoco-tiktok.loja-oficial.workers.dev nos anúncios. A APICloudflare, nesta sessão, mostrou apenas7bindings no Worker principal (assets/KV/variáveis públicas), sem segredos de banco/login/gateways. O Pages anterior continua com os segredos. Não há como recuperar os valores criptografados do Pages pelaAPI. O cadastro no Worker é um bloqueio real para operação, independente do bloqueio dos atalhos de eventos. Não copiar valores paraGit/chat. Publicação da correção não equivale a checkout homologado.
+
+
+## Fechamento dos testes antigos
+Os quatro testes de purchase-routes foram corrigidos sem mudar a aplicação: filtroOR do mock limitado à filaPurchase (não confundir com o filtroOR da listagem administrativa), contextoPRODUCTS do teste de preço e verificação do link de rastreio em vez de texto antigo. Conjunto ampliado final:55testes passaram, além de test:multisite. PublicaçãoWorkersBuilds do commit8d4accc concluída, versão ccfff6c4-bd06-4578-babc-e8fbaba3934b; duas rotas410/no-store, quatro páginas200 e admin401 sem sessão. Nenhum segredo alterado e nenhum evento enviado.
