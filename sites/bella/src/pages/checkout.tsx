@@ -609,7 +609,7 @@ export default function Checkout() {
                 </div>
                 {paymentMethod === "pix" && (
                   <div className="flex justify-between text-green-700 font-semibold">
-                    <span>Desconto Pix (10%)</span>
+                    <span>Desconto Pix ({total > 0 ? Math.round((1 - pixTotal / total) * 100) : 0}%)</span>
                     <span>- R$ {discount.toFixed(2).replace('.', ',')}</span>
                   </div>
                 )}
@@ -792,7 +792,7 @@ export default function Checkout() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-bold text-gray-900">Pix</span>
-                          <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-green-100 text-green-700">10% OFF</span>
+                          <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-green-100 text-green-700">Preço no Pix</span>
                         </div>
                         <p className="text-xs text-gray-500 mt-0.5">Aprovação imediata • Desconto automático</p>
                       </div>
@@ -916,7 +916,7 @@ export default function Checkout() {
                         </div>
                         <div className="bg-orange-50 border border-orange-200 rounded-xl px-3 py-2.5">
                           <p className="text-xs text-orange-700 font-medium text-center">
-                            Em caso de recusa pelo banco, trocaremos automaticamente para Pix com 10% de desconto
+                            Em caso de recusa pelo banco, trocaremos automaticamente para Pix com o preço informado no pedido
                           </p>
                         </div>
                       </div>
@@ -984,7 +984,7 @@ export default function Checkout() {
                   </div>
                   {paymentMethod === "pix" && (
                     <div className="flex justify-between text-green-700 font-semibold">
-                      <span>Desconto Pix (10%)</span>
+                      <span>Desconto Pix ({total > 0 ? Math.round((1 - pixTotal / total) * 100) : 0}%)</span>
                       <span>- R$ {discount.toFixed(2).replace('.', ',')}</span>
                     </div>
                   )}

@@ -1,0 +1,10 @@
+type Config = { primary?: string; products: { id: string; salePrice: number; pixPrice: number; originalPrice: number; version: string | null }[] };
+const config = (window as unknown as { __PRODUCT_PRICING?: Config }).__PRODUCT_PRICING;
+const current = config?.products.find(p => p.id === (config.primary || 'escova'));
+export const salePrice = current?.salePrice ?? 37.90;
+export const pixPrice = current?.version ? current.pixPrice : current?.salePrice ?? 37.90;
+export const originalPrice = current?.originalPrice ?? 167.90;
+export const priceText = salePrice.toFixed(2).replace('.', ',');
+export const originalText = originalPrice.toFixed(2).replace('.', ',');
+export const installmentText = (salePrice / 5).toFixed(2).replace('.', ',');
+export const discountPercent = Math.round((1 - salePrice / originalPrice) * 100);

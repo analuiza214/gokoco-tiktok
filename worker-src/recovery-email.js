@@ -1,3 +1,4 @@
+import { orderStore, orderSite } from './forja-catalog.js';
 // Recuperação de PIX não pago: até três mensagens por cliente, com estado no pedido.
 const RECOVERY_ACTIVATION_AT = '2026-10-14T22:28:59Z';
 const RECOVERY_DELAYS = [30 * 60000, 4 * 3600000, 24 * 3600000];
@@ -15,20 +16,23 @@ function recoverySettings(env) {
 }
 
 function recoveryMessage(order, number, settings) {
+  settings = { ...settings, site: orderSite({ SITE_URL: settings.site }, order) };
+  const brand = orderStore(order) === 'forja' ? 'Forja Ferramentas' : 'GOKOCO';
+  const product = brand === 'GOKOCO' ? 'escova GOKOCO' : 'compra na Forja Ferramentas';
   const name = recoveryText(order.name, 100).split(/\s+/)[0] || 'cliente';
   const items = Array.isArray(order.products) ? order.products.map((item) => recoveryText(item.name, 120)).filter(Boolean).join(', ') : '';
   const amount = Number(order.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const link = `${settings.site}/?utm_source=recovery&utm_medium=email&utm_campaign=email${number}`;
   const messages = [
-    `Seu PIX foi gerado, mas ainda não identificamos o pagamento. Se quiser concluir a compra da sua escova GOKOCO, acesse a loja. Caso já tenha pago, desconsidere esta mensagem.`,
-    `Seu pedido da escova GOKOCO ainda aparece sem pagamento confirmado. Você pode voltar à loja para concluir a compra. Caso já tenha pago, desconsidere esta mensagem.`,
-    `Este é nosso último lembrete sobre o pedido da escova GOKOCO que ainda aparece sem pagamento confirmado. Se quiser, você pode concluir a compra na loja. Caso já tenha pago, desconsidere esta mensagem.`,
+    `Seu PIX foi gerado, mas ainda não identificamos o pagamento. Se quiser concluir a compra da sua ${product}, acesse a loja. Caso já tenha pago, desconsidere esta mensagem.`,
+    `Seu pedido da ${product} ainda aparece sem pagamento confirmado. Você pode voltar à loja para concluir a compra. Caso já tenha pago, desconsidere esta mensagem.`,
+    `Este é nosso último lembrete sobre o pedido da ${product} que ainda aparece sem pagamento confirmado. Se quiser, você pode concluir a compra na loja. Caso já tenha pago, desconsidere esta mensagem.`,
   ];
-  const subject = [`Seu pedido GOKOCO ainda está aguardando pagamento`, `Ainda quer sua escova GOKOCO?`, `Último lembrete sobre seu pedido GOKOCO`][number - 1];
+  const subject = [`Seu pedido ${brand} ainda está aguardando pagamento`, `Ainda quer sua ${product}?`, `Último lembrete sobre seu pedido ${brand}`][number - 1];
   const body = messages[number - 1];
-  const text = `Olá, ${name}!\n\n${body}\n\n${items ? `Produto: ${items}\n` : ''}Valor do pedido: ${amount}\n\nVoltar à loja: ${link}\n\nEquipe GOKOCO`;
-  const html = `<div style="max-width:560px;margin:auto;font-family:Arial,sans-serif;color:#17212b;line-height:1.6"><h1 style="font-size:22px">Olá, ${recoveryHtml(name)}!</h1><p>${recoveryHtml(body)}</p>${items ? `<p><strong>Produto:</strong> ${recoveryHtml(items)}</p>` : ''}<p><strong>Valor do pedido:</strong> ${recoveryHtml(amount)}</p><p><a href="${recoveryHtml(link)}" style="display:inline-block;padding:12px 20px;border-radius:8px;background:#15803d;color:#fff;text-decoration:none;font-weight:bold">Voltar à loja</a></p><p>Equipe GOKOCO</p></div>`;
-  return { from: `GOKOCO <${settings.from}>`, to: [order.email], reply_to: settings.from, subject, text, html };
+  const text = `Olá, ${name}!\n\n${body}\n\n${items ? `Produto: ${items}\n` : ''}Valor do pedido: ${amount}\n\nVoltar à loja: ${link}\n\nEquipe ${brand}`;
+  const html = `<div style="max-width:560px;margin:auto;font-family:Arial,sans-serif;color:#17212b;line-height:1.6"><h1 style="font-size:22px">Olá, ${recoveryHtml(name)}!</h1><p>${recoveryHtml(body)}</p>${items ? `<p><strong>Produto:</strong> ${recoveryHtml(items)}</p>` : ''}<p><strong>Valor do pedido:</strong> ${recoveryHtml(amount)}</p><p><a href="${recoveryHtml(link)}" style="display:inline-block;padding:12px 20px;border-radius:8px;background:#15803d;color:#fff;text-decoration:none;font-weight:bold">Voltar à loja</a></p><p>Equipe ${brand}</p></div>`;
+  return { from: `${brand} <${settings.from}>`, to: [order.email], reply_to: settings.from, subject, text, html };
 }
 
 async function recoverySwap(db, env, order, state) {

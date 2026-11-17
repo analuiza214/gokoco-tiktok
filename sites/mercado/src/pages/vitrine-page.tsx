@@ -18,6 +18,16 @@ interface VitrineProduct {
 
 const VITRINE_PRODUCTS: VitrineProduct[] = "__VITRINE_PRODUCTS__" as unknown as VitrineProduct[];
 
+if (Array.isArray(VITRINE_PRODUCTS)) {
+  const pricing = (window as unknown as { productPricing?: { fromHref: (href: string) => { salePrice: number; originalPrice: number; version: string | null } | undefined } }).productPricing;
+  for (const product of VITRINE_PRODUCTS) {
+    const p = pricing?.fromHref(product.href); if (!p?.version) continue;
+    const [integer, decimal] = p.salePrice.toFixed(2).split('.');
+    product.priceInt = integer; product.priceDec = decimal; product.oldPriceText = 'R$ ' + p.originalPrice.toFixed(2).replace('.', ',');
+    product.installment = `5x R$ ${(p.salePrice / 5).toFixed(2).replace('.', ',')} sem juros`;
+  }
+}
+
 const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 

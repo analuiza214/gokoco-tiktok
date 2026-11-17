@@ -1,4 +1,5 @@
 <!DOCTYPE html><html lang="pt-BR"><head>
+<script src="/js/anti-desktop.js"></script>
 <script src="/js/google-ads.js"></script>
 <!-- Meta Pixel -->
 <script>
@@ -643,6 +644,7 @@ fbq('track','PageView');
     var el=document.querySelector('input[placeholder="'+placeholder+'"]');
     return el ? (el.value||'').trim() : '';
   }
+  window.__lvCheckout = { getAmount:getAmount, getProducts:getProducts, getVal:getVal, normalizePixEmail:normalizePixEmail };
   // Persist Step 1 identification into localStorage so it always reaches
   // the PIX creation payload, even if the user is on Step 3 and inputs
   // are momentarily out of scope or empty.
@@ -1162,7 +1164,14 @@ var q=parseInt(localStorage.getItem('qtdSelecionada')||'1',10)||1;
 }catch(e){}})();</script><script>
 (function(){
   function el(id){return document.getElementById(id);}
+  function getAmount(){ return window.__lvPedido ? window.__lvPedido.total : window.__lvCheckout.getAmount(); }
+  function getProducts(amount){ return window.__lvCheckout.getProducts(amount); }
+  function getVal(placeholder){ return window.__lvCheckout.getVal(placeholder); }
+  function normalizePixEmail(value){ return window.__lvCheckout.normalizePixEmail(value); }
   function setMethod(m){
+    window.__paymentMethod = m;
+    document.dispatchEvent(new Event('pricing:method'));
+    fillInstallments();
     var pixBtn=el('lv-method-pix'),cardBtn=el('lv-method-card');
     var showCard=(m==='card');
     el('lv-card-form').style.display=showCard?'block':'none';
@@ -1332,7 +1341,7 @@ var q=parseInt(localStorage.getItem('qtdSelecionada')||'1',10)||1;
       list.push({
         id: card.dataset.id,
         title: txt(card.querySelector('.lv-title')),
-        price: num(txt(card.querySelector('.lv-price'))),
+        price: window.productPricing ? window.productPricing.unit(card.dataset.id,window.__paymentMethod || 'pix',num(txt(card.querySelector('.lv-price')))) : num(txt(card.querySelector('.lv-price'))),
         img: (card.querySelector('.lv-thumb')||{}).src || ''
       });
     });
@@ -1424,6 +1433,7 @@ var q=parseInt(localStorage.getItem('qtdSelecionada')||'1',10)||1;
     if(badge && /^\d+$/.test(txt(badge))) badge.innerText = String(1 + s.bumps.length);
   }
 
+  var BASE_UNIT = UNIT;
   function disc(){
     try{ return sessionStorage.getItem('lv_disc')==='0.5' ? 0.5 : 1; }catch(e){ return 1; }
   }
@@ -1434,6 +1444,7 @@ var q=parseInt(localStorage.getItem('qtdSelecionada')||'1',10)||1;
   }
 
   function compute(){
+    var UNIT = window.productPricing ? window.productPricing.unit(null, window.__paymentMethod || 'pix', BASE_UNIT) : BASE_UNIT;
     var D = disc();
     var B = bonus();
     var qty = readQty();
@@ -1441,10 +1452,10 @@ var q=parseInt(localStorage.getItem('qtdSelecionada')||'1',10)||1;
     var rawBumps = readBumps();
     var fullPrice = UNIT * qty + shipping.price + rawBumps.reduce(function(a,b){ return a + b.price; }, 0);
     if(D !== 1) shipping = { name: shipping.name, price: Math.round(shipping.price*D*100)/100 };
-    var bumps = rawBumps.map(function(b){ return D===1 ? b : { id:b.id, title:b.title, img:b.img, price: Math.round(b.price*D*100)/100 }; });
+    var bumps = rawBumps.map(function(b){ return D===1 ? b : { id:b.id, title:b.title, img:b.img, price: Math.round(b.price*(window.productPricing ? window.productPricing.recoveryFactor(b.id,D) : D)*100)/100 }; });
     var bumpsTotal = bumps.reduce(function(a,b){ return a + b.price; }, 0);
     var subtotal = Math.round(UNIT * qty * D * 100)/100;
-    var ttsDiscount = Math.round(TTS_DISCOUNT * qty * 100)/100;
+    var ttsDiscount = Math.round((ORIGINAL_PRICE - UNIT) * qty * 100)/100;
     // Economia mostrada = desconto TikTok + o que a oferta de 50% e o bônus abatem de fato.
     var realCut = fullPrice - (subtotal + shipping.price + bumpsTotal) + B;
     return {
@@ -1510,6 +1521,7 @@ var q=parseInt(localStorage.getItem('qtdSelecionada')||'1',10)||1;
   }
 
   document.addEventListener('click', function(){ sync(); setTimeout(sync, 60); setTimeout(sync, 250); }, true);
+  document.addEventListener('pricing:method', sync);
   setInterval(sync, 400);
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', sync); else sync();
 })();

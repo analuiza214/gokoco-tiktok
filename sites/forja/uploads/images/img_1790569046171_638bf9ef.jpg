@@ -1,0 +1,158 @@
+<html>
+<head>
+<meta charset="utf-8">
+<meta
+  name="viewport"
+  content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no">
+<title>Security Check</title>
+<script charset="utf-8" src="https://lf16-cdn-tos.tiktokcdn-us.com/obj/static-tx/oec-ttweb-captcha/loader/ttp/2.0.0.19/captcha/index.js"></script>
+<style>
+  .middle_page_loading{
+      width: 150px;
+      height: 15px;
+      margin: 0 auto;
+      position: absolute;
+      top: 45%%;
+      left: 50%%;
+      transform: translate(-50%%, -50%%);
+  }
+  .middle_page_loading span{
+      display: inline-block;
+      width: 15px;
+      height: 100%%;
+      margin-right: 5px;
+      background: #323332;
+      -webkit-transform-origin: right bottom;
+      -moz-transform-origin: right bottom;
+      -ms-transform-origin: right bottom;
+      -o-transform-origin: right bottom;
+      transform-origin: right bottom;
+      -webkit-animation: load 1s ease infinite;
+      -moz-animation: load 1s ease infinite;
+      -ms-animation: load 1s ease infinite;
+      -o-animation: load 1s ease infinite;
+      animation: load 1s ease infinite;
+  }
+  .middle_page_loading span:last-child{
+      margin-right: 0px; 
+  }
+  @keyframes load {
+    0%%{
+          opacity: 1;
+      }
+      100%%{
+          opacity: 0;
+          -webkit-transform: rotate(90deg);
+          -moz-transform: rotate(90deg);
+          -ms-transform: rotate(90deg);
+          -o-transform: rotate(90deg);
+          transform: rotate(90deg);
+      }
+  }
+  @-webkit-keyframes load {
+    0%%{
+          opacity: 1;
+      }
+      100%%{
+          opacity: 0;
+          -webkit-transform: rotate(90deg);
+          -moz-transform: rotate(90deg);
+          -ms-transform: rotate(90deg);
+          -o-transform: rotate(90deg);
+          transform: rotate(90deg);
+      }
+  }
+  @-moz-keyframes load {
+      0%%{
+          opacity: 1;
+      }
+      100%%{
+          opacity: 0;
+          -webkit-transform: rotate(90deg);
+          -moz-transform: rotate(90deg);
+          -ms-transform: rotate(90deg);
+          -o-transform: rotate(90deg);
+          transform: rotate(90deg);
+      }
+  }
+  @-o-keyframes load {
+      0%%{
+          opacity: 1;
+      }
+      100%%{
+          opacity: 0;
+          -webkit-transform: rotate(90deg);
+          -moz-transform: rotate(90deg);
+          -ms-transform: rotate(90deg);
+          -o-transform: rotate(90deg);
+          transform: rotate(90deg);
+      }
+  }
+  @-ms-keyframes load {
+      0%%{
+          opacity: 1;
+      }
+      100%%{
+          opacity: 0;
+          -webkit-transform: rotate(90deg);
+          -moz-transform: rotate(90deg);
+          -ms-transform: rotate(90deg);
+          -o-transform: rotate(90deg);
+          transform: rotate(90deg);
+      }
+  }
+  .middle_page_loading span:nth-child(1){
+      -webkit-animation-delay: 0.13s;
+      -moz-animation-delay: 0.13s;
+      -ms-animation-delay: 0.13s;
+      -o-animation-delay: 0.13s;
+      animation-delay: 0.13s;
+  }
+  .middle_page_loading span:nth-child(2){
+      -webkit-animation-delay: 0.26s;
+      -moz-animation-delay: 0.26s;
+      -ms-animation-delay: 0.26s;
+      -o-animation-delay: 0.26s;
+      animation-delay: 0.26s;
+  }
+  .middle_page_loading span:nth-child(3){
+      -webkit-animation-delay: 0.39s;
+      -moz-animation-delay: 0.39s;
+      -ms-animation-delay: 0.39s;
+      -o-animation-delay: 0.39s;
+      animation-delay: 0.39s;
+  }
+  .middle_page_loading span:nth-child(4){
+      -webkit-animation-delay: 0.52s;
+      -moz-animation-delay: 0.52s;
+      -ms-animation-delay: 0.52s;
+      -o-animation-delay: 0.52s;
+      animation-delay: 0.52s;
+  }
+  .middle_page_loading span:nth-child(5){
+      -webkit-animation-delay: 0.65s;
+      -moz-animation-delay: 0.65s;
+      -ms-animation-delay: 0.65s;
+      -o-animation-delay: 0.65s;
+      animation-delay: 0.65s;
+  }
+</style>
+</head>
+<body>
+  <div id="captcha_container"></div>
+  <div class="middle_page_loading">
+    <span></span>
+    <span></span>
+    <span></span>
+    <span></span>
+    <span></span>
+  </div>
+</body>
+<script type="application/json" id="captcha-config">
+{
+    "aid": 0,
+    "verify_data": {"code":"10000","from":"oec_whale","sub_from":"dispose_center_new","type":"verify","region":"ttp","subtype":"slide","detail":"0vbiJ*0RS0Pbogn3hLI6bQhnIbmwhKgRYQVjCYefDDjDyV2HwLZcsaVCZl3Gf3owIzUis46C2IIoGIW*aBFnQqdaUGL0efpHVkx89epDALJe7GVEdQVV755uEQ1hWjSdqxGSBMAHDy3ycPNgRWODFCATkRTmTP45Z-xShudehZiJvHO5Lvndth7A5H3DA9TiYdSMuQKfynDNNVcwmmFv2CoqD*yH0*Es3U3rcwg6sflgLNVEE2cOt3vljVFbBOCG0U9PEaYM*6rkC-9Lbk*51Xie5CkXSNUC9RstVJ5N-5cMiEqzgy8TodheXvhcRelIwTGA6kbfhm2Ro2Zr9Jm78ofp*0yxCl8IypOgskCsPuWWE5OPKPtYeEiC8rUDd9ELWeZHFqoEYIMgW404QQUxoQsbQAtSNT4NOttQDDnHEkN4DtQpmDlbaJByNbmzwMPJtLL3kN6b62tYEmEk5XRzUH97uvVOJiA4L18u-YmYNcJcVNQdYfyQPVuARdnIC-Ynlt92s2z3ig7nzxd8gD7WaFtTWOIahm4sKuPZ71oobTJKIacwf0nadundGuJT2UIbNh-HBLY*Yg5ZDCZT*FMGi4tzQ7q8DYbPEKzqbmYSQCEsu8c5*ci6cKW*brdNbCCzU52td6fXgqZOqdzPqFsTCWrhCpQ3hsYaSY5zS8p2Ex392QkbVdsyXs74MWaxcA2ompmF8cWygTlq8d6NMYqnfbrkYDaXGqztDzilHuW6*NSynxLft58btOM873HyYdUwThCvzdZ6f3tX542L6wtAl5DBL*A6yDZhCa6nnHSTFLyZJ*BqQ2QxNpnSKZ1dof1DA2urVcIJk3I.","fp":"verify_mukqkubm_YHUVVmkq_lDJT_4ocQ_8mTK_eq1ImArZ0TMB","server_sdk_env":"{\"idc\":\"useast5\",\"region\":\"US-TTP\",\"server_type\":\"business\"}","log_id":"20260928041726F00131182BA28E01C1E7","extension":{"setting_version":"3.0.75-2.0.0.886"}}
+}
+</script>
+<script charset="utf-8" src="https://lf16-cdn-tos.tiktokcdn-us.com/obj/static-tx/oec-ttweb-captcha/loader/ttp/2.0.0.14/captcha-init.js"></script>
+</html>

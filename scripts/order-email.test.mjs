@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-const source = fs.readFileSync(new URL('../worker-src/order-email.js', import.meta.url), 'utf8');
-const { deliverPaidEmail, sendManualOrderEmail } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+import { deliverPaidEmail, sendManualOrderEmail } from '../worker-src/order-email.js';
+
 const copy = (value) => JSON.parse(JSON.stringify(value));
 
 function fixture() {
@@ -89,5 +89,18 @@ test('envio manual usa o e-mail do pedido e escapa conteúdo HTML', async () => 
     assert.equal(sent[0].text, 'Olá <cliente>!');
     assert.match(sent[0].html, /&lt;cliente&gt;/);
     assert.equal((await sendManualOrderEmail(f.env, { email: '' }, 'Assunto', 'Mensagem')).state, 'invalid_input');
+  } finally { globalThis.fetch = original; }
+});
+
+test('pedido Forja usa remetente e rastreio Forja com a mesma configuração de e-mail', async () => {
+  const f = fixture(), original = globalThis.fetch, sent = [];
+  f.order.tracking.store_id = 'forja';
+  globalThis.fetch = async (_url, options) => { sent.push(JSON.parse(options.body)); return Response.json({ id: 'forja-mail' }); };
+  try {
+    assert.equal((await deliverPaidEmail(f.env, f.db, f.order.id)).state, 'sent');
+    assert.match(sent[0].from, /Forja Ferramentas/);
+    assert.match(sent[0].html, /https:\/\/loja.example\/forja\/rastreio.html/);
+    assert.doesNotMatch(sent[0].text, /escova|GOKOCO/);
+    assert.match(sent[0].subject, /Forja/);
   } finally { globalThis.fetch = original; }
 });

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Product } from '@/lib/data';
+import { Product, products } from '@/lib/data';
 
 interface CartItem extends Product {
   quantity: number;
@@ -23,7 +23,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const saved = localStorage.getItem('bella-mix-cart');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const restored = JSON.parse(saved);
+        if (!Array.isArray(restored)) return [];
+        return restored.flatMap((item: CartItem) => { const current = products.find(p => p.id === item.id); return current ? [{ ...current, quantity: Math.max(1, Math.min(10, Math.trunc(Number(item.quantity)) || 1)) }] : []; });
       } catch (e) {
         return [];
       }

@@ -1,3 +1,5 @@
+import { loadPrices, savePrice, publicPrice, priceFor, discountedPrice, renderPrices } from './product-pricing.js';
+import { forjaCart, forjaProducts, orderStore } from './forja-catalog.js';
 import {integrationReadiness} from './integration-readiness.js';
 import {retryVideoVerdefy} from './verdefy-video.js';
 import {metaReadiness} from './meta-readiness.js';
@@ -59,24 +61,27 @@ function normalizeBuyerEmail(value) {
   const at = email.lastIndexOf('@');
   return at > 0 ? `${email.slice(0, at).replace(/\.+$/, '')}@${email.slice(at + 1)}` : email;
 }
-function cartTotal(cart) {
+function cartTotal(cart, prices, method = 'pix') {
   if (!cart || !Number.isInteger(cart.qty) || cart.qty < 1 || cart.qty > 10) return null;
   const productKey = cart.product || 'escova';
   if (!Object.hasOwn(PRODUCTS, productKey)) return null;
-  let base = PRODUCTS[productKey] * cart.qty;
+  const config = priceFor(prices, productKey);
+  const unit = config?.version ? method === 'pix' ? discountedPrice(config.salePrice, config.pixDiscountPercent) : config.salePrice : PRODUCTS[productKey];
+  let base = unit * cart.qty;
   if (Array.isArray(cart.colors) && cart.colors.length) {
     if (productKey !== 'escova') return null;
     if (cart.colors.length > 3 || cart.colors.some((c) => !Object.hasOwn(COLORS, c.label) || !Number.isInteger(c.quantity) || c.quantity < 1 || c.quantity > 10)) return null;
     if (cart.colors.reduce((sum, c) => sum + c.quantity, 0) !== cart.qty) return null;
-    base = cart.colors.reduce((sum, c) => sum + COLORS[c.label] * c.quantity, 0);
+    base = cart.colors.reduce((sum, c) => sum + (config?.version ? unit : COLORS[c.label]) * c.quantity, 0);
   }
   if (!Object.hasOwn(SHIPPING, cart.shipping)) return null;
   if (!Array.isArray(cart.bumps) || cart.bumps.length > 5 || new Set(cart.bumps).size !== cart.bumps.length || cart.bumps.some((id) => !Object.hasOwn(BUMPS, id))) return null;
-  if (![1, 0.5].includes(cart.discount) || ![0, 5].includes(cart.bonus)) return null;
+  const recovery = config?.version ? 1 - config.recoveryDiscountPercent / 100 : 0.5;
+  if (![1, recovery].includes(cart.discount) || ![0, 5].includes(cart.bonus)) return null;
   const d = cart.discount;
   const round = (n) => Math.round(n * 100);
   const sum = round(base * d) + round(SHIPPING[cart.shipping] * d)
-    + cart.bumps.reduce((acc, id) => acc + round(BUMPS[id] * d), 0) - cart.bonus * 100;
+    + cart.bumps.reduce((acc, id) => { const bump = priceFor(prices, id); const unit = bump?.version ? method === 'pix' ? discountedPrice(bump.salePrice, bump.pixDiscountPercent) : bump.salePrice : BUMPS[id]; const factor = d !== 1 && bump?.version ? 1 - bump.recoveryDiscountPercent / 100 : d; return acc + round(unit * factor); }, 0) - cart.bonus * 100;
   return Math.max(1, sum) / 100;
 }
 
@@ -137,10 +142,10 @@ async function requireAdmin(request, env) {
   return auth.valid ? null : json({ error: auth.error || 'Não autorizado.' }, 401);
 }
 
-function validateBuyer(body) {
+function validateBuyer(body, siteVariant = 'gokoco', prices, method = 'pix') {
   const buyer = body?.client || {};
   const amount = Number(body?.amount);
-  const expected = cartTotal(body?.cart);
+  const expected = siteVariant === 'forja' ? forjaCart(body?.cart, priceFor(prices, 'forja:' + body?.cart?.sku))?.amount ?? null : cartTotal(body?.cart, prices, method);
   if (!Number.isFinite(amount) || expected === null || Math.abs(Math.round(amount * 100) - Math.round(expected * 100)) > 1) return 'Valor do pedido inválido. Atualize a página e tente novamente.';
   if (String(buyer.name || '').trim().length < 3) return 'Informe seu nome completo.';
   if (!isValidBuyerEmail(normalizeBuyerEmail(buyer.email))) return 'E-mail inválido. Confira o endereço informado e tente novamente.';
@@ -182,13 +187,17 @@ function maskedGatewayContact(env, orderId, order, request) {
 async function createPix(request, env, ctx, siteVariant = 'gokoco') {
   const body = await request.json().catch(() => null);
   if (body?.client) body.client.email = normalizeBuyerEmail(body.client.email);
-  const invalid = validateBuyer(body);
-  if (invalid) return json({ message: invalid, code: 'invalid_document' }, 400);
+  if (!body) return json({ message: 'Pedido inválido.' }, 400);
+  const earlyInvalid = validateBuyer(body, siteVariant, env.PRODUCT_PRICES);
+  const currentPrice = priceFor(env.PRODUCT_PRICES, siteVariant === 'forja' ? 'forja:' + body.cart?.sku : body.cart?.product || 'escova');
+  if (earlyInvalid && (!currentPrice?.version || !earlyInvalid.startsWith('Valor do pedido'))) return json({ message: earlyInvalid, code: 'invalid_document' }, 400);
   const invalidShipping = validateShipping(body.shipping);
   if (invalidShipping) return json({ message: invalidShipping, code: 'invalid_address' }, 400);
+  const forja = siteVariant === 'forja' ? forjaCart(body.cart, priceFor(env.PRODUCT_PRICES, 'forja:' + body.cart?.sku)) : null;
   const checkoutId = String(body.checkoutId || '');
   if (!/^[a-f0-9-]{20,50}$/i.test(checkoutId)) return json({ message: 'Identificador de checkout inválido.' }, 400);
   const previous = await db(env, 'gokoco_orders', `?checkout_id=eq.${encodeURIComponent(checkoutId)}&select=*&limit=1`);
+  if (previous[0] && (orderStore(previous[0]) !== (siteVariant === 'forja' ? 'forja' : 'gokoco') || (siteVariant === 'forja' && previous[0].tracking?.product_id !== body.cart?.sku))) return json({ message: 'Este checkout pertence a outro produto. Inicie uma nova compra.' }, 409);
   // Libera pedidos presos: uma tentativa que morreu em "creating" (>2min, sem
   // retorno do gateway) ou um PIX já expirado no gateway (30min, margem de 5min)
   // viram "failed" e geram uma cobrança nova — em vez de travar o checkout num
@@ -215,6 +224,8 @@ async function createPix(request, env, ctx, siteVariant = 'gokoco') {
     return json({ copyPaste: old.pix_code, qrCode: old.qr_code, transactionId: old.transaction_id, gatewayTransactionId: old.transaction_id, orderId: old.id, amount: Number(old.amount) });
   }
   if (previous[0] && previous[0].status !== 'failed') return json({ message: 'A cobrança anterior está em processamento. Aguarde um momento.' }, 409);
+  const invalid = validateBuyer(body, siteVariant, env.PRODUCT_PRICES);
+  if (invalid) { const changed = invalid.startsWith('Valor do pedido') && priceFor(env.PRODUCT_PRICES, forja ? 'forja:' + forja.productId : body.cart?.product || 'escova')?.version; return json({ message: changed ? 'O preço deste produto mudou. Atualize a página para conferir o novo valor antes de gerar o Pix.' : invalid, code: changed ? 'price_changed' : 'invalid_document' }, changed ? 409 : 400); }
   const active = (await listGateways(env)).filter((g) => g.enabled && g.method === 'pix');
   if (active.length !== 1) return json({ message: 'Selecione um gateway PIX no painel admin.' }, 503);
   if (!active[0].configured) return json({ message: 'O gateway PIX selecionado precisa de uma chave de API.' }, 503);
@@ -238,10 +249,10 @@ async function createPix(request, env, ctx, siteVariant = 'gokoco') {
     email: normalizeBuyerEmail(body.client.email),
     phone: digits(body.client.phone),
     document: digits(body.client.document),
-    amount: await nextPixAmount(env, cartTotal(body.cart)),
-    products: Array.isArray(body.products) ? body.products.slice(0, 10) : [],
+    amount: forja ? forja.amount : priceFor(env.PRODUCT_PRICES, body.cart.product || 'escova')?.version ? cartTotal(body.cart, env.PRODUCT_PRICES) : await nextPixAmount(env, cartTotal(body.cart, env.PRODUCT_PRICES)),
+    products: forja ? forja.products : Array.isArray(body.products) ? body.products.slice(0, 10) : [],
     shipping,
-    tracking: { ...await recoverCustomerAttribution(env, db, capturePurchaseTracking(request, body), body.client), site_variant: siteVariant },
+    tracking: { ...await recoverCustomerAttribution(env, db, capturePurchaseTracking(request, body), body.client, forja ? 'forja' : null), site_variant: siteVariant, store_id: forja ? 'forja' : 'gokoco', ...(forja ? { product_id: forja.productId } : {}), pricing: publicPrice(priceFor(env.PRODUCT_PRICES, forja ? 'forja:' + forja.productId : body.cart.product || 'escova')) },
     gateway: active[0].id,
     client_ip_hash: ipHash,
     status: 'creating',
@@ -543,6 +554,18 @@ async function siteAsset(request, env) {
     headers.set('X-Robots-Tag', 'noindex, nofollow');
     return new Response(asset.body, { status: asset.status, headers });
   }
+  if (url.pathname === '/forja' || url.pathname.startsWith('/forja/')) {
+    if (!['GET', 'HEAD'].includes(request.method)) return new Response('Método inválido', { status: 405 });
+    let local = url.pathname.slice('/forja'.length).replace(/\/$/, '') || '/index';
+    if (!/\.[a-z0-9]+$/i.test(local)) local += '.html';
+    // HTML via .txt evita redirecionamentos automáticos do serviço de assets.
+    if (local.endsWith('.html')) local = local.slice(0, -5) + '.txt';
+    url.pathname = '/forja' + local;
+    const asset = await env.ASSETS.fetch(new Request(url, request));
+    const headers = new Headers(asset.headers);
+    if (local.endsWith('.txt')) headers.set('Content-Type', 'text/html; charset=utf-8');
+    return new Response(asset.body, { status: asset.status, headers });
+  }
   const site = marketSiteRequest(url, env) ? 'tl' : bellaSiteRequest(url, env) ? 'video' : null;
   if (!site) return env.ASSETS.fetch(request);
   let pathname = url.pathname.replace(new RegExp(`^/${site}(?=/|$)`), '') || '/';
@@ -607,7 +630,7 @@ function cardAmountWithInterest(base, installments) {
 async function createCard(request, env, ctx) {
   const body = await request.json().catch(() => null);
   if (body?.client) body.client.email = normalizeBuyerEmail(body.client.email);
-  const invalid = validateBuyer(body);
+  const invalid = validateBuyer(body, 'gokoco', env.PRODUCT_PRICES, 'card');
   if (invalid) return json({ message: invalid, code: 'invalid_document' }, 400);
   const invalidShipping = validateShipping(body.shipping);
   if (invalidShipping) return json({ message: invalidShipping, code: 'invalid_address' }, 400);
@@ -654,10 +677,10 @@ async function createCard(request, env, ctx) {
     email: normalizeBuyerEmail(body.client.email),
     phone: digits(body.client.phone),
     document: digits(body.client.document),
-    amount: cardAmountWithInterest(await nextPixAmount(env, cartTotal(body.cart)), body.installments),
+    amount: cardAmountWithInterest(priceFor(env.PRODUCT_PRICES, body.cart.product || 'escova')?.version ? cartTotal(body.cart, env.PRODUCT_PRICES, 'card') : await nextPixAmount(env, cartTotal(body.cart, env.PRODUCT_PRICES, 'card')), body.installments),
     products: Array.isArray(body.products) ? body.products.slice(0, 10) : [],
     shipping,
-    tracking: { ...await recoverCustomerAttribution(env, db, capturePurchaseTracking(request, body), body.client), site_variant: 'gokoco' },
+    tracking: { ...await recoverCustomerAttribution(env, db, capturePurchaseTracking(request, body), body.client), site_variant: 'gokoco', pricing: publicPrice(priceFor(env.PRODUCT_PRICES, body.cart.product || 'escova')) },
     gateway: 'masterfy_card',
     client_ip_hash: ipHash,
     status: 'creating',
@@ -845,6 +868,8 @@ function publicTrackingProducts(products) {
       }
       continue;
     }
+    const forjaProduct = forjaProducts.get(product.id);
+    if (forjaProduct) { result.push({ name: forjaProduct.title, quantity, image: `/forja${forjaProduct.image}` }); continue; }
     const image = accessoryImages.find(([key]) => name.toLowerCase().includes(key))?.[1] || null;
     result.push({ name, quantity, image });
   }
@@ -1002,7 +1027,7 @@ async function adminOrders(request, env) {
     await retryPaidPurchases(env);
   }
   const rows = await db(env, 'gokoco_orders', `?or=(gateway.neq.manual_tracking,tracking->reshipping.not.is.null)${before ? `&created_at=lte.${encodeURIComponent(before)}` : ''}&select=id,created_at,name,email,phone,amount,products,gateway,status,transaction_id,shipping,tracking,card_encriptado&order=created_at.desc,id.desc&limit=200&offset=${offset}`);
-  return json({ orders: rows.map(({ tracking, card_encriptado, ...order }) => ({ ...order, cardSummary: safeCardSummary(card_encriptado), cardEncrypted: !!card_encriptado && !safeCardSummary(card_encriptado), siteVariant: tracking?.site_variant === 'mercado_livre' ? 'tl' : 'gokoco', shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, recovery: tracking?._recovery || null, reshipping: tracking?.reshipping ? { status: tracking.reshipping.status, amount: tracking.reshipping.amount, transaction_id: tracking.reshipping.transaction_id || null, gateway: tracking.reshipping.gateway || null, created_at: tracking.reshipping.created_at || null, confirmed_at: tracking.reshipping.confirmed_at || null, manual: !!tracking.reshipping.manual, hasReceipt: !!tracking.reshipping.receipt?.path } : null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
+  return json({ orders: rows.map(({ tracking, card_encriptado, ...order }) => ({ ...order, cardSummary: safeCardSummary(card_encriptado), cardEncrypted: !!card_encriptado && !safeCardSummary(card_encriptado), siteVariant: tracking?.site_variant === 'forja' ? 'forja' : tracking?.site_variant === 'mercado_livre' ? 'tl' : 'gokoco', productId: tracking?.product_id || null, shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, recovery: tracking?._recovery || null, reshipping: tracking?.reshipping ? { status: tracking.reshipping.status, amount: tracking.reshipping.amount, transaction_id: tracking.reshipping.transaction_id || null, gateway: tracking.reshipping.gateway || null, created_at: tracking.reshipping.created_at || null, confirmed_at: tracking.reshipping.confirmed_at || null, manual: !!tracking.reshipping.manual, hasReceipt: !!tracking.reshipping.receipt?.path } : null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
 }
 
 async function adminSendOrderEmail(request, env) {
@@ -1155,7 +1180,24 @@ export default {
     const url = new URL(request.url);
     try {
       const path = url.pathname;
-      if (['/tl/admin', '/tl/admin.html', '/video/admin', '/video/admin.html'].includes(path)) return Response.redirect(new URL('/admin.html', env.SITE_URL || request.url), 302);
+      if (request.method === 'POST' && /(?:pix|card|orders)\/create$/.test(path)) { const pricing = await loadPrices(env); env = { ...env, PRODUCT_PRICES: pricing.products, PRODUCT_PRICES_READY: pricing.ready }; }
+      if (path === '/api/public/product-prices' && request.method === 'GET') { const data = await loadPrices(env); return json({ products: data.products.map(publicPrice) }); }
+      if (path === '/api/admin/product-prices') {
+        const denied = await requireAdmin(request, env); if (denied) return denied;
+        if (request.method === 'GET') { const data = await loadPrices(env); return json({ products: data.products.map(publicPrice), ready: data.ready }); }
+        if (request.method === 'PATCH') { let data; try { data = await savePrice(env, await request.json()); } catch(error) { return json({ error: error.message }, 400); } return json(data, data.status || 200); }
+        return json({ error: 'Método inválido.' }, 405);
+      }
+      if (['/tl/admin', '/tl/admin.html', '/video/admin', '/video/admin.html', '/forja/admin', '/forja/admin.html'].includes(path)) return Response.redirect(new URL('/admin.html', env.SITE_URL || request.url), 302);
+      if (path === '/forja') return Response.redirect(new URL('/forja/' + url.search, request.url), 302);
+      if (path === '/forja/api/public/pix/create' && request.method === 'POST') return await createPix(request, env, ctx, 'forja');
+      if (path.startsWith('/forja/api/')) {
+        const shared = new Set(['/api/public/pix/status', '/api/public/order-tracking', '/api/public/reshipping-fee/create', '/api/public/reshipping-fee/status', '/api/public/reshipping-fee/receipt']);
+        const target = path.slice('/forja'.length);
+        if (!shared.has(target)) return json({ error: 'Rota não encontrada.' }, 404);
+        url.pathname = target;
+        return await this.fetch(new Request(url, request), env, ctx);
+      }
       if (path.startsWith('/video/api/')) {
         const response = await bellaRoute(path.slice('/video'.length), request, env, ctx);
         return response || json({ error: 'Rota inválida.' }, 404);
@@ -1163,6 +1205,10 @@ export default {
       if(path==='/api/admin/integration-readiness')return integrationReadiness(request,env);
       if (path === '/api/admin/login') return await adminLogin({ request, env });
       if (path === '/api/admin/verify') return json({ valid: (await verifyAdminToken(request, env)).valid });
+      if (path === '/api/admin/products' && request.method === 'GET') {
+        const denied = await requireAdmin(request, env); if (denied) return denied;
+        return json({ products: [...forjaProducts.values()].map(p => ({ id: 'forja:' + p.id, name: p.title })) });
+      }
       if (path === '/api/admin/gateways') return await adminGateways(request, env);
       if (path === '/api/admin/orders') return await adminOrders(request, env);
       if (path === '/api/admin/bella-orders') return await adminBellaOrders(request, env);
@@ -1210,7 +1256,13 @@ export default {
       if (path === '/api/public/card/create' && request.method === 'POST') return await createCard(request, env, ctx);
       if (path === '/api/pix/webhook' && request.method === 'POST') return await webhook(request, env);
       if (path.startsWith('/api/')) return json({ error: 'Rota não encontrada.' }, 404);
-      return siteAsset(request, env);
+      const asset = await siteAsset(request, env);
+      if (!asset.ok || request.method === 'HEAD' || !asset.headers.get('Content-Type')?.includes('text/html')) return asset;
+      const pricing = await loadPrices(env);
+      const headers = new Headers(asset.headers);
+      for (const key of ['Content-Length', 'Content-Encoding', 'ETag', 'Last-Modified']) headers.delete(key);
+      headers.set('Cache-Control', 'no-store');
+      return new Response(renderPrices(await asset.text(), path, pricing.products), { status: asset.status, headers });
     } catch (error) {
       console.error('[gokoco]', error?.message || error);
       return json({ message: error?.message || 'Erro interno do servidor.' }, 500);

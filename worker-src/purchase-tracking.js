@@ -24,7 +24,7 @@ export function capturePurchaseTracking(request, body) {
   return tracking;
 }
 
-export async function recoverCustomerAttribution(env, db, tracking, buyer) {
+export async function recoverCustomerAttribution(env, db, tracking, buyer, storeId = null) {
   const current = Object.fromEntries(ATTRIBUTION_KEYS.map((key) => [key, tracking?.[key] || null]));
   const hasAttribution = (values) => ATTRIBUTION_KEYS.some((key) => Boolean(values?.[key]));
   if (hasAttribution(current)) return { ...tracking, attribution_source: 'current_visit' };
@@ -35,7 +35,8 @@ export async function recoverCustomerAttribution(env, db, tracking, buyer) {
   const filters = [email ? `email=eq.${encodeURIComponent(email)}` : null, phone ? `phone=eq.${encodeURIComponent(phone)}` : null].filter(Boolean);
   if (!filters.length) return { ...tracking, attribution_source: 'unattributed' };
   try {
-    const results = await Promise.all(filters.map((filter) => db(env, 'gokoco_orders', `?${filter}&created_at=gte.${encodeURIComponent(since)}&select=tracking,created_at&order=created_at.desc&limit=5`)));
+    const scope = storeId === 'forja' ? '&tracking->>store_id=eq.forja' : '&or=(tracking->>store_id.is.null,tracking->>store_id.neq.forja)';
+    const results = await Promise.all(filters.map((filter) => db(env, 'gokoco_orders', `?${filter}${scope}&created_at=gte.${encodeURIComponent(since)}&select=tracking,created_at&order=created_at.desc&limit=5`)));
     const previous = results.flat().filter((order) => hasAttribution(order?.tracking)).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0]?.tracking;
     if (!previous) return { ...tracking, attribution_source: 'unattributed' };
     const recovered = Object.fromEntries(ATTRIBUTION_KEYS.map((key) => [key, previous[key] || null]));

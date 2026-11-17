@@ -12,6 +12,8 @@ let gateways = [];
 let selectedStatus = 'todos';
 let selectedFee = 'todas';
 let selectedSite = 'todas';
+let selectedProduct = sessionStorage.getItem('admin_selected_product') || 'todas';
+if (!['todas', 'gokoco', 'forja'].includes(selectedProduct) && !selectedProduct.startsWith('forja:')) selectedProduct = 'todas';
 let selectedPeriod = 'todos';
 let selectedSort = 'recentes';
 let page = 1;
@@ -33,7 +35,7 @@ const shippingStages = [
 
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const siteBadge = (variant) => {
-  const site = variant === 'tl' ? ['tl', 'TL'] : variant === 'video' ? ['video', 'VÍDEO'] : ['gokoco', 'TikTok'];
+  const site = variant === 'forja' ? ['forja', 'FORJA'] : variant === 'tl' ? ['tl', 'TL'] : variant === 'video' ? ['video', 'VÍDEO'] : ['gokoco', 'TikTok'];
   return `<span class="site-badge site-badge-${site[0]}" aria-label="Origem da venda: ${site[1]}">${site[1]}</span>`;
 };
 const bellaStatus = { checkout_iniciado: 'creating', pix_gerado: 'pending', pago: 'paid', reembolsado: 'refunded', expirado: 'expired', falha: 'failed', cartao_recusado: 'failed' };
@@ -69,14 +71,14 @@ const whatsapp = (order) => {
   const digits = String(order.phone || '').replace(/\D/g, '');
   const number = digits.startsWith('55') ? digits : `55${digits}`;
   const firstName = String(order.name || '').trim().split(/\s+/)[0] || 'tudo bem';
-  const product = order.siteVariant === 'video' ? 'seu pedido da Bella Mix' : 'seu pedido da escova GOKOCO';
+  const product = order.siteVariant === 'forja' ? 'seu pedido da Forja Ferramentas' : order.siteVariant === 'video' ? 'seu pedido da Bella Mix' : 'seu pedido da escova GOKOCO';
   const hour = new Date().getHours();
   const saudacao = hour >= 5 && hour < 12 ? 'bom dia' : hour >= 12 && hour < 18 ? 'boa tarde' : 'boa noite';
   const feePending = order.reshipping && order.reshipping.status !== 'paid';
   const feeMessage = `Oiii ${saudacao}!!\nMil desculpas pela demora viu, é muita gente me chamando.\n\nEntão, sobre o seu pedido: ele foi taxado pela Receita Federal quando passou no centro de distribuição. Não é na sua cidade não viu — como o produto vem de fora, a taxa é aplicada no trajeto mesmo, é super normal acontecer. Pra liberar é só pagar a taxa no link que te mandei, tá?\n\nAssim que o pagamento da taxa for feito, o rastreio já atualiza sozinho e o pedido sai pra entrega rapidinho. Qualquer coisa me chama aqui 😊`;
   const message = feePending ? feeMessage : order.status === 'paid'
     ? `Olá ${firstName}! Estou entrando em contato sobre ${product}. Posso te ajudar com alguma informação? 😊`
-    : `Olá ${firstName}! Vi que você iniciou uma compra da ${order.siteVariant === 'video' ? 'Bella Mix' : 'escova GOKOCO'} mas não finalizou. Posso te ajudar? 😊`;
+    : `Olá ${firstName}! Vi que você iniciou uma compra da ${order.siteVariant === 'forja' ? 'Forja Ferramentas' : order.siteVariant === 'video' ? 'Bella Mix' : 'escova GOKOCO'} mas não finalizou. Posso te ajudar? 😊`;
   return `https://api.whatsapp.com/send?phone=${number}&text=${encodeURIComponent(message)}`;
 };
 
@@ -146,6 +148,8 @@ function matchingOrders(feeDates = selectedStatus === 'taxa') {
   const siteVariant = siteTerm === 'tl' ? 'tl' : siteTerm === 'video' ? 'video' : ['tiktok', 'tik tok'].includes(siteTerm) ? 'gokoco' : null;
   const now = new Date();
   return orders.filter((order) => {
+    if (selectedProduct.startsWith('forja:')) { if (order.siteVariant !== 'forja' || order.productId !== selectedProduct.slice(6)) return false; }
+    else if (selectedProduct !== 'todas' && (order.siteVariant === 'forja' ? 'forja' : 'gokoco') !== selectedProduct) return false;
     const d = new Date(feeDates && order.reshipping ? (order.reshipping.confirmed_at || order.reshipping.created_at || order.created_at) : order.created_at);
     const days = (now.getTime() - d.getTime()) / 86400000;
     let periodMatch = true;
@@ -200,6 +204,7 @@ function renderStats() {
   $('site-gokoco').textContent = siteOrders.filter((order) => (order.siteVariant || 'gokoco') === 'gokoco').length;
   $('site-tl').textContent = siteOrders.filter((order) => order.siteVariant === 'tl').length;
   $('site-video').textContent = siteOrders.filter((order) => order.siteVariant === 'video').length;
+  $('site-forja').textContent = siteOrders.filter((order) => order.siteVariant === 'forja').length;
 }
 
 function renderOrders() {
@@ -303,7 +308,12 @@ async function load() {
       $('page-error').textContent = 'Não foi possível sincronizar o gateway agora. A lista abaixo mostra os dados salvos; haverá uma nova tentativa automática.';
       $('page-error').hidden = false;
     }
-    const [gatewayData, orderData, manualData, bellaData] = await Promise.all([api('gateways'), api('orders'), api('external-tracking'), api('bella-orders').catch((error) => ({ error }))]);
+    const [gatewayData, orderData, manualData, bellaData, productData] = await Promise.all([api('gateways'), api('orders'), api('external-tracking'), api('bella-orders').catch((error) => ({ error })), api('products')]);
+    const select = $('product-select');
+    select.querySelector('optgroup')?.remove();
+    const group = document.createElement('optgroup'); group.label = 'Produtos Forja';
+    for (const product of productData.products || []) { const option = document.createElement('option'); option.value = product.id; option.textContent = product.name; group.append(option); }
+    select.append(group); select.value = selectedProduct;
     gateways = gatewayData.gateways || [];
     gokocoOrders = orderData.orders || [];
     bellaOrders = (bellaData.orders || []).filter((order) => order.siteVariant === 'video');
@@ -523,8 +533,10 @@ $('orders').addEventListener('click', async (event) => {
   const code = order.shippingTracking?.code;
   const firstName = String(order.name || '').trim().split(/\s+/)[0] || 'tudo bem';
   $('email-recipient').value = order.email;
-  $('email-subject').value = `Informações do seu pedido GOKOCO${code ? ` · ${code}` : ''}`;
-  $('email-message').value = `Olá ${firstName}!\n\n${code ? `Seu código de rastreio é ${code}. Acompanhe por aqui: ${location.origin}/rastreio.html?codigo=${encodeURIComponent(code)}\n\n` : 'Estou entrando em contato sobre seu pedido da escova GOKOCO.\n\n'}Qualquer dúvida, estamos à disposição!\nEquipe GOKOCO`;
+  const brand = order.siteVariant === 'forja' ? 'Forja Ferramentas' : 'GOKOCO';
+  const trackingBase = order.siteVariant === 'forja' ? '/forja' : '';
+  $('email-subject').value = `Informações do seu pedido ${brand}${code ? ` · ${code}` : ''}`;
+  $('email-message').value = `Olá ${firstName}!\n\n${code ? `Seu código de rastreio é ${code}. Acompanhe por aqui: ${location.origin}${trackingBase}/rastreio.html?codigo=${encodeURIComponent(code)}\n\n` : `Estou entrando em contato sobre seu pedido ${brand}.\n\n`}Qualquer dúvida, estamos à disposição!\nEquipe ${brand}`;
   $('email-error').hidden = true;
   $('email-success').hidden = true;
   $('email-submit').disabled = false;
@@ -603,3 +615,6 @@ document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { 
 if (token) api('verify').then((data) => data.valid ? showPanel() : showLogin()).catch(showLogin);
 window.setInterval(() => { if (!integrationCheck && token && !$('shell').hidden) load(); }, 60_000);
 
+
+$('product-select').value = selectedProduct;
+$('product-select').addEventListener('change', (event) => { selectedProduct = event.target.value; sessionStorage.setItem('admin_selected_product', selectedProduct); selectedSite = 'todas'; page = 1; $('site-filters').querySelectorAll('button').forEach(item => item.classList.toggle('selected', item.dataset.site === 'todas')); renderOrders(); });

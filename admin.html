@@ -27,8 +27,10 @@
   <div class="shell" id="shell" hidden>
     <header class="topbar">
       <div class="topbar-inner">
-        <div class="brand-lockup"><span class="brand-mark" data-icon="bag"></span><div><h1>Contatos GOKOCO</h1><p>Pedidos e clientes da loja</p></div></div>
+        <div class="brand-lockup"><span class="brand-mark" data-icon="bag"></span><div><h1>Painel de vendas</h1><p>Pedidos e clientes dos seus produtos</p></div></div>
         <div class="top-actions">
+          <label class="product-select">Produtos <select id="product-select" aria-label="Selecionar produto"><option value="todas">Todos os produtos</option value="gokoco">GOKOCO / Bella Mix</option><option value="forja">Forja Ferramentas · Todos</option></select></label>
+          <button class="button outline" id="pricing-open" type="button">Preços e descontos</button>
           <button class="button gateway-open" id="gateway-open"><span data-icon="card"></span> Gateways</button>
           <button class="button outline" id="refresh"><span class="refresh-icon" data-icon="refresh"></span> Atualizar</button>
           <button class="button outline logout" id="logout"><span data-icon="logout"></span> <span>Sair</span></button>
@@ -78,6 +80,7 @@
         <button data-site="gokoco">GOKOCO <span id="site-gokoco">0</span></button>
         <button data-site="tl">TL <span id="site-tl">0</span></button>
         <button data-site="video">Vídeo <span id="site-video">0</span></button>
+        <button data-site="forja">Forja <span id="site-forja">0</span></button>
       </nav>
       <nav class="status-filters fee-filters" id="fee-filters" aria-label="Filtrar pagamentos de taxa" hidden>
         <button class="selected" data-fee="todas">Todas <span id="fee-all">0</span></button>
@@ -113,6 +116,24 @@
       </form>
     </section>
   </div>
+  <dialog id="pricing-dialog" class="pricing-dialog" aria-labelledby="pricing-title">
+    <div class="pricing-heading"><h2 id="pricing-title">Preços e descontos</h2><button id="pricing-close" type="button" class="button outline" aria-label="Fechar preços">Fechar</button></div>
+    <p>Edite o produto e aplique o mesmo preço aos sites em que ele é vendido. Pedidos e Pix já gerados mantêm o valor original.</p>
+    <form id="pricing-form">
+      <label>Produto<select id="pricing-product" required></select></label>
+      <div class="pricing-fields">
+        <label>Preço original (R$)<input name="originalPrice" type="number" min="0.01" max="999999.99" step="0.01" required></label>
+        <label>Preço de venda (R$)<input name="salePrice" type="number" min="0.01" max="999999.99" step="0.01" required></label>
+        <label>Desconto extra no Pix (%)<input name="pixDiscountPercent" type="number" min="0" max="99" step="0.01" required></label>
+        <label>Desconto de recuperação (%)<input name="recoveryDiscountPercent" type="number" min="0" max="99" step="0.01" required></label>
+      </div>
+      <p id="pricing-preview" class="pricing-preview" aria-live="polite"></p>
+      <p>O desconto principal é calculado automaticamente. O desconto de recuperação vale nas ofertas de recuperação que já existem para o produto. Frete e complementos são calculados à parte.</p>
+      <p id="pricing-message" role="status" aria-live="polite"></p>
+      <button id="pricing-save" class="button primary" type="submit" disabled>Salvar preços</button>
+    </form>
+  </dialog>
   <script src="/admin.js?v=meta-readiness1" defer></script>
+  <script src="/js/admin-pricing.js" defer></script>
 </body>
 </html>

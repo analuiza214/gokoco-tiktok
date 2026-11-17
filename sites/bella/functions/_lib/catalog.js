@@ -1,3 +1,4 @@
+import { priceFor, discountedPrice } from '../../../../worker-src/product-pricing.js';
 const PRODUCTS = new Map([
   ["bella-escova-branca", { name: "Kit Escova 3 em 1 Branca", price: 37.9, pixPrice: 34.11 }],
   ["bella-escova-preta", { name: "Kit Escova 3 em 1 Preta", price: 37.9, pixPrice: 34.11 }],
@@ -16,7 +17,7 @@ const PRODUCTS = new Map([
   ["bella-kit-7-em-1-verde", { name: "Kit 7 em 1 Escova Secadora Verde Bivolt com Caixa e 7 Acessórios", price: 69.9, pixPrice: 62.91 }],
 ]);
 
-export function validateCartItems(rawItems, method) {
+export function validateCartItems(rawItems, method, prices) {
   if (!Array.isArray(rawItems) || rawItems.length === 0) {
     throw new Error("Carrinho não informado.");
   }
@@ -26,7 +27,9 @@ export function validateCartItems(rawItems, method) {
     if (!product || !Number.isInteger(quantity) || quantity < 1 || quantity > 10) {
       throw new Error("O carrinho contém um produto ou quantidade inválida.");
     }
-    return { ...product, id: String(raw.id), quantity };
+    const configured = priceFor(prices, raw.id);
+    const current = configured?.version ? { price: configured.salePrice, pixPrice: discountedPrice(configured.salePrice, configured.pixDiscountPercent) } : {};
+    return { ...product, ...current, id: String(raw.id), quantity };
   });
   const priceKey = method === "pix" ? "pixPrice" : "price";
   const amount = Number(normalized.reduce((sum, item) => sum + item[priceKey] * item.quantity, 0).toFixed(2));

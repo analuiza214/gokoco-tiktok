@@ -1,3 +1,4 @@
+import { salePrice, pixPrice, originalPrice, priceText, originalText, installmentText, discountPercent } from "@/lib/pricing";
 import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import { ArrowLeft, Search, ShoppingCart, Heart, MapPin, ChevronLeft, ChevronRight, Truck, ShieldCheck, Trophy, Star, Sparkles, ThumbsUp, MoreVertical, Flag, Share2, Play, RotateCcw, BadgeCheck, Navigation, X } from "lucide-react";
@@ -8,7 +9,7 @@ import { fbqTrack } from "@/lib/tracking";
 
 // ── Link de compartilhamento — edite aqui para mudar facilmente ──
 const SHARE_URL = window.location.href;
-const SHARE_TITLE = "Kit 3 em 1 - Escova Modeladora GOKOCO Bivolt por R$ 37,90";
+const SHARE_TITLE = `Kit 3 em 1 - Escova Modeladora GOKOCO Bivolt por R$ ${priceText}`;
 // ────────────────────────────────────────────────────────────────
 
 type SlideItem =
@@ -34,7 +35,7 @@ function answerProductQuestion(question: string): string {
   if (/caixa|embalagem|acompanha|vem junto|conteudo|manual|luva|prendedor|bolsa|estojo|ziper/.test(text)) return 'O kit apresentado inclui escova modeladora, luva térmica, dois prendedores, uma caixa tipo estojo com zíper e manual. A foto do conjunto é ilustrativa.';
   if (/cabo|gira|giratorio/.test(text)) return 'Sim. O cabo é giratório em 360°.';
   if (/tela|visor|display|led/.test(text)) return 'Sim. A escova possui uma tela LED digital que mostra a temperatura selecionada.';
-  if (/preco|valor|custa|parcela|cartao|pix/.test(text)) return 'O preço mostrado neste anúncio é R$ 37,90. As opções de pagamento aparecem na etapa de compra.';
+  if (/preco|valor|custa|parcela|cartao|pix/.test(text)) return `O preço mostrado neste anúncio é R$ ${priceText}. As opções de pagamento aparecem na etapa de compra.`;
   if (/frete|entrega|prazo|cep|envio/.test(text)) return 'O prazo e as condições de entrega dependem do CEP. Informe seu endereço na etapa de compra para conferir os dados disponíveis.';
   if (/garantia|troca|devolu/.test(text)) return 'Consulte as condições de garantia, troca e devolução apresentadas na compra antes de finalizar o pedido.';
   return 'Não encontrei essa informação na descrição da escova. Confira os detalhes do produto e as condições da compra antes de finalizar o pedido.';
@@ -101,7 +102,7 @@ export default function ProductPage() {
     if (raw) { try { setSavedAddress(JSON.parse(raw)); } catch { /* ignored */ } }
     fbqTrack("ViewContent", {
       content_name: "Kit 3 em 1 - Escova Modeladora GOKOCO Bivolt",
-      content_type: "product", content_ids: ["gokoco_escova"], value: 37.90, currency: "BRL",
+      content_type: "product", content_ids: ["gokoco_escova"], value: salePrice, currency: "BRL",
     });
   }, []);
 
@@ -186,7 +187,7 @@ export default function ProductPage() {
     setPreparando(true);
     sessionStorage.setItem(
       "topmix_cart",
-      JSON.stringify({ qty: cartCount, totalPrice: 37.90 * cartCount, color: selectedColor.name, image: `/images/escova/cores/${selectedColor.file}` })
+      JSON.stringify({ qty: cartCount, totalPrice: pixPrice * cartCount, color: selectedColor.name, image: `/images/escova/cores/${selectedColor.file}` })
     );
     setTimeout(() => {
       setPreparando(false);
@@ -423,10 +424,11 @@ export default function ProductPage() {
 
         {/* Price & Buying options */}
         <div className="px-4 pb-6">
-          <div className="text-sm text-gray-400 line-through">R$ 167,90</div>
-          <div className="text-4xl font-normal text-foreground">R$ 37<span className="text-xl align-top">,90</span></div>
+          <div className="text-sm text-gray-400 line-through">R$ {originalText}</div>
+          <div className="text-4xl font-normal text-foreground">R$ {priceText.split(',')[0]}<span className="text-xl align-top">,{priceText.split(',')[1]}</span></div>
+          {pixPrice < salePrice && <div className="text-sm text-green-700">No Pix: R$ {pixPrice.toFixed(2).replace('.', ',')} ({Math.round((1 - pixPrice / salePrice) * 100)}% de desconto extra)</div>}
           <div className="mt-1 text-[15px]">
-            em <span className="text-ml-green font-medium">5x R$ 7,58 sem juros</span> no cartão
+            em <span className="text-ml-green font-medium">5x R$ {installmentText} sem juros</span> no cartão
           </div>
 
           <div className="mt-4 flex items-start gap-2">
@@ -818,10 +820,10 @@ export default function ProductPage() {
         <div className="flex flex-col shrink-0">
           <div className="flex items-start gap-0.5 leading-none">
             <span className="text-xs font-medium text-gray-700 mt-1">R$</span>
-            <span className="text-3xl font-semibold text-gray-900 leading-none">37</span>
-            <span className="text-xs font-semibold text-gray-900 leading-none mt-0.5">,90</span>
+            <span className="text-3xl font-semibold text-gray-900 leading-none">{priceText.split(',')[0]}</span>
+            <span className="text-xs font-semibold text-gray-900 leading-none mt-0.5">,{priceText.split(',')[1]}</span>
           </div>
-          <span className="text-[11px] text-ml-green font-medium leading-tight mt-0.5">5x R$ 7,58 sem juros</span>
+          <span className="text-[11px] text-ml-green font-medium leading-tight mt-0.5">5x R$ {installmentText} sem juros</span>
         </div>
         <Button onClick={handleBuyNow} className="flex-1 bg-ml-blue hover:bg-ml-blue/90 text-white rounded-xl h-12 font-semibold text-base">
           Comprar agora
@@ -876,8 +878,8 @@ export default function ProductPage() {
                       Kit 3 em 1 - Escova Modeladora GOKOCO Bivolt · {selectedColor.name}
                     </p>
                     <div className="flex items-baseline gap-2 mb-3">
-                      <span className="text-base font-bold text-gray-900">R$ 37,90</span>
-                      <span className="text-[10px] text-gray-400 line-through">R$ 167,90</span>
+                      <span className="text-base font-bold text-gray-900">R$ {priceText}</span>
+                      <span className="text-[10px] text-gray-400 line-through">R$ {originalText}</span>
                     </div>
                     <div className="flex items-center gap-3">
                       <button
@@ -897,7 +899,7 @@ export default function ProductPage() {
                 <div className="px-4 py-4 space-y-2 bg-white mt-2">
                   <div className="flex justify-between text-sm text-gray-500">
                     <span>Subtotal ({cartCount} {cartCount === 1 ? 'item' : 'itens'})</span>
-                    <span>R$ {(37.90 * cartCount).toFixed(2).replace('.', ',')}</span>
+                    <span>R$ {(salePrice * cartCount).toFixed(2).replace('.', ',')}</span>
                   </div>
                   <div className="flex justify-between text-sm text-green-600 font-medium">
                     <span>Frete</span>
@@ -905,10 +907,10 @@ export default function ProductPage() {
                   </div>
                   <div className="flex justify-between text-base font-bold text-gray-900 pt-1 border-t border-gray-100">
                     <span>Total</span>
-                    <span>R$ {(37.90 * cartCount).toFixed(2).replace('.', ',')}</span>
+                    <span>R$ {(salePrice * cartCount).toFixed(2).replace('.', ',')}</span>
                   </div>
                   <p className="text-xs text-green-600">
-                    Em 5x de R$ {(37.90 * cartCount / 5).toFixed(2).replace('.', ',')} sem juros
+                    Em 5x de R$ {(salePrice * cartCount / 5).toFixed(2).replace('.', ',')} sem juros
                   </p>
                 </div>
               </>

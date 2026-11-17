@@ -30,6 +30,7 @@ http.createServer((req, res) => {
   if (page) file = path.join(dist, 'upsell-pages', `${page}.txt`);
   else {
     file = path.join(dist, decodeURIComponent(url.pathname));
+    if (url.pathname.startsWith('/forja/') && !path.extname(file) && fs.existsSync(file + '.html')) file += '.html';
     if (fs.existsSync(file) && fs.statSync(file).isDirectory()) file = path.join(file, 'index.html');
   }
   if (!file || !fs.existsSync(file) || !fs.statSync(file).isFile()) {

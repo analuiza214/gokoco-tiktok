@@ -321,7 +321,7 @@ export default function Home() {
           >
             <img
               src={getImagePath("/images/banner-principal.jpg")}
-              alt="Escova Modeladora Gokoco 3 em 1 - Seca, Alisa e Modela por R$ 37,90"
+              alt="Escova Modeladora Gokoco 3 em 1 - Seca, Alisa e Modela"
               className="w-full h-auto object-cover transition-transform duration-300 group-hover:scale-[1.01]"
               fetchPriority="high"
               decoding="sync"
@@ -439,7 +439,7 @@ export default function Home() {
           <div className="rounded-2xl p-6 text-center relative overflow-hidden"
             style={{ background: "linear-gradient(135deg, #166534 0%, #16a34a 100%)" }}>
             <p className="text-green-200 text-xs font-bold tracking-widest uppercase mb-1">Desconto Exclusivo</p>
-            <h3 className="text-xl sm:text-2xl font-black text-white mb-1">10% OFF PAGANDO NO PIX</h3>
+            <h3 className="text-xl sm:text-2xl font-black text-white mb-1">CONFIRA OS PREÇOS NO PIX</h3>
             <p className="text-green-100 text-sm mb-4">Aprovação instantânea. Sem taxas. Frete grátis.</p>
             <Link href="/produto/kit-7-em-1-bege">
               <button className="px-7 py-2.5 rounded-xl font-black text-sm bg-white hover:bg-gray-50 transition-all shadow"

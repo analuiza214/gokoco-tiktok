@@ -319,3 +319,6 @@ products.forEach((product, productIndex) => {
   const count = productReviewCounts[productIndex] ?? 3;
   product.productReviews = Array.from({ length: count }, (_, offset) => reviews[(start + offset) % reviews.length]);
 });
+
+// Configuração pública injetada pelo Worker antes de carregar o aplicativo.
+(window as unknown as { productPricing?: { apply: (items: Product[]) => void } }).productPricing?.apply(products);

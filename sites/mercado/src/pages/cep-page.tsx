@@ -1,3 +1,4 @@
+import { pixPrice, originalPrice as configuredOriginalPrice } from "@/lib/pricing";
 import { useState, useRef, useEffect } from "react";
 import { ArrowLeft, MapPin, ChevronRight, X, CreditCard, Navigation, Check, User, Pencil, AlertCircle } from "lucide-react";
 import { useLocation } from "wouter";
@@ -213,7 +214,7 @@ export default function CepPage() {
 
   // Cart quantity / total (read from product page)
   const [cartQty, setCartQty] = useState(1);
-  const [cartTotal, setCartTotal] = useState(37.90);
+  const [cartTotal, setCartTotal] = useState(pixPrice);
   const [cartColor, setCartColor] = useState('Preta');
   const [cartImage, setCartImage] = useState('/images/escova/cores/preta.webp');
 
@@ -323,7 +324,7 @@ export default function CepPage() {
         const cart = JSON.parse(cartRaw);
         if (cart.qty && cart.qty > 0) {
           setCartQty(cart.qty);
-          setCartTotal(cart.totalPrice ?? 37.90 * cart.qty);
+          setCartTotal(pixPrice * cart.qty);
           if (typeof cart.color === 'string') setCartColor(cart.color);
           if (typeof cart.image === 'string' && cart.image.startsWith('/images/escova/cores/')) setCartImage(cart.image);
         }
@@ -579,7 +580,7 @@ export default function CepPage() {
   ];
 
   const productPrice = cartTotal;
-  const originalPrice = 167.90 * cartQty;
+  const originalPrice = configuredOriginalPrice * cartQty;
   const discount = originalPrice - productPrice;
   const installments = calcInstallments(productPrice);
 

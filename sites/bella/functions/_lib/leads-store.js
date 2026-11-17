@@ -130,6 +130,7 @@ async function leadRow(env, body, method, tracking) {
 
 export async function createCheckoutLead(env, body, method) {
   const tracking = await resolveLeadTracking(env, body);
+  if (body._serverPricing?.length) tracking.pricing = body._serverPricing;
   const response = await supabaseRequest(env, "leads?select=id", {
     method: "POST",
     headers: { Prefer: "return=representation" },

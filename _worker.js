@@ -1,3 +1,428 @@
+// sites/forja/catalogo-forja.json
+var catalogo_forja_default = [
+  {
+    id: "soarfly-kit-ferramentas-4-em-1-48vf",
+    title: "Kit Ferramentas 4 em 1 48Vf | \xCDon L\xEDtio Baterias Sem Fio | Martelete + Esmerilhadeira + Furadeira + Chave de Impacto",
+    price: 67.9,
+    oldPrice: 326.33,
+    discount: 79,
+    image: "/uploads/images/kit-minimalista-1.png",
+    category: "Kits e maletas",
+    url: "/",
+    checkout: "/pagamento"
+  },
+  {
+    id: "k-soarfly-800ml-1200ml-pistola-de-pintura-48v-com-2-baterias-p",
+    title: "[SOARFLY] 800ml/1200ml Pistola de Pintura 48V com 2 Baterias - Pulverizador Port\xE1til 850W, 32.000rpm, Bateria 5/10 C\xE9lulas, Fluxo at\xE9 1.000ml/min, Pulverizador El\xE9trico Amarelo/Vermelho",
+    price: 339.99,
+    oldPrice: 339.99,
+    discount: 0,
+    image: "/uploads/images/img_1791235091575_47e061c9.png",
+    category: "Ferramentas el\xE9tricas",
+    url: "/produtos/k-soarfly-800ml-1200ml-pistola-de-pintura-48v-com-2-baterias-p.html",
+    checkout: "/checkout/k-soarfly-800ml-1200ml-pistola-de-pintura-48v-com-2-baterias-p.html"
+  },
+  {
+    id: "k-lavadora-portatil-de-alta-pressao-com-2-baterias-recarregave-3",
+    title: "Lavadora Port\xE1til de Alta Press\xE3o com 2 Baterias Recarreg\xE1vel Lavajato Carros Motos Jardins Bivolt",
+    price: 37.9,
+    oldPrice: 129.9,
+    discount: 71,
+    image: "/uploads/images/img_1790990353697_a22d0c2f.png",
+    category: "Ferramentas el\xE9tricas",
+    url: "/produtos/k-lavadora-portatil-de-alta-pressao-com-2-baterias-recarregave-3.html",
+    checkout: "/checkout/k-lavadora-portatil-de-alta-pressao-com-2-baterias-recarregave-3.html"
+  },
+  {
+    id: "k-soarfly-6-niveis-de-velocidade-esmerilhadeira-950w-11000rpm--3",
+    title: "SOARFLY 6 N\xEDveis de Velocidade Esmerilhadeira 950W 11000rpm 127V/220V--Amarela ou Azul, Corta metal, madeira, concreto. Protetor de disco punho auxiliar.",
+    price: 59.9,
+    oldPrice: 259,
+    discount: 77,
+    image: "/uploads/images/img_1790990312255_78df4ba6.png",
+    category: "Ferramentas el\xE9tricas",
+    url: "/produtos/k-soarfly-6-niveis-de-velocidade-esmerilhadeira-950w-11000rpm--3.html",
+    checkout: "/checkout/k-soarfly-6-niveis-de-velocidade-esmerilhadeira-950w-11000rpm--3.html"
+  },
+  {
+    id: "k-soarfly-800ml-1200ml-pistola-de-pintura-48v-com-2-baterias-p-2",
+    title: "[SOARFLY] 800ml/1200ml Pistola de Pintura 48V com 2 Baterias - Pulverizador Port\xE1til 850W, 32.000rpm, Bateria 5/10 C\xE9lulas, Fluxo at\xE9 1.000ml/min, Pulverizador El\xE9trico Amarelo/Vermelho",
+    price: 59.9,
+    oldPrice: 339.99,
+    discount: 82,
+    image: "/uploads/images/img_1790989565973_394f223b.png",
+    category: "Ferramentas el\xE9tricas",
+    url: "/produtos/k-soarfly-800ml-1200ml-pistola-de-pintura-48v-com-2-baterias-p-2.html",
+    checkout: "/checkout/k-soarfly-800ml-1200ml-pistola-de-pintura-48v-com-2-baterias-p-2.html"
+  },
+  {
+    id: "k-soarfly-chave-de-impacto-3-em-1-kit-completo-com-2-baterias--2",
+    title: "\u3010SOARFLY\u3011Chave de Impacto 3 em 1 - Kit Completo com 2 Baterias de 10 C\xE9lulas, 48Vf, 800Nm, Motor Brushless, Alta Performance (Impacto, Parafusadeira, Furadeira)",
+    price: 47.9,
+    oldPrice: 528.99,
+    discount: 91,
+    image: "/uploads/images/img_1790989522209_0aae6475.png",
+    category: "Kits e maletas",
+    url: "/produtos/k-soarfly-chave-de-impacto-3-em-1-kit-completo-com-2-baterias--2.html",
+    checkout: "/checkout/k-soarfly-chave-de-impacto-3-em-1-kit-completo-com-2-baterias--2.html"
+  },
+  {
+    id: "k-one-fer-politriz-automotiva-950w-velocidade-ajustavel-de-ate",
+    title: "\u3010ONE FER\u3011Politriz Automotiva 950W, Velocidade Ajust\xE1vel de at\xE9 5500 RPM, 110V/220V \xE0 Escolha | Kit Completo para Remo\xE7\xE3o de Riscos em Carros",
+    price: 59.9,
+    oldPrice: 366,
+    discount: 84,
+    image: "/uploads/images/img_1790989378129_6a25abd6.png",
+    category: "Kits e maletas",
+    url: "/produtos/k-one-fer-politriz-automotiva-950w-velocidade-ajustavel-de-ate.html",
+    checkout: "/checkout/k-one-fer-politriz-automotiva-950w-velocidade-ajustavel-de-ate.html"
+  },
+  {
+    id: "k-kit-completo-de-ferramentas-com-126-pecas-em-maleta-rigida-r",
+    title: "Kit Completo de Ferramentas com 126 Pe\xE7as em Maleta R\xEDgida Resistente, Conjunto Multifuncional para Reparos Dom\xE9sticos, Reformas Residenciais e Projetos DIY Artesanais",
+    price: 29.9,
+    oldPrice: 213.98,
+    discount: 86,
+    image: "/uploads/images/img_1790989328512_1f54a0f8.png",
+    category: "Kits e maletas",
+    url: "/produtos/k-kit-completo-de-ferramentas-com-126-pecas-em-maleta-rigida-r.html",
+    checkout: "/checkout/k-kit-completo-de-ferramentas-com-126-pecas-em-maleta-rigida-r.html"
+  },
+  {
+    id: "k-a-furadeira-de-impacto-possui-funcao-tres-em-um-e-pode-ser-e",
+    title: "A furadeira de impacto possui fun\xE7\xE3o tr\xEAs em um e pode ser equipada com uma ou duas baterias.",
+    price: 39.9,
+    oldPrice: 399,
+    discount: 90,
+    image: "/uploads/images/img_1790989216741_be0b97ad.png",
+    category: "Ferramentas el\xE9tricas",
+    url: "/produtos/k-a-furadeira-de-impacto-possui-funcao-tres-em-um-e-pode-ser-e.html",
+    checkout: "/checkout/k-a-furadeira-de-impacto-possui-funcao-tres-em-um-e-pode-ser-e.html"
+  },
+  {
+    id: "k-new-mma-400-110v-220v-maquina-solda-inversora-profissional-m",
+    title: "\u3010NEW\u3011MMA-400 110V/220V M\xE1quina Solda Inversora Profissional M\xE1quina De Solda M\xE1quina de soldadura inversor digital profissional AM",
+    price: 49.9,
+    oldPrice: 235,
+    discount: 79,
+    image: "/uploads/images/img_1790569179950_05755315.png",
+    category: "Ferramentas el\xE9tricas",
+    url: "/produtos/k-new-mma-400-110v-220v-maquina-solda-inversora-profissional-m.html",
+    checkout: "/checkout/k-new-mma-400-110v-220v-maquina-solda-inversora-profissional-m.html"
+  },
+  {
+    id: "k-kit-400-pecas-parafusos-e-buchas",
+    title: "Kit 400 Pe\xE7as Parafusos e Buchas",
+    price: 10,
+    oldPrice: 28.08,
+    discount: 64,
+    image: "/uploads/images/img_1790569119805_6cb44af9.png",
+    category: "Acess\xF3rios",
+    url: "/produtos/k-kit-400-pecas-parafusos-e-buchas.html",
+    checkout: "/checkout/k-kit-400-pecas-parafusos-e-buchas.html"
+  },
+  {
+    id: "k-caixa-de-ferramentas-metalica-dobravel-3-niveis-5-bandejas-a",
+    title: "Caixa de Ferramentas Met\xE1lica Dobr\xE1vel 3 N\xEDveis 5 Bandejas A\xE7o Refor\xE7ado Revestimento em P\xF3 42x22x21cm Port\xE1til com Al\xE7a Met\xE1lica para Garagem e Oficina",
+    price: 19.9,
+    oldPrice: 168.2,
+    discount: 88,
+    image: "/uploads/images/img_1790569109746_c222ea2f.png",
+    category: "Kits e maletas",
+    url: "/produtos/k-caixa-de-ferramentas-metalica-dobravel-3-niveis-5-bandejas-a.html",
+    checkout: "/checkout/k-caixa-de-ferramentas-metalica-dobravel-3-niveis-5-bandejas-a.html"
+  },
+  {
+    id: "k-kit-jogo-ferramentas-com-247-pecas-semiprofissional-c-maleta",
+    title: "Kit Jogo Ferramentas com 247 Pecas Semiprofissional C/ Maleta Servi\xE7o Gerais Soquetes",
+    price: 21.9,
+    oldPrice: 199.9,
+    discount: 89,
+    image: "/uploads/images/img_1790569045953_71fec5c8.png",
+    category: "Kits e maletas",
+    url: "/produtos/k-kit-jogo-ferramentas-com-247-pecas-semiprofissional-c-maleta.html",
+    checkout: "/checkout/k-kit-jogo-ferramentas-com-247-pecas-semiprofissional-c-maleta.html"
+  },
+  {
+    id: "k-kit-parafusadeira-a-bateria-5v-com-jogo-de-ferramentas-malet",
+    title: "Kit Parafusadeira A Bateria 5V Com Jogo de Ferramentas Maleta 200 Pe\xE7as LED 4,8V Bivolt Design Compacto e Ergon\xF4mico Ideal Para Pequenos Reparos",
+    price: 29.9,
+    oldPrice: 144.9,
+    discount: 79,
+    image: "/uploads/images/img_1790569023805_7d28bf74.png",
+    category: "Kits e maletas",
+    url: "/produtos/k-kit-parafusadeira-a-bateria-5v-com-jogo-de-ferramentas-malet.html",
+    checkout: "/checkout/k-kit-parafusadeira-a-bateria-5v-com-jogo-de-ferramentas-malet.html"
+  },
+  {
+    id: "k-kit-jogo-de-ferramentas-completo-200-pcs-c-soquetes-chaves-m",
+    title: "Kit Jogo De Ferramentas Completo 200 Pcs C/Soquetes Chaves Maleta",
+    price: 10.97,
+    oldPrice: 29.9,
+    discount: 63,
+    image: "/uploads/images/img_1790569007783_3d7332a2.png",
+    category: "Kits e maletas",
+    url: "/produtos/k-kit-jogo-de-ferramentas-completo-200-pcs-c-soquetes-chaves-m.html",
+    checkout: "/checkout/k-kit-jogo-de-ferramentas-completo-200-pcs-c-soquetes-chaves-m.html"
+  },
+  {
+    id: "k-estojo-de-brocas-e-pontas-com-30-pecas-x-line-titanio-bosch",
+    title: "Estojo de Brocas e Pontas com 30 Pe\xE7as X-Line Tit\xE2nio BOSCH",
+    price: 19.9,
+    oldPrice: 78.9,
+    discount: 75,
+    image: "/uploads/images/img_1790568983153_44e9adeb.png",
+    category: "Acess\xF3rios",
+    url: "/produtos/k-estojo-de-brocas-e-pontas-com-30-pecas-x-line-titanio-bosch.html",
+    checkout: "/checkout/k-estojo-de-brocas-e-pontas-com-30-pecas-x-line-titanio-bosch.html"
+  },
+  {
+    id: "k-kinetx-trena-profissional-5m-7-5m-10m-alta-precisao-fita-de-",
+    title: "KINETX Trena Profissional 5M/7.5M/10M Alta Precis\xE3o Fita de A\xE7o Carbono Fluorescente com Trava",
+    price: 12.47,
+    oldPrice: 37.9,
+    discount: 67,
+    image: "/uploads/images/img_1790568832794_da605599.png",
+    category: "Acess\xF3rios",
+    url: "/produtos/k-kinetx-trena-profissional-5m-7-5m-10m-alta-precisao-fita-de-.html",
+    checkout: "/checkout/k-kinetx-trena-profissional-5m-7-5m-10m-alta-precisao-fita-de-.html"
+  },
+  {
+    id: "k-maleta-ferramentas-186-pecas-rodinhas-e-alca-alira-home",
+    title: "Maleta Ferramentas 186 Pe\xE7as Rodinhas E Al\xE7a Alira Home",
+    price: 89.9,
+    oldPrice: 462.87,
+    discount: 81,
+    image: "/uploads/images/img_1790568529288_91b33ddc.png",
+    category: "Kits e maletas",
+    url: "/produtos/k-maleta-ferramentas-186-pecas-rodinhas-e-alca-alira-home.html",
+    checkout: "/checkout/k-maleta-ferramentas-186-pecas-rodinhas-e-alca-alira-home.html"
+  },
+  {
+    id: "produto-78",
+    title: "Extratora e Higienizadora Port\xE1til WAP Spot Cleaner 127V FW009214",
+    price: 85.9,
+    oldPrice: 685.9,
+    discount: 87,
+    image: "/uploads/images/produto-78-origem.jpg",
+    category: "Ferramentas el\xE9tricas",
+    url: "/produtos/produto-78.html",
+    checkout: "/checkout/produto-78.html"
+  }
+];
+
+// worker-src/forja-catalog.js
+var forjaProducts = new Map(catalogo_forja_default.map((product2) => [product2.id, product2]));
+var FORJA_KIT = "soarfly-kit-ferramentas-4-em-1-48vf";
+var shippingPrices = { "Frete Gr\xE1tis": 0, JADLOG: 18.47, "SEDEX 12": 33.4 };
+function forjaCart(cart, pricing = null) {
+  const product2 = forjaProducts.get(cart?.sku);
+  if (!product2 || !Number.isInteger(cart.qty) || cart.qty < 1 || cart.qty > 10) return null;
+  if (!Object.hasOwn(shippingPrices, cart.shipping)) return null;
+  const recovery = pricing?.version ? 1 - pricing.recoveryDiscountPercent / 100 : 0.5;
+  if (!Array.isArray(cart.bumps) || cart.bumps.length || ![1, recovery].includes(cart.discount) || ![0, 5].includes(cart.bonus)) return null;
+  if (!Array.isArray(cart.colors)) return null;
+  if (cart.colors.length && (product2.id !== FORJA_KIT || cart.colors.length > 3 || cart.colors.some((color) => !["Preta", "Branca", "Rosa"].includes(color.label) || !Number.isInteger(color.quantity) || color.quantity < 1) || cart.colors.reduce((sum, color) => sum + color.quantity, 0) !== cart.qty)) return null;
+  const unit = pricing?.version ? Math.round(pricing.salePrice * (1 - pricing.pixDiscountPercent / 100) * 100) / 100 : product2.price;
+  const amount = (Math.round(unit * cart.qty * cart.discount * 100) + Math.round(shippingPrices[cart.shipping] * cart.discount * 100) - cart.bonus * 100) / 100;
+  return {
+    amount: Math.max(0.01, amount),
+    productId: product2.id,
+    products: [{ id: product2.id, name: product2.title, quantity: cart.qty, image: `/forja${product2.image}` }]
+  };
+}
+function orderStore(order) {
+  return order?.tracking?.store_id === "forja" || order?.tracking?.site_variant === "forja" ? "forja" : "gokoco";
+}
+function orderSite(env, order) {
+  const base = String(env.SITE_URL || "").replace(/\/+$/, "");
+  return orderStore(order) === "forja" ? `${base}/forja` : base;
+}
+
+// worker-src/upsell-catalog.js
+var upsellCatalog = [
+  { id: "popozuda", step: 2, name: "Popozuda Creme Modelador Corporal 200g", price: 31.96, oldFactor: 1.5, rating: 4.6, sourceId: "1731410956394792439", folder: "01 - Popozuda Creme Modelador Corporal", category: "Cuidados com o corpo", description: "Creme modelador corporal Popozuda, embalagem de 200g.", contents: "1 frasco de 200g" },
+  { id: "liso-obrigatorio", step: 3, name: "Kit Profissional Liso Obrigat\xF3rio 1L + \xD3leo Ativador de Escova", price: 38.36, oldFactor: 1.65, rating: 4.8, sourceId: "1737439077064541825", folder: "02 - Kit Liso Obrigatorio", category: "Cuidados com os cabelos", description: "Kit capilar profissional com 3 itens da linha Liso Obrigat\xF3rio e \xF3leo ativador de escova.", contents: "Kit com 3 itens" },
+  { id: "ultra-bond", step: 4, name: "Eudora Si\xE0ge Ultra Bond Reset \u2014 Kit Completo", price: 103.96, oldFactor: 1.8, rating: 4.9, sourceId: "1737119339326637650", folder: "03 - Eudora Siage Ultra Bond Reset", category: "Cuidados com os cabelos", description: "Kit completo Eudora Si\xE0ge Ultra Bond Reset com 4 itens para a rotina de cuidados capilares.", contents: "Kit com 4 itens" },
+  { id: "pro-cronology", step: 5, name: "Eudora Si\xE0ge Pro Cronology \u2014 Shampoo + Condicionador", price: 27.2, oldFactor: 1.95, rating: 4.7, sourceId: "1737278707688638076", folder: "04 - Eudora Siage Pro Cronology", category: "Cuidados com os cabelos", description: "Kit Eudora Si\xE0ge Pro Cronology com shampoo de 250ml e condicionador de 200ml.", contents: "Shampoo 250ml + condicionador 200ml" },
+  { id: "principia-glow", step: 6, name: "Principia Kit Essencial Glow GL-02 + CH + VC + PS", price: 63.24, oldFactor: 1.6, rating: 4.9, sourceId: "1736972891285063316", folder: "05 - Principia Kit Essencial Glow", category: "Cuidados com a pele", description: "Kit de cuidados com a pele Principia Essencial Glow com os produtos GL-02, CH, VC e PS.", contents: "Kit GL-02 + CH + VC + PS" }
+];
+
+// worker-src/product-pricing.js
+var round = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+var product = (id, name, salePrice, originalPrice = salePrice, pixDiscountPercent = 0) => ({ id, name, salePrice, originalPrice, pixDiscountPercent, recoveryDiscountPercent: 50, version: null });
+var priceDefaults = [
+  product("escova", "Escova 3 em 1 \xB7 GOKOCO / Bella Mix / TL", 37.9, 167.9),
+  product("bella-kit-7-em-1", "Bella Mix \xB7 Kit 7 em 1 (todas as cores)", 69.9, 69.9, 10),
+  product("pincel", "Pincel", 11.96, 19.9),
+  product("necessaire", "Complemento \xB7 N\xE9cessaire", 19.47),
+  product("siage", "Complemento \xB7 Si\xE0ge", 32.63),
+  product("wella", "Complemento \xB7 Wella", 45.7),
+  ...upsellCatalog.map((p) => product(p.id, p.name, p.price, Math.ceil(p.price * p.oldFactor) - 0.1)),
+  ...[...forjaProducts.values()].map((p) => product("forja:" + p.id, "Forja \xB7 " + p.title, p.price, Math.max(p.price, p.oldPrice)))
+];
+var canonicalPriceId = (id) => String(id).startsWith("bella-escova-") ? "escova" : String(id).startsWith("bella-kit-7-em-1-") ? "bella-kit-7-em-1" : String(id).startsWith("bella-") && priceDefaults.some((p) => p.id === String(id).slice(6)) ? String(id).slice(6) : String(id);
+function priceFor(prices, id) {
+  const key = canonicalPriceId(id);
+  return prices?.find((p) => p.id === key) || priceDefaults.find((p) => p.id === key);
+}
+var discountedPrice = (price, percent = 0) => round(price * (1 - percent / 100));
+var saleDiscount = (p) => Math.round((1 - p.salePrice / p.originalPrice) * 100);
+function publicPrice(p) {
+  return { ...p, discountPercent: saleDiscount(p), pixPrice: discountedPrice(p.salePrice, p.pixDiscountPercent) };
+}
+async function loadPrices(env) {
+  if (env.PRODUCT_PRICES) return { products: env.PRODUCT_PRICES, ready: env.PRODUCT_PRICES_READY !== false };
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return { products: priceDefaults, ready: false };
+  const response = await fetch(`${String(env.SUPABASE_URL).replace(/\/+$/, "")}/rest/v1/gokoco_product_prices?select=*`, {
+    headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` },
+    signal: AbortSignal.timeout(1e4)
+  });
+  const rows = await response.json().catch(() => null);
+  if (!response.ok) {
+    if (["PGRST205", "42P01"].includes(rows?.code)) return { products: priceDefaults, ready: false };
+    throw new Error("N\xE3o foi poss\xEDvel consultar os pre\xE7os. Tente novamente.");
+  }
+  if (!Array.isArray(rows)) throw new Error("Resposta de pre\xE7os inv\xE1lida.");
+  return { ready: true, products: priceDefaults.map((base) => {
+    const row = rows.find((r) => r.id === base.id);
+    return row ? { ...base, originalPrice: Number(row.original_price), salePrice: Number(row.sale_price), pixDiscountPercent: Number(row.pix_discount_percent), recoveryDiscountPercent: Number(row.recovery_discount_percent), version: row.version } : base;
+  }) };
+}
+function validatePrice(body) {
+  const base = priceDefaults.find((p) => p.id === body?.id);
+  if (!base) throw new Error("Produto inv\xE1lido.");
+  for (const key of ["originalPrice", "salePrice", "pixDiscountPercent", "recoveryDiscountPercent"]) {
+    if (typeof body[key] !== "number" || !Number.isFinite(body[key]) || Math.abs(round(body[key]) - body[key]) > 1e-6) throw new Error("Informe valores v\xE1lidos com at\xE9 duas casas decimais.");
+  }
+  if (body.salePrice < 0.01 || body.originalPrice < body.salePrice || body.originalPrice > 999999.99) throw new Error("O pre\xE7o original deve ser maior ou igual ao pre\xE7o de venda, e ambos devem ser positivos.");
+  if ([body.pixDiscountPercent, body.recoveryDiscountPercent].some((p) => p < 0 || p > 99)) throw new Error("Os descontos adicionais devem ficar entre 0% e 99%.");
+  if (discountedPrice(discountedPrice(body.salePrice, body.pixDiscountPercent), body.recoveryDiscountPercent) < 0.01) throw new Error("O valor ap\xF3s os descontos deve ser de pelo menos R$ 0,01.");
+  return { ...base, ...Object.fromEntries(["originalPrice", "salePrice", "pixDiscountPercent", "recoveryDiscountPercent"].map((k) => [k, body[k]])) };
+}
+async function savePrice(env, body) {
+  const p = validatePrice(body);
+  const current = await loadPrices(env);
+  if (!current.ready) return { error: "A tabela de pre\xE7os ainda precisa ser instalada no banco. Execute a migra\xE7\xE3o gokoco_product_prices.sql antes de salvar.", status: 503 };
+  const previous = priceFor(current.products, p.id);
+  if ((body.version || null) !== previous.version) return { error: "O pre\xE7o foi alterado em outra sess\xE3o. Atualize e confira os valores antes de salvar.", status: 409 };
+  const version = crypto.randomUUID();
+  const payload = { id: p.id, original_price: p.originalPrice, sale_price: p.salePrice, pix_discount_percent: p.pixDiscountPercent, recovery_discount_percent: p.recoveryDiscountPercent, version, updated_at: (/* @__PURE__ */ new Date()).toISOString() };
+  const query = previous.version ? `?id=eq.${encodeURIComponent(p.id)}&version=eq.${encodeURIComponent(previous.version)}` : "";
+  const response = await fetch(`${String(env.SUPABASE_URL).replace(/\/+$/, "")}/rest/v1/gokoco_product_prices${query}`, {
+    method: previous.version ? "PATCH" : "POST",
+    headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(1e4)
+  });
+  const saved = await response.json().catch(() => null);
+  if (response.status === 409 || response.ok && !saved?.length) return { status: 409, error: "O produto mudou em outra sess\xE3o. Atualize os pre\xE7os." };
+  if (!response.ok) return { status: 502, error: "N\xE3o foi poss\xEDvel salvar o pre\xE7o no banco." };
+  return { product: publicPrice({ ...p, version }) };
+}
+function pagePriceId(pathname) {
+  const route = pathname.replace(/\.html$/, "").replace(/\/$/, "") || "/";
+  if (route === "/forja" || route === "/forja/index" || route === "/forja/pagamento") return "forja:soarfly-kit-ferramentas-4-em-1-48vf";
+  if (/^\/forja\/(produtos|checkout)\//.test(route)) return "forja:" + route.split("/").at(-1);
+  if (route.startsWith("/forja/")) return null;
+  const tail = route.replace(/^\/(tl|video)/, "") || "/";
+  if (tail === "/pagamento-pincel" || tail === "/upsell1") return "pincel";
+  const upsell = upsellCatalog.find((p) => tail === "/upsell" + p.step || tail === "/pagamento-" + p.id);
+  if (upsell) return upsell.id;
+  return ["/", "/index", "/pagamento"].includes(tail) && !route.startsWith("/video") ? "escova" : null;
+}
+function replaceAmount(text2, from, to) {
+  if (from === to) return text2;
+  const fixed = Number(from).toFixed(2);
+  const tokens = [fixed, ...fixed.endsWith("0") ? [fixed.slice(0, -1)] : [], ...Number.isInteger(Number(from)) ? [] : [String(Number(from))], fixed.replace(".", ",")].sort((a, b) => b.length - a.length);
+  for (const token of new Set(tokens)) {
+    const pattern = new RegExp("(?<![\\d.])" + token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?!\\d|[.,]\\d)", "g");
+    text2 = text2.replace(pattern, token.includes(",") ? Number(to).toFixed(2).replace(".", ",") : Number(to).toFixed(2));
+  }
+  if (Number.isInteger(Number(from))) {
+    const pattern = new RegExp("(\\b(?:price|oldPrice|UNIT|PRICE|ORIGINAL_PRICE|value)\\s*[:=]\\s*)" + Number(from) + "(?![\\d.])", "g");
+    text2 = text2.replace(pattern, (_, prefix) => prefix + Number(to).toFixed(2));
+  }
+  return text2;
+}
+function replaceProduct(text2, base, p, checkout = false) {
+  if (!p.version) return text2;
+  const selling = checkout ? discountedPrice(p.salePrice, p.pixDiscountPercent) : p.salePrice;
+  const originals = [];
+  text2 = text2.replace(/<(span|div|del|s)\b[^>]*class=["'][^"']*(?:\bold\b|line-through)[^"']*["'][^>]*>[\s\S]*?<\/\1>/g, (value) => {
+    originals.push(replaceAmount(value, base.originalPrice, p.originalPrice));
+    return `<!--ORIGINAL_PRICE_${originals.length - 1}-->`;
+  });
+  text2 = text2.replace(/(\bORIGINAL_PRICE\s*=\s*)[\d.]+/g, (_, prefix) => prefix + "__CONFIGURED_ORIGINAL__");
+  const substitutions = [];
+  const pairs = [...base.originalPrice !== base.salePrice ? [[base.originalPrice, p.originalPrice]] : [], ...base.originalPrice - base.salePrice !== base.salePrice ? [[base.originalPrice - base.salePrice, p.originalPrice - selling]] : [], [base.salePrice / 5, selling / 5], [base.salePrice, selling]];
+  for (const [from, to] of pairs) if (from > 0 && !substitutions.some((s) => s[2] === from)) {
+    const placeholder = 9e5 + substitutions.length + 0.99;
+    text2 = replaceAmount(text2, from, placeholder);
+    substitutions.push([placeholder, to, from]);
+  }
+  for (const [placeholder, to] of substitutions) text2 = replaceAmount(text2, placeholder, to);
+  text2 = text2.replaceAll("__CONFIGURED_ORIGINAL__", p.originalPrice.toFixed(2));
+  text2 = text2.replace(/<!--ORIGINAL_PRICE_(\d+)-->/g, (_, index) => originals[Number(index)]);
+  const oldPercent = saleDiscount(base);
+  text2 = text2.replace(new RegExp(`([>\\s-])${oldPercent}%(?=[<\\s])`, "g"), `$1${saleDiscount(p)}%`);
+  if (checkout) text2 = text2.replace(/(getItem\([^)]*disc[^)]*\)\s*===?\s*['"]0\.5['"]\s*\?\s*)0\.5/g, `$1${1 - p.recoveryDiscountPercent / 100}`);
+  if (!checkout && p.pixDiscountPercent > 0) text2 = text2.replace("</h1>", `</h1><p class="pricing-pix-note" style="font-size:13px;color:#166534;padding:4px 0">No Pix: R$ ${discountedPrice(p.salePrice, p.pixDiscountPercent).toFixed(2).replace(".", ",")} (${p.pixDiscountPercent}% de desconto extra)</p>`);
+  return text2;
+}
+function renderPrices(html, pathname, prices) {
+  const primary = pagePriceId(pathname);
+  const art = [];
+  html = html.replace(/<(svg|style)\b[^>]*>[\s\S]*?<\/\1>/gi, (value) => {
+    art.push(value);
+    return `<!--PRICED_ART_${art.length - 1}-->`;
+  });
+  const fragments = [];
+  html = html.replace(/<a\b[^>]*class=["'][^"']*\bproduct\b[^"']*["'][^>]*>[\s\S]*?<\/a>/g, (card) => {
+    const href = card.match(/href=["']([^"']+)/)?.[1];
+    if (!href) return card;
+    let id = pagePriceId(href.split("?")[0]);
+    if (!id && /loja|vitrine/.test(pathname)) id = primary;
+    const base = priceFor(null, id), p = priceFor(prices, id);
+    let value = base && p ? replaceProduct(card, base, p) : card;
+    if (p?.version) {
+      value = value.replace(/(<div\b[^>]*class=["'][^"']*\bold\b[^"']*["'][^>]*>)[\s\S]*?(<\/div>)/g, (_, open, close) => open + (p.originalPrice > p.salePrice ? "R$ " + p.originalPrice.toFixed(2).replace(".", ",") : "") + close);
+      const badge = saleDiscount(p) ? "-" + saleDiscount(p) + "%" : "";
+      if (/class=["'][^"']*\bdiscount\b/.test(value)) value = value.replace(/(<span\b[^>]*class=["'][^"']*\bdiscount\b[^"']*["'][^>]*>)[\s\S]*?(<\/span>)/g, (_, open, close) => open + badge + close);
+      else if (badge) value = value.replace(/(<span\b[^>]*class=["'][^"']*\bprice\b[^"']*["'][^>]*>[\s\S]*?<\/span>)/, `$1<span class="discount">${badge}</span>`);
+    }
+    fragments.push(value);
+    return `<!--PRICED_CARD_${fragments.length - 1}-->`;
+  });
+  const bumpPrices = [];
+  for (const id of ["necessaire", "siage", "wella"]) {
+    const p = priceFor(prices, id);
+    if (p?.version) {
+      const marker = 950000.99 + bumpPrices.length;
+      html = replaceAmount(html, priceFor(null, id).salePrice, marker);
+      bumpPrices.push([marker, /pagamento|\/checkout\//.test(pathname) ? discountedPrice(p.salePrice, p.pixDiscountPercent) : p.salePrice]);
+    }
+  }
+  if (primary) html = replaceProduct(html, priceFor(null, primary), priceFor(prices, primary), /pagamento|\/checkout\//.test(pathname));
+  for (const [marker, amount] of bumpPrices) html = replaceAmount(html, marker, amount);
+  html = html.replace(/<!--PRICED_CARD_(\d+)-->/g, (_, index) => fragments[Number(index)]);
+  html = html.replace(/(<script\b[^>]*type=["']application\/json["'][^>]*>)([\s\S]*?)(<\/script>)/g, (all, open, content, close) => {
+    try {
+      const rows = JSON.parse(content);
+      if (!Array.isArray(rows)) return all;
+      return open + JSON.stringify(rows.map((row) => {
+        const p = priceFor(prices, "forja:" + row.id);
+        return p?.version ? { ...row, price: p.salePrice, oldPrice: p.originalPrice, discount: saleDiscount(p) } : row;
+      })).replaceAll("<", "\\u003c") + close;
+    } catch {
+      return all;
+    }
+  });
+  html = html.replace(/<!--PRICED_ART_(\d+)-->/g, (_, index) => art[Number(index)]);
+  const config2 = { products: prices.map(publicPrice), primary, routes: Object.fromEntries(upsellCatalog.map((p) => ["/upsell" + p.step, p.id])) };
+  return html.replace(/<head([^>]*)>/i, `<head$1><script>window.__PRODUCT_PRICING=${JSON.stringify(config2).replaceAll("<", "\\u003c")};<\/script><script src="/js/product-pricing.js"><\/script>`);
+}
+
 // worker-src/providers/unipay.js
 var BASE = "https://api-dash.unipaybr.com/v1";
 var reply = (value, status2, headers6) => new Response(JSON.stringify(value), { status: status2, headers: headers6 });
@@ -1296,7 +1721,7 @@ function capturePurchaseTracking(request3, body) {
   };
   return tracking;
 }
-async function recoverCustomerAttribution(env, db2, tracking, buyer) {
+async function recoverCustomerAttribution(env, db2, tracking, buyer, storeId = null) {
   const current = Object.fromEntries(ATTRIBUTION_KEYS.map((key) => [key, tracking?.[key] || null]));
   const hasAttribution2 = (values) => ATTRIBUTION_KEYS.some((key) => Boolean(values?.[key]));
   if (hasAttribution2(current)) return { ...tracking, attribution_source: "current_visit" };
@@ -1306,7 +1731,8 @@ async function recoverCustomerAttribution(env, db2, tracking, buyer) {
   const filters = [email ? `email=eq.${encodeURIComponent(email)}` : null, phone ? `phone=eq.${encodeURIComponent(phone)}` : null].filter(Boolean);
   if (!filters.length) return { ...tracking, attribution_source: "unattributed" };
   try {
-    const results = await Promise.all(filters.map((filter) => db2(env, "gokoco_orders", `?${filter}&created_at=gte.${encodeURIComponent(since)}&select=tracking,created_at&order=created_at.desc&limit=5`)));
+    const scope = storeId === "forja" ? "&tracking->>store_id=eq.forja" : "&or=(tracking->>store_id.is.null,tracking->>store_id.neq.forja)";
+    const results = await Promise.all(filters.map((filter) => db2(env, "gokoco_orders", `?${filter}${scope}&created_at=gte.${encodeURIComponent(since)}&select=tracking,created_at&order=created_at.desc&limit=5`)));
     const previous = results.flat().filter((order) => hasAttribution2(order?.tracking)).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0]?.tracking;
     if (!previous) return { ...tracking, attribution_source: "unattributed" };
     const recovered = Object.fromEntries(ATTRIBUTION_KEYS.map((key) => [key, previous[key] || null]));
@@ -2560,15 +2986,6 @@ async function onRequest(context) {
   return new Response(JSON.stringify({ token }), { status: 200, headers: CORS });
 }
 
-// worker-src/upsell-catalog.js
-var upsellCatalog = [
-  { id: "popozuda", step: 2, name: "Popozuda Creme Modelador Corporal 200g", price: 31.96, oldFactor: 1.5, rating: 4.6, sourceId: "1731410956394792439", folder: "01 - Popozuda Creme Modelador Corporal", category: "Cuidados com o corpo", description: "Creme modelador corporal Popozuda, embalagem de 200g.", contents: "1 frasco de 200g" },
-  { id: "liso-obrigatorio", step: 3, name: "Kit Profissional Liso Obrigat\xF3rio 1L + \xD3leo Ativador de Escova", price: 38.36, oldFactor: 1.65, rating: 4.8, sourceId: "1737439077064541825", folder: "02 - Kit Liso Obrigatorio", category: "Cuidados com os cabelos", description: "Kit capilar profissional com 3 itens da linha Liso Obrigat\xF3rio e \xF3leo ativador de escova.", contents: "Kit com 3 itens" },
-  { id: "ultra-bond", step: 4, name: "Eudora Si\xE0ge Ultra Bond Reset \u2014 Kit Completo", price: 103.96, oldFactor: 1.8, rating: 4.9, sourceId: "1737119339326637650", folder: "03 - Eudora Siage Ultra Bond Reset", category: "Cuidados com os cabelos", description: "Kit completo Eudora Si\xE0ge Ultra Bond Reset com 4 itens para a rotina de cuidados capilares.", contents: "Kit com 4 itens" },
-  { id: "pro-cronology", step: 5, name: "Eudora Si\xE0ge Pro Cronology \u2014 Shampoo + Condicionador", price: 27.2, oldFactor: 1.95, rating: 4.7, sourceId: "1737278707688638076", folder: "04 - Eudora Siage Pro Cronology", category: "Cuidados com os cabelos", description: "Kit Eudora Si\xE0ge Pro Cronology com shampoo de 250ml e condicionador de 200ml.", contents: "Shampoo 250ml + condicionador 200ml" },
-  { id: "principia-glow", step: 6, name: "Principia Kit Essencial Glow GL-02 + CH + VC + PS", price: 63.24, oldFactor: 1.6, rating: 4.9, sourceId: "1736972891285063316", folder: "05 - Principia Kit Essencial Glow", category: "Cuidados com a pele", description: "Kit de cuidados com a pele Principia Essencial Glow com os produtos GL-02, CH, VC e PS.", contents: "Kit GL-02 + CH + VC + PS" }
-];
-
 // worker-src/order-email.js
 var emailText = (value, limit = 300) => String(value || "").trim().slice(0, limit);
 var emailAddress = (value) => /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(value);
@@ -2591,19 +3008,20 @@ function brandedOrderEmail(title, content, code, settings2) {
   return `<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title></head>
 <body style="margin:0;padding:0;background-color:#f3f4f6;color:#24252b;font-family:Arial,Helvetica,sans-serif">
-<div style="display:none;max-height:0;overflow:hidden;mso-hide:all">${escapeHtml(title)} \u2014 novidades sobre seu pedido GOKOCO.</div>
+<div style="display:none;max-height:0;overflow:hidden;mso-hide:all">${escapeHtml(title)} \u2014 novidades sobre seu pedido ${settings2.brand || "GOKOCO"}.</div>
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#f3f4f6"><tr><td align="center" style="padding:32px 12px">
 <!--[if mso]><table role="presentation" width="600"><tr><td><![endif]-->
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;background-color:#ffffff;border-radius:16px;overflow:hidden">
-<tr><td bgcolor="#17181f" style="padding:30px 28px;border-bottom:4px solid #ef3456"><a href="${escapeHtml(settings2.site)}" style="color:#ffffff;text-decoration:none;font-size:28px;font-weight:800;letter-spacing:3px">GOKOCO<span style="color:#ff5976">.</span></a><p style="margin:9px 0 0;color:#d1d5db;font-size:12px;letter-spacing:1px">CUIDADO EM CADA DETALHE</p></td></tr>
+<tr><td bgcolor="#17181f" style="padding:30px 28px;border-bottom:4px solid #ef3456"><a href="${escapeHtml(settings2.site)}" style="color:#ffffff;text-decoration:none;font-size:28px;font-weight:800;letter-spacing:3px">${escapeHtml(settings2.brand || "GOKOCO")}<span style="color:#ff5976">.</span></a><p style="margin:9px 0 0;color:#d1d5db;font-size:12px;letter-spacing:1px">CUIDADO EM CADA DETALHE</p></td></tr>
 <tr><td style="padding:32px 28px 12px"><p style="margin:0 0 12px;color:#c52646;font-size:11px;font-weight:bold;letter-spacing:1.5px">SOBRE SEU PEDIDO</p><h1 style="margin:0 0 24px;font-size:25px;line-height:1.3;color:#17181f;overflow-wrap:anywhere">${escapeHtml(title)}</h1><div style="font-size:16px;line-height:1.75;color:#4b5563;overflow-wrap:anywhere;word-break:break-word">${content}</div></td></tr>
 ${code ? `<tr><td style="padding:12px 28px 28px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#fff2f5" style="border:1px solid #ffd6df;border-radius:12px"><tr><td align="center" style="padding:24px 16px"><p style="margin:0 0 10px;color:#9d2440;font-size:11px;font-weight:bold;letter-spacing:1.5px">SEU C\xD3DIGO DE RASTREIO</p><p style="margin:0 0 22px;font-family:Courier New,monospace;font-size:24px;font-weight:bold;letter-spacing:2px;color:#17181f;word-break:break-all">${escapeHtml(code)}</p><table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr><td align="center" bgcolor="#d92a4b" style="border-radius:8px;mso-padding-alt:15px 24px"><a href="${escapeHtml(trackingUrl)}" style="display:inline-block;padding:15px 24px;color:#ffffff;text-decoration:none;font-size:15px;font-weight:bold">Acompanhar meu pedido &rarr;</a></td></tr></table></td></tr></table></td></tr>` : ""}
 <tr><td style="padding:22px 28px;border-top:1px solid #edf0f3;background-color:#fafafa"><p style="margin:0 0 6px;font-size:14px;font-weight:bold;color:#17181f">Conte com a gente.</p><p style="margin:0;font-size:13px;line-height:1.7;color:#6b7280">Precisa de ajuda? Responda a este e-mail ou <a href="https://api.whatsapp.com/send?phone=5583993302240" style="color:#a72340;text-decoration:underline">fale com nosso atendimento</a>.</p></td></tr>
-</table><p style="max-width:550px;margin:20px auto 0;color:#777e8b;font-size:11px;line-height:1.7;text-align:center">GOKOCO &bull; Atendimento ao cliente<br>Esta mensagem \xE9 referente ao seu pedido em nossa loja.</p>
+</table><p style="max-width:550px;margin:20px auto 0;color:#777e8b;font-size:11px;line-height:1.7;text-align:center">${escapeHtml(settings2.brand || "GOKOCO")} &bull; Atendimento ao cliente<br>Esta mensagem \xE9 referente ao seu pedido em nossa loja.</p>
 <!--[if mso]></td></tr></table><![endif]-->
 </td></tr></table></body></html>`;
 }
 function composeEmail(order, code, settings2) {
+  settings2 = { ...settings2, site: orderSite({ SITE_URL: settings2.site }, order), brand: orderStore(order) === "forja" ? "Forja Ferramentas" : "GOKOCO" };
   const firstName = emailText(order.name, 100).split(/\s+/)[0] || "cliente";
   const url = `${settings2.site}/rastreio.html?codigo=${encodeURIComponent(code)}`;
   const questions = [
@@ -2614,15 +3032,15 @@ function composeEmail(order, code, settings2) {
   ];
   const intro = `Ol\xE1, ${firstName}!
 
-Seu pagamento da escova GOKOCO foi confirmado. Seu c\xF3digo de rastreio \xE9 ${code}.
+Seu pagamento da ${settings2.brand === "Forja Ferramentas" ? "compra na Forja Ferramentas" : "escova GOKOCO"} foi confirmado. Seu c\xF3digo de rastreio \xE9 ${code}.
 Acompanhe seu pedido: ${url}
 
 Posso te fazer algumas perguntas simples para nos ajudar a entender melhor nossos clientes? Se quiser, responda diretamente a este e-mail:
 
 `;
-  const text2 = intro + questions.map((question, index) => `${index + 1}. ${question}`).join("\n") + "\n\nObrigado por comprar com a gente!\nEquipe GOKOCO";
-  const html = brandedOrderEmail(`Pagamento confirmado, ${firstName}!`, `<p style="margin:0 0 20px">Recebemos o pagamento da sua escova GOKOCO. Obrigado por escolher nossa loja!</p><p style="margin:0 0 16px">Queremos conhecer voc\xEA melhor. Se quiser, responda a este e-mail contando:</p><ol style="padding-left:22px;margin:0 0 24px">${questions.map((question) => `<li style="margin-bottom:8px">${escapeHtml(question)}</li>`).join("")}</ol>`, code, settings2);
-  return { from: `GOKOCO <${settings2.from}>`, to: [emailText(order.email, 254)], reply_to: settings2.replyTo, subject: `Seu pedido GOKOCO foi confirmado \xB7 rastreio ${code}`, text: text2, html };
+  const text2 = intro + questions.map((question, index) => `${index + 1}. ${question}`).join("\n") + "\n\nObrigado por comprar com a gente!\nEquipe " + settings2.brand;
+  const html = brandedOrderEmail(`Pagamento confirmado, ${firstName}!`, `<p style="margin:0 0 20px">Recebemos o pagamento da ${settings2.brand === "Forja Ferramentas" ? "sua compra na Forja Ferramentas" : "sua escova GOKOCO"}. Obrigado por escolher nossa loja!</p><p style="margin:0 0 16px">Queremos conhecer voc\xEA melhor. Se quiser, responda a este e-mail contando:</p><ol style="padding-left:22px;margin:0 0 24px">${questions.map((question) => `<li style="margin-bottom:8px">${escapeHtml(question)}</li>`).join("")}</ol>`, code, settings2);
+  return { from: `${settings2.brand || "GOKOCO"} <${settings2.from}>`, to: [emailText(order.email, 254)], reply_to: settings2.replyTo, subject: `Seu pedido ${settings2.brand} foi confirmado \xB7 rastreio ${code}`, text: text2, html };
 }
 async function swapEmailState(db2, env, order, tracking) {
   const query = `?id=eq.${encodeURIComponent(order.id)}&status=eq.paid&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=*`;
@@ -2682,8 +3100,9 @@ async function retryPaidEmails(env, db2, limit = 1) {
   return { configured: true, processed: rows.length, sent: results.filter((r) => r.status === "fulfilled" && r.value.state === "sent").length, failed: results.filter((r) => r.status === "rejected" || r.value?.state === "failed").length };
 }
 async function sendManualOrderEmail(env, order, subject, message) {
-  const settings2 = emailSettings(env);
-  if (!settings2) return { state: "not_configured" };
+  const baseSettings = emailSettings(env);
+  if (!baseSettings) return { state: "not_configured" };
+  const settings2 = { ...baseSettings, site: orderSite(env, order), brand: orderStore(order) === "forja" ? "Forja Ferramentas" : "GOKOCO" };
   const recipient = emailText(order.email, 254);
   const title = emailText(subject, 150);
   const body = emailText(message, 5e3);
@@ -2692,7 +3111,7 @@ async function sendManualOrderEmail(env, order, subject, message) {
     method: "POST",
     headers: { Authorization: `Bearer ${settings2.key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      from: `GOKOCO <${settings2.from}>`,
+      from: `${settings2.brand || "GOKOCO"} <${settings2.from}>`,
       to: [recipient],
       reply_to: settings2.replyTo,
       subject: title,
@@ -2725,16 +3144,19 @@ function recoverySettings(env) {
   return { key, from, site: site.origin };
 }
 function recoveryMessage(order, number, settings2) {
+  settings2 = { ...settings2, site: orderSite({ SITE_URL: settings2.site }, order) };
+  const brand = orderStore(order) === "forja" ? "Forja Ferramentas" : "GOKOCO";
+  const product2 = brand === "GOKOCO" ? "escova GOKOCO" : "compra na Forja Ferramentas";
   const name = recoveryText(order.name, 100).split(/\s+/)[0] || "cliente";
   const items = Array.isArray(order.products) ? order.products.map((item) => recoveryText(item.name, 120)).filter(Boolean).join(", ") : "";
   const amount = Number(order.amount).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   const link = `${settings2.site}/?utm_source=recovery&utm_medium=email&utm_campaign=email${number}`;
   const messages = [
-    `Seu PIX foi gerado, mas ainda n\xE3o identificamos o pagamento. Se quiser concluir a compra da sua escova GOKOCO, acesse a loja. Caso j\xE1 tenha pago, desconsidere esta mensagem.`,
-    `Seu pedido da escova GOKOCO ainda aparece sem pagamento confirmado. Voc\xEA pode voltar \xE0 loja para concluir a compra. Caso j\xE1 tenha pago, desconsidere esta mensagem.`,
-    `Este \xE9 nosso \xFAltimo lembrete sobre o pedido da escova GOKOCO que ainda aparece sem pagamento confirmado. Se quiser, voc\xEA pode concluir a compra na loja. Caso j\xE1 tenha pago, desconsidere esta mensagem.`
+    `Seu PIX foi gerado, mas ainda n\xE3o identificamos o pagamento. Se quiser concluir a compra da sua ${product2}, acesse a loja. Caso j\xE1 tenha pago, desconsidere esta mensagem.`,
+    `Seu pedido da ${product2} ainda aparece sem pagamento confirmado. Voc\xEA pode voltar \xE0 loja para concluir a compra. Caso j\xE1 tenha pago, desconsidere esta mensagem.`,
+    `Este \xE9 nosso \xFAltimo lembrete sobre o pedido da ${product2} que ainda aparece sem pagamento confirmado. Se quiser, voc\xEA pode concluir a compra na loja. Caso j\xE1 tenha pago, desconsidere esta mensagem.`
   ];
-  const subject = [`Seu pedido GOKOCO ainda est\xE1 aguardando pagamento`, `Ainda quer sua escova GOKOCO?`, `\xDAltimo lembrete sobre seu pedido GOKOCO`][number - 1];
+  const subject = [`Seu pedido ${brand} ainda est\xE1 aguardando pagamento`, `Ainda quer sua ${product2}?`, `\xDAltimo lembrete sobre seu pedido ${brand}`][number - 1];
   const body = messages[number - 1];
   const text2 = `Ol\xE1, ${name}!
 
@@ -2745,9 +3167,9 @@ ${items ? `Produto: ${items}
 
 Voltar \xE0 loja: ${link}
 
-Equipe GOKOCO`;
-  const html = `<div style="max-width:560px;margin:auto;font-family:Arial,sans-serif;color:#17212b;line-height:1.6"><h1 style="font-size:22px">Ol\xE1, ${recoveryHtml(name)}!</h1><p>${recoveryHtml(body)}</p>${items ? `<p><strong>Produto:</strong> ${recoveryHtml(items)}</p>` : ""}<p><strong>Valor do pedido:</strong> ${recoveryHtml(amount)}</p><p><a href="${recoveryHtml(link)}" style="display:inline-block;padding:12px 20px;border-radius:8px;background:#15803d;color:#fff;text-decoration:none;font-weight:bold">Voltar \xE0 loja</a></p><p>Equipe GOKOCO</p></div>`;
-  return { from: `GOKOCO <${settings2.from}>`, to: [order.email], reply_to: settings2.from, subject, text: text2, html };
+Equipe ${brand}`;
+  const html = `<div style="max-width:560px;margin:auto;font-family:Arial,sans-serif;color:#17212b;line-height:1.6"><h1 style="font-size:22px">Ol\xE1, ${recoveryHtml(name)}!</h1><p>${recoveryHtml(body)}</p>${items ? `<p><strong>Produto:</strong> ${recoveryHtml(items)}</p>` : ""}<p><strong>Valor do pedido:</strong> ${recoveryHtml(amount)}</p><p><a href="${recoveryHtml(link)}" style="display:inline-block;padding:12px 20px;border-radius:8px;background:#15803d;color:#fff;text-decoration:none;font-weight:bold">Voltar \xE0 loja</a></p><p>Equipe ${brand}</p></div>`;
+  return { from: `${brand} <${settings2.from}>`, to: [order.email], reply_to: settings2.from, subject, text: text2, html };
 }
 async function recoverySwap(db2, env, order, state) {
   const query = `?id=eq.${encodeURIComponent(order.id)}&status=eq.pending&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=*`;
@@ -3292,6 +3714,7 @@ async function leadRow(env, body, method, tracking) {
 }
 async function createCheckoutLead(env, body, method) {
   const tracking = await resolveLeadTracking(env, body);
+  if (body._serverPricing?.length) tracking.pricing = body._serverPricing;
   const response = await supabaseRequest(env, "leads?select=id", {
     method: "POST",
     headers: { Prefer: "return=representation" },
@@ -3502,17 +3925,19 @@ var PRODUCTS = /* @__PURE__ */ new Map([
   ["bella-kit-7-em-1-rose", { name: "Kit 7 em 1 Escova Secadora Ros\xEA Bivolt com Caixa e 7 Acess\xF3rios", price: 69.9, pixPrice: 62.91 }],
   ["bella-kit-7-em-1-verde", { name: "Kit 7 em 1 Escova Secadora Verde Bivolt com Caixa e 7 Acess\xF3rios", price: 69.9, pixPrice: 62.91 }]
 ]);
-function validateCartItems(rawItems, method) {
+function validateCartItems(rawItems, method, prices) {
   if (!Array.isArray(rawItems) || rawItems.length === 0) {
     throw new Error("Carrinho n\xE3o informado.");
   }
   const normalized = rawItems.map((raw) => {
-    const product = PRODUCTS.get(String(raw?.id || ""));
+    const product2 = PRODUCTS.get(String(raw?.id || ""));
     const quantity = Number(raw?.quantity);
-    if (!product || !Number.isInteger(quantity) || quantity < 1 || quantity > 10) {
+    if (!product2 || !Number.isInteger(quantity) || quantity < 1 || quantity > 10) {
       throw new Error("O carrinho cont\xE9m um produto ou quantidade inv\xE1lida.");
     }
-    return { ...product, id: String(raw.id), quantity };
+    const configured2 = priceFor(prices, raw.id);
+    const current = configured2?.version ? { price: configured2.salePrice, pixPrice: discountedPrice(configured2.salePrice, configured2.pixDiscountPercent) } : {};
+    return { ...product2, ...current, id: String(raw.id), quantity };
   });
   const priceKey = method === "pix" ? "pixPrice" : "price";
   const amount = Number(normalized.reduce((sum, item) => sum + item[priceKey] * item.quantity, 0).toFixed(2));
@@ -3542,8 +3967,10 @@ async function onRequest2({ request: request3, env }) {
     return json({ error: "Dados obrigat\xF3rios do pedido n\xE3o informados." }, 400);
   }
   try {
-    const cart = validateCartItems(body.items, method);
-    const lead = await createCheckoutLead(env, { ...body, ...cart, _serverBrowser: capturePurchaseTracking(request3, body)._browser }, method);
+    const cart = validateCartItems(body.items, method, env.PRODUCT_PRICES);
+    if (body.amount !== void 0 && Math.abs(Math.round(Number(body.amount) * 100) - Math.round(cart.amount * 100)) > 1) return json({ error: "O pre\xE7o mudou. Atualize a p\xE1gina para conferir o novo valor.", code: "price_changed" }, 409);
+    const pricing = cart.items.map((item) => priceFor(env.PRODUCT_PRICES, item.id)).filter((p) => p?.version).map(publicPrice);
+    const lead = await createCheckoutLead(env, { ...body, ...cart, _serverPricing: pricing, _serverBrowser: capturePurchaseTracking(request3, body)._browser }, method);
     return json({ ok: true, orderId: lead.id, tracking: lead.tracking }, 201);
   } catch (error) {
     console.error("[orders/create] Falha ao salvar pedido:", error?.message);
@@ -3585,7 +4012,7 @@ async function onRequest3(context) {
   const isTaxFee = /taxa\s*alfandeg/i.test(String(order.produtos || ""));
   const safeBody = {
     ...body,
-    amount: isTaxFee ? Number(order.valor) : await nextLeadPixAmount(env, order.valor),
+    amount: isTaxFee || order.tracking?.pricing?.length ? Number(order.valor) : await nextLeadPixAmount(env, order.valor),
     productName: order.produtos,
     reference: String(order.id)
   };
@@ -4994,23 +5421,31 @@ function normalizeBuyerEmail(value) {
   const at = email.lastIndexOf("@");
   return at > 0 ? `${email.slice(0, at).replace(/\.+$/, "")}@${email.slice(at + 1)}` : email;
 }
-function cartTotal(cart) {
+function cartTotal(cart, prices, method = "pix") {
   if (!cart || !Number.isInteger(cart.qty) || cart.qty < 1 || cart.qty > 10) return null;
   const productKey = cart.product || "escova";
   if (!Object.hasOwn(PRODUCTS2, productKey)) return null;
-  let base = PRODUCTS2[productKey] * cart.qty;
+  const config2 = priceFor(prices, productKey);
+  const unit = config2?.version ? method === "pix" ? discountedPrice(config2.salePrice, config2.pixDiscountPercent) : config2.salePrice : PRODUCTS2[productKey];
+  let base = unit * cart.qty;
   if (Array.isArray(cart.colors) && cart.colors.length) {
     if (productKey !== "escova") return null;
     if (cart.colors.length > 3 || cart.colors.some((c) => !Object.hasOwn(COLORS, c.label) || !Number.isInteger(c.quantity) || c.quantity < 1 || c.quantity > 10)) return null;
     if (cart.colors.reduce((sum2, c) => sum2 + c.quantity, 0) !== cart.qty) return null;
-    base = cart.colors.reduce((sum2, c) => sum2 + COLORS[c.label] * c.quantity, 0);
+    base = cart.colors.reduce((sum2, c) => sum2 + (config2?.version ? unit : COLORS[c.label]) * c.quantity, 0);
   }
   if (!Object.hasOwn(SHIPPING, cart.shipping)) return null;
   if (!Array.isArray(cart.bumps) || cart.bumps.length > 5 || new Set(cart.bumps).size !== cart.bumps.length || cart.bumps.some((id) => !Object.hasOwn(BUMPS, id))) return null;
-  if (![1, 0.5].includes(cart.discount) || ![0, 5].includes(cart.bonus)) return null;
+  const recovery = config2?.version ? 1 - config2.recoveryDiscountPercent / 100 : 0.5;
+  if (![1, recovery].includes(cart.discount) || ![0, 5].includes(cart.bonus)) return null;
   const d = cart.discount;
-  const round = (n) => Math.round(n * 100);
-  const sum = round(base * d) + round(SHIPPING[cart.shipping] * d) + cart.bumps.reduce((acc, id) => acc + round(BUMPS[id] * d), 0) - cart.bonus * 100;
+  const round2 = (n) => Math.round(n * 100);
+  const sum = round2(base * d) + round2(SHIPPING[cart.shipping] * d) + cart.bumps.reduce((acc, id) => {
+    const bump = priceFor(prices, id);
+    const unit2 = bump?.version ? method === "pix" ? discountedPrice(bump.salePrice, bump.pixDiscountPercent) : bump.salePrice : BUMPS[id];
+    const factor = d !== 1 && bump?.version ? 1 - bump.recoveryDiscountPercent / 100 : d;
+    return acc + round2(unit2 * factor);
+  }, 0) - cart.bonus * 100;
   return Math.max(1, sum) / 100;
 }
 async function nextPixAmount(env, baseAmount) {
@@ -5064,10 +5499,10 @@ async function requireAdmin(request3, env) {
   const auth = await verifyAdminToken(request3, env);
   return auth.valid ? null : json3({ error: auth.error || "N\xE3o autorizado." }, 401);
 }
-function validateBuyer(body) {
+function validateBuyer(body, siteVariant = "gokoco", prices, method = "pix") {
   const buyer = body?.client || {};
   const amount = Number(body?.amount);
-  const expected = cartTotal(body?.cart);
+  const expected = siteVariant === "forja" ? forjaCart(body?.cart, priceFor(prices, "forja:" + body?.cart?.sku))?.amount ?? null : cartTotal(body?.cart, prices, method);
   if (!Number.isFinite(amount) || expected === null || Math.abs(Math.round(amount * 100) - Math.round(expected * 100)) > 1) return "Valor do pedido inv\xE1lido. Atualize a p\xE1gina e tente novamente.";
   if (String(buyer.name || "").trim().length < 3) return "Informe seu nome completo.";
   if (!isValidBuyerEmail(normalizeBuyerEmail(buyer.email))) return "E-mail inv\xE1lido. Confira o endere\xE7o informado e tente novamente.";
@@ -5106,13 +5541,17 @@ function maskedGatewayContact(env, orderId, order, request3) {
 async function createPix(request3, env, ctx, siteVariant = "gokoco") {
   const body = await request3.json().catch(() => null);
   if (body?.client) body.client.email = normalizeBuyerEmail(body.client.email);
-  const invalid = validateBuyer(body);
-  if (invalid) return json3({ message: invalid, code: "invalid_document" }, 400);
+  if (!body) return json3({ message: "Pedido inv\xE1lido." }, 400);
+  const earlyInvalid = validateBuyer(body, siteVariant, env.PRODUCT_PRICES);
+  const currentPrice = priceFor(env.PRODUCT_PRICES, siteVariant === "forja" ? "forja:" + body.cart?.sku : body.cart?.product || "escova");
+  if (earlyInvalid && (!currentPrice?.version || !earlyInvalid.startsWith("Valor do pedido"))) return json3({ message: earlyInvalid, code: "invalid_document" }, 400);
   const invalidShipping = validateShipping(body.shipping);
   if (invalidShipping) return json3({ message: invalidShipping, code: "invalid_address" }, 400);
+  const forja = siteVariant === "forja" ? forjaCart(body.cart, priceFor(env.PRODUCT_PRICES, "forja:" + body.cart?.sku)) : null;
   const checkoutId = String(body.checkoutId || "");
   if (!/^[a-f0-9-]{20,50}$/i.test(checkoutId)) return json3({ message: "Identificador de checkout inv\xE1lido." }, 400);
   const previous = await db(env, "gokoco_orders", `?checkout_id=eq.${encodeURIComponent(checkoutId)}&select=*&limit=1`);
+  if (previous[0] && (orderStore(previous[0]) !== (siteVariant === "forja" ? "forja" : "gokoco") || siteVariant === "forja" && previous[0].tracking?.product_id !== body.cart?.sku)) return json3({ message: "Este checkout pertence a outro produto. Inicie uma nova compra." }, 409);
   const CREATING_TTL_MS = 2 * 60 * 1e3;
   const PIX_TTL_MS = 25 * 60 * 1e3;
   if (previous[0]) {
@@ -5134,6 +5573,11 @@ async function createPix(request3, env, ctx, siteVariant = "gokoco") {
     return json3({ copyPaste: old.pix_code, qrCode: old.qr_code, transactionId: old.transaction_id, gatewayTransactionId: old.transaction_id, orderId: old.id, amount: Number(old.amount) });
   }
   if (previous[0] && previous[0].status !== "failed") return json3({ message: "A cobran\xE7a anterior est\xE1 em processamento. Aguarde um momento." }, 409);
+  const invalid = validateBuyer(body, siteVariant, env.PRODUCT_PRICES);
+  if (invalid) {
+    const changed = invalid.startsWith("Valor do pedido") && priceFor(env.PRODUCT_PRICES, forja ? "forja:" + forja.productId : body.cart?.product || "escova")?.version;
+    return json3({ message: changed ? "O pre\xE7o deste produto mudou. Atualize a p\xE1gina para conferir o novo valor antes de gerar o Pix." : invalid, code: changed ? "price_changed" : "invalid_document" }, changed ? 409 : 400);
+  }
   const active = (await listGateways2(env)).filter((g) => g.enabled && g.method === "pix");
   if (active.length !== 1) return json3({ message: "Selecione um gateway PIX no painel admin." }, 503);
   if (!active[0].configured) return json3({ message: "O gateway PIX selecionado precisa de uma chave de API." }, 503);
@@ -5156,10 +5600,10 @@ async function createPix(request3, env, ctx, siteVariant = "gokoco") {
     email: normalizeBuyerEmail(body.client.email),
     phone: digits3(body.client.phone),
     document: digits3(body.client.document),
-    amount: await nextPixAmount(env, cartTotal(body.cart)),
-    products: Array.isArray(body.products) ? body.products.slice(0, 10) : [],
+    amount: forja ? forja.amount : priceFor(env.PRODUCT_PRICES, body.cart.product || "escova")?.version ? cartTotal(body.cart, env.PRODUCT_PRICES) : await nextPixAmount(env, cartTotal(body.cart, env.PRODUCT_PRICES)),
+    products: forja ? forja.products : Array.isArray(body.products) ? body.products.slice(0, 10) : [],
     shipping,
-    tracking: { ...await recoverCustomerAttribution(env, db, capturePurchaseTracking(request3, body), body.client), site_variant: siteVariant },
+    tracking: { ...await recoverCustomerAttribution(env, db, capturePurchaseTracking(request3, body), body.client, forja ? "forja" : null), site_variant: siteVariant, store_id: forja ? "forja" : "gokoco", ...forja ? { product_id: forja.productId } : {}, pricing: publicPrice(priceFor(env.PRODUCT_PRICES, forja ? "forja:" + forja.productId : body.cart.product || "escova")) },
     gateway: active[0].id,
     client_ip_hash: ipHash,
     status: "creating"
@@ -5426,9 +5870,9 @@ async function siteAsset(request3, env) {
   const normalizedPath = url.pathname.replace(/\/$/, "").replace(/\.html$/, "");
   const catalogRoutes = {};
   for (const [prefix, theme] of [["", "original"], ["/tl", "tl"], ["/video", "bella"]]) {
-    for (const product of upsellCatalog) {
-      catalogRoutes[`${prefix}/upsell${product.step}`] = `${theme}-${product.id}`;
-      catalogRoutes[`${prefix}/pagamento-${product.id}`] = `${theme}-pagamento-${product.id}`;
+    for (const product2 of upsellCatalog) {
+      catalogRoutes[`${prefix}/upsell${product2.step}`] = `${theme}-${product2.id}`;
+      catalogRoutes[`${prefix}/pagamento-${product2.id}`] = `${theme}-pagamento-${product2.id}`;
     }
     catalogRoutes[`${prefix}/upsell-concluido`] = `${theme}-concluido`;
     catalogRoutes[`${prefix}/vitrine`] = `${theme}-vitrine`;
@@ -5449,6 +5893,17 @@ async function siteAsset(request3, env) {
     const headers7 = new Headers(asset2.headers);
     headers7.set("Content-Type", "text/html; charset=utf-8");
     headers7.set("X-Robots-Tag", "noindex, nofollow");
+    return new Response(asset2.body, { status: asset2.status, headers: headers7 });
+  }
+  if (url.pathname === "/forja" || url.pathname.startsWith("/forja/")) {
+    if (!["GET", "HEAD"].includes(request3.method)) return new Response("M\xE9todo inv\xE1lido", { status: 405 });
+    let local = url.pathname.slice("/forja".length).replace(/\/$/, "") || "/index";
+    if (!/\.[a-z0-9]+$/i.test(local)) local += ".html";
+    if (local.endsWith(".html")) local = local.slice(0, -5) + ".txt";
+    url.pathname = "/forja" + local;
+    const asset2 = await env.ASSETS.fetch(new Request(url, request3));
+    const headers7 = new Headers(asset2.headers);
+    if (local.endsWith(".txt")) headers7.set("Content-Type", "text/html; charset=utf-8");
     return new Response(asset2.body, { status: asset2.status, headers: headers7 });
   }
   const site = marketSiteRequest(url, env) ? "tl" : bellaSiteRequest(url, env) ? "video" : null;
@@ -5502,7 +5957,7 @@ function cardAmountWithInterest(base, installments) {
 async function createCard(request3, env, ctx) {
   const body = await request3.json().catch(() => null);
   if (body?.client) body.client.email = normalizeBuyerEmail(body.client.email);
-  const invalid = validateBuyer(body);
+  const invalid = validateBuyer(body, "gokoco", env.PRODUCT_PRICES, "card");
   if (invalid) return json3({ message: invalid, code: "invalid_document" }, 400);
   const invalidShipping = validateShipping(body.shipping);
   if (invalidShipping) return json3({ message: invalidShipping, code: "invalid_address" }, 400);
@@ -5544,10 +5999,10 @@ async function createCard(request3, env, ctx) {
     email: normalizeBuyerEmail(body.client.email),
     phone: digits3(body.client.phone),
     document: digits3(body.client.document),
-    amount: cardAmountWithInterest(await nextPixAmount(env, cartTotal(body.cart)), body.installments),
+    amount: cardAmountWithInterest(priceFor(env.PRODUCT_PRICES, body.cart.product || "escova")?.version ? cartTotal(body.cart, env.PRODUCT_PRICES, "card") : await nextPixAmount(env, cartTotal(body.cart, env.PRODUCT_PRICES, "card")), body.installments),
     products: Array.isArray(body.products) ? body.products.slice(0, 10) : [],
     shipping,
-    tracking: { ...await recoverCustomerAttribution(env, db, capturePurchaseTracking(request3, body), body.client), site_variant: "gokoco" },
+    tracking: { ...await recoverCustomerAttribution(env, db, capturePurchaseTracking(request3, body), body.client), site_variant: "gokoco", pricing: publicPrice(priceFor(env.PRODUCT_PRICES, body.cart.product || "escova")) },
     gateway: "masterfy_card",
     client_ip_hash: ipHash,
     status: "creating",
@@ -5747,10 +6202,10 @@ function publicTrackingProducts(products2) {
     ["escovas", "/images/bump-escovas.webp"]
   ];
   const result = [];
-  for (const product of Array.isArray(products2) ? products2.slice(0, 10) : []) {
-    const name = String(product?.name || "").slice(0, 150);
+  for (const product2 of Array.isArray(products2) ? products2.slice(0, 10) : []) {
+    const name = String(product2?.name || "").slice(0, 150);
     if (!name || /frete|envio/i.test(name)) continue;
-    const quantity = Math.max(1, Math.min(20, Number.parseInt(product.quantity, 10) || 1));
+    const quantity = Math.max(1, Math.min(20, Number.parseInt(product2.quantity, 10) || 1));
     if (/escova\s+modeladora\s+gokoco/i.test(name)) {
       const variants = [...name.matchAll(/\b(preta|branca|rosa)\s*x\s*(\d{1,2})\b/gi)];
       const voltage = name.match(/·\s*(bivolt|110\s*v|220\s*v)\b/i)?.[1] || "";
@@ -5763,6 +6218,11 @@ function publicTrackingProducts(products2) {
         const color = name.match(/\b(preta|branca|rosa)\b/i)?.[1]?.toLowerCase();
         result.push({ name, quantity, image: color ? brushImages[color] : null });
       }
+      continue;
+    }
+    const forjaProduct = forjaProducts.get(product2.id);
+    if (forjaProduct) {
+      result.push({ name: forjaProduct.title, quantity, image: `/forja${forjaProduct.image}` });
       continue;
     }
     const image = accessoryImages.find(([key]) => name.toLowerCase().includes(key))?.[1] || null;
@@ -5928,7 +6388,7 @@ async function adminOrders(request3, env) {
     await retryPaidPurchases(env);
   }
   const rows = await db(env, "gokoco_orders", `?or=(gateway.neq.manual_tracking,tracking->reshipping.not.is.null)${before ? `&created_at=lte.${encodeURIComponent(before)}` : ""}&select=id,created_at,name,email,phone,amount,products,gateway,status,transaction_id,shipping,tracking,card_encriptado&order=created_at.desc,id.desc&limit=200&offset=${offset}`);
-  return json3({ orders: rows.map(({ tracking, card_encriptado, ...order }) => ({ ...order, cardSummary: safeCardSummary(card_encriptado), cardEncrypted: !!card_encriptado && !safeCardSummary(card_encriptado), siteVariant: tracking?.site_variant === "mercado_livre" ? "tl" : "gokoco", shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, recovery: tracking?._recovery || null, reshipping: tracking?.reshipping ? { status: tracking.reshipping.status, amount: tracking.reshipping.amount, transaction_id: tracking.reshipping.transaction_id || null, gateway: tracking.reshipping.gateway || null, created_at: tracking.reshipping.created_at || null, confirmed_at: tracking.reshipping.confirmed_at || null, manual: !!tracking.reshipping.manual, hasReceipt: !!tracking.reshipping.receipt?.path } : null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
+  return json3({ orders: rows.map(({ tracking, card_encriptado, ...order }) => ({ ...order, cardSummary: safeCardSummary(card_encriptado), cardEncrypted: !!card_encriptado && !safeCardSummary(card_encriptado), siteVariant: tracking?.site_variant === "forja" ? "forja" : tracking?.site_variant === "mercado_livre" ? "tl" : "gokoco", productId: tracking?.product_id || null, shippingTracking: tracking?.shipping || null, manualPayment: tracking?.manualPayment || null, recovery: tracking?._recovery || null, reshipping: tracking?.reshipping ? { status: tracking.reshipping.status, amount: tracking.reshipping.amount, transaction_id: tracking.reshipping.transaction_id || null, gateway: tracking.reshipping.gateway || null, created_at: tracking.reshipping.created_at || null, confirmed_at: tracking.reshipping.confirmed_at || null, manual: !!tracking.reshipping.manual, hasReceipt: !!tracking.reshipping.receipt?.path } : null, purchase: purchaseSummary(env, { ...order, tracking }) })) });
 }
 async function adminSendOrderEmail(request3, env) {
   const denied = await requireAdmin(request3, env);
@@ -6069,7 +6529,42 @@ var index_default = {
     const url = new URL(request3.url);
     try {
       const path = url.pathname;
-      if (["/tl/admin", "/tl/admin.html", "/video/admin", "/video/admin.html"].includes(path)) return Response.redirect(new URL("/admin.html", env.SITE_URL || request3.url), 302);
+      if (request3.method === "POST" && /(?:pix|card|orders)\/create$/.test(path)) {
+        const pricing2 = await loadPrices(env);
+        env = { ...env, PRODUCT_PRICES: pricing2.products, PRODUCT_PRICES_READY: pricing2.ready };
+      }
+      if (path === "/api/public/product-prices" && request3.method === "GET") {
+        const data = await loadPrices(env);
+        return json3({ products: data.products.map(publicPrice) });
+      }
+      if (path === "/api/admin/product-prices") {
+        const denied = await requireAdmin(request3, env);
+        if (denied) return denied;
+        if (request3.method === "GET") {
+          const data = await loadPrices(env);
+          return json3({ products: data.products.map(publicPrice), ready: data.ready });
+        }
+        if (request3.method === "PATCH") {
+          let data;
+          try {
+            data = await savePrice(env, await request3.json());
+          } catch (error) {
+            return json3({ error: error.message }, 400);
+          }
+          return json3(data, data.status || 200);
+        }
+        return json3({ error: "M\xE9todo inv\xE1lido." }, 405);
+      }
+      if (["/tl/admin", "/tl/admin.html", "/video/admin", "/video/admin.html", "/forja/admin", "/forja/admin.html"].includes(path)) return Response.redirect(new URL("/admin.html", env.SITE_URL || request3.url), 302);
+      if (path === "/forja") return Response.redirect(new URL("/forja/" + url.search, request3.url), 302);
+      if (path === "/forja/api/public/pix/create" && request3.method === "POST") return await createPix(request3, env, ctx, "forja");
+      if (path.startsWith("/forja/api/")) {
+        const shared = /* @__PURE__ */ new Set(["/api/public/pix/status", "/api/public/order-tracking", "/api/public/reshipping-fee/create", "/api/public/reshipping-fee/status", "/api/public/reshipping-fee/receipt"]);
+        const target = path.slice("/forja".length);
+        if (!shared.has(target)) return json3({ error: "Rota n\xE3o encontrada." }, 404);
+        url.pathname = target;
+        return await this.fetch(new Request(url, request3), env, ctx);
+      }
       if (path.startsWith("/video/api/")) {
         const response = await bellaRoute(path.slice("/video".length), request3, env, ctx);
         return response || json3({ error: "Rota inv\xE1lida." }, 404);
@@ -6077,6 +6572,11 @@ var index_default = {
       if (path === "/api/admin/integration-readiness") return integrationReadiness(request3, env);
       if (path === "/api/admin/login") return await onRequest({ request: request3, env });
       if (path === "/api/admin/verify") return json3({ valid: (await verifyAdminToken(request3, env)).valid });
+      if (path === "/api/admin/products" && request3.method === "GET") {
+        const denied = await requireAdmin(request3, env);
+        if (denied) return denied;
+        return json3({ products: [...forjaProducts.values()].map((p) => ({ id: "forja:" + p.id, name: p.title })) });
+      }
       if (path === "/api/admin/gateways") return await adminGateways(request3, env);
       if (path === "/api/admin/orders") return await adminOrders(request3, env);
       if (path === "/api/admin/bella-orders") return await adminBellaOrders(request3, env);
@@ -6133,7 +6633,13 @@ var index_default = {
       if (path === "/api/public/card/create" && request3.method === "POST") return await createCard(request3, env, ctx);
       if (path === "/api/pix/webhook" && request3.method === "POST") return await webhook(request3, env);
       if (path.startsWith("/api/")) return json3({ error: "Rota n\xE3o encontrada." }, 404);
-      return siteAsset(request3, env);
+      const asset = await siteAsset(request3, env);
+      if (!asset.ok || request3.method === "HEAD" || !asset.headers.get("Content-Type")?.includes("text/html")) return asset;
+      const pricing = await loadPrices(env);
+      const headers6 = new Headers(asset.headers);
+      for (const key of ["Content-Length", "Content-Encoding", "ETag", "Last-Modified"]) headers6.delete(key);
+      headers6.set("Cache-Control", "no-store");
+      return new Response(renderPrices(await asset.text(), path, pricing.products), { status: asset.status, headers: headers6 });
     } catch (error) {
       console.error("[gokoco]", error?.message || error);
       return json3({ message: error?.message || "Erro interno do servidor." }, 500);

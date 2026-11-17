@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-const source = fs.readFileSync(new URL('../worker-src/recovery-email.js', import.meta.url), 'utf8');
-const { processRecoveryOrder } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+import { processRecoveryOrder } from '../worker-src/recovery-email.js';
+
 const copy = (value) => JSON.parse(JSON.stringify(value));
 const firstDue = Date.parse('2026-10-15T12:31:00Z');
 
@@ -76,5 +76,19 @@ test('falha do Resend não conta como enviado e pode ser repetida com a mesma ch
     await processRecoveryOrder(f.env, f.db, f.verify, f.order.id, firstDue + 30 * 60000);
     assert.equal(f.order.tracking._recovery.count, 1);
     assert.deepEqual(sent, ['gokoco-recovery-order-1-1', 'gokoco-recovery-order-1-1']);
+  } finally { globalThis.fetch = original; }
+});
+
+test('recuperação Forja retorna à loja Forja e preserva a configuração compartilhada', async () => {
+  const f = fixture(), original = globalThis.fetch, sent = [];
+  f.order.tracking.store_id = 'forja';
+  f.order.products = [{ name: 'Kit Ferramentas 4 em 1', quantity: 1 }];
+  globalThis.fetch = async (_url, options) => { sent.push(JSON.parse(options.body)); return Response.json({ id: 'forja-recovery' }); };
+  try {
+    await processRecoveryOrder(f.env, f.db, f.verify, f.order.id, firstDue);
+    assert.equal(sent.length, 1);
+    assert.match(sent[0].text, /https:\/\/loja.example\/forja\//);
+    assert.doesNotMatch(sent[0].text, /escova|GOKOCO/);
+    assert.match(sent[0].from, /Forja Ferramentas/);
   } finally { globalThis.fetch = original; }
 });

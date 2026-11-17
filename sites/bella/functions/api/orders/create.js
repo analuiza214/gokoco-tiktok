@@ -1,3 +1,4 @@
+import { priceFor, publicPrice } from '../../../../../worker-src/product-pricing.js';
 import {capturePurchaseTracking} from '../../../../../worker-src/purchase-tracking.js';
 import { createCheckoutLead } from "../../_lib/leads-store.js";
 import { validateCartItems } from "../../_lib/catalog.js";
@@ -14,8 +15,10 @@ export async function onRequest({ request, env }) {
     return json({ error: "Dados obrigatórios do pedido não informados." }, 400);
   }
   try {
-    const cart = validateCartItems(body.items, method);
-    const lead = await createCheckoutLead(env, { ...body, ...cart, _serverBrowser: capturePurchaseTracking(request,body)._browser }, method);
+    const cart = validateCartItems(body.items, method, env.PRODUCT_PRICES);
+    if (body.amount !== undefined && Math.abs(Math.round(Number(body.amount) * 100) - Math.round(cart.amount * 100)) > 1) return json({ error: 'O preço mudou. Atualize a página para conferir o novo valor.', code: 'price_changed' }, 409);
+    const pricing = cart.items.map(item => priceFor(env.PRODUCT_PRICES, item.id)).filter(p => p?.version).map(publicPrice);
+    const lead = await createCheckoutLead(env, { ...body, ...cart, _serverPricing: pricing, _serverBrowser: capturePurchaseTracking(request,body)._browser }, method);
     return json({ ok: true, orderId: lead.id, tracking: lead.tracking }, 201);
   } catch (error) {
     console.error("[orders/create] Falha ao salvar pedido:", error?.message);

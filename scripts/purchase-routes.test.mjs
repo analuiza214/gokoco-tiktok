@@ -1,3 +1,4 @@
+import { priceFor, discountedPrice } from '../worker-src/product-pricing.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -484,7 +485,7 @@ test('rastreio avulso mostra só o código e etapas previstas, sem destinatário
 
 test('bônus antigo de R$ 5 não reduz mais o preço da escova', () => {
   const source = fs.readFileSync(new URL('../worker-src/index.js', import.meta.url), 'utf8');
-  const calculate = vm.runInNewContext(source.slice(source.indexOf('function cartTotal('), source.indexOf('async function db(')) + ';cartTotal', { PRODUCTS: { escova: 37.90 }, COLORS: { Preta: 37.90 }, SHIPPING: { 'Frete Grátis': 0 }, BUMPS: {} });
+  const calculate = vm.runInNewContext(source.slice(source.indexOf('function cartTotal('), source.indexOf('async function db(')) + ';cartTotal', { priceFor, discountedPrice, PRODUCTS: { escova: 37.90 }, COLORS: { Preta: 37.90 }, SHIPPING: { 'Frete Grátis': 0 }, BUMPS: {} });
   const cart = { qty: 1, colors: [{ label: 'Preta', quantity: 1 }], shipping: 'Frete Grátis', bumps: [], discount: 1, bonus: 0 };
   assert.equal(calculate(cart), 37.90);
   assert.equal(calculate({ ...cart, bonus: 5 }), 32.90);

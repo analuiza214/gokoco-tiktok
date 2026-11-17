@@ -259,7 +259,7 @@ export default function Product() {
                 </div>
                 <div className="text-right">
                   <div className="text-lg font-black text-green-700">{product.pixPrice > 0 ? 'R$ ' + product.pixPrice.toFixed(2).replace('.', ',') : 'A definir'}</div>
-                  <div className="text-xs text-green-600">10% de desconto</div>
+                  <div className="text-xs text-green-600">{Math.round((1 - product.pixPrice / product.price) * 100)}% de desconto</div>
                 </div>
               </div>
             </div>
