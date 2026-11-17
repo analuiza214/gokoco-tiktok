@@ -653,5 +653,18 @@
     </div>
   </footer>
 
+  <script>
+    fetch('/api/public/product-prices')
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        var p = (data.products || []).find(function(item) { return item.id === 'escova-whitepage'; });
+        if (p && p.salePrice) {
+          document.querySelectorAll('.price-val').forEach(function(el) {
+            el.innerHTML = '<small>R$</small> ' + Number(p.salePrice).toFixed(2).replace('.', ',');
+          });
+        }
+      })
+      .catch(function() {});
+  </script>
 </body>
 </html>

@@ -54,8 +54,8 @@ const gateways = [
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
 const digits = (value) => String(value || '').replace(/\D/g, '');
 const BUMPS = { necessaire: 19.47, siage: 32.63, wella: 45.70 };
-const COLORS = { Preta: 37.90, Branca: 37.90, Rosa: 37.90 };
-const PRODUCTS = { escova: 37.90, pincel: 11.96, ...Object.fromEntries(upsellCatalog.map(p => [p.id, p.price])) };
+const COLORS = { Preta: 37.90, Branca: 37.90, Rosa: 37.90, Lilás: 37.90, 'Azul Céu': 37.90, Verde: 37.90, Dourada: 37.90 };
+const PRODUCTS = { escova: 37.90, 'escova-whitepage': 129.90, pincel: 11.96, ...Object.fromEntries(upsellCatalog.map(p => [p.id, p.price])) };
 const SHIPPING = { 'Frete Grátis': 0, JADLOG: 18.47, 'SEDEX 12': 33.40 };
 function normalizeBuyerEmail(value) {
   const email = String(value || '').trim().toLowerCase();
@@ -70,10 +70,10 @@ function cartTotal(cart, prices, method = 'pix') {
   const unit = config?.version ? method === 'pix' ? discountedPrice(config.salePrice, config.pixDiscountPercent) : config.salePrice : PRODUCTS[productKey];
   let base = unit * cart.qty;
   if (Array.isArray(cart.colors) && cart.colors.length) {
-    if (productKey !== 'escova') return null;
-    if (cart.colors.length > 3 || cart.colors.some((c) => !Object.hasOwn(COLORS, c.label) || !Number.isInteger(c.quantity) || c.quantity < 1 || c.quantity > 10)) return null;
+    if (productKey !== 'escova' && productKey !== 'escova-whitepage') return null;
+    if (cart.colors.length > 5 || cart.colors.some((c) => !Object.hasOwn(COLORS, c.label) || !Number.isInteger(c.quantity) || c.quantity < 1 || c.quantity > 10)) return null;
     if (cart.colors.reduce((sum, c) => sum + c.quantity, 0) !== cart.qty) return null;
-    base = cart.colors.reduce((sum, c) => sum + (config?.version ? unit : COLORS[c.label]) * c.quantity, 0);
+    base = cart.colors.reduce((sum, c) => sum + (config?.version ? unit : (PRODUCTS[productKey] || COLORS[c.label])) * c.quantity, 0);
   }
   if (!Object.hasOwn(SHIPPING, cart.shipping)) return null;
   if (!Array.isArray(cart.bumps) || cart.bumps.length > 5 || new Set(cart.bumps).size !== cart.bumps.length || cart.bumps.some((id) => !Object.hasOwn(BUMPS, id))) return null;
@@ -187,16 +187,18 @@ function maskedGatewayContact(env, orderId, order, request) {
 
 async function createPix(request, env, ctx, siteVariant = 'gokoco') {
   const body = await request.json().catch(() => null);
-  if (body?.client) body.client.email = normalizeBuyerEmail(body.client.email);
   if (!body) return json({ message: 'Pedido inválido.' }, 400);
+  if (body?.site === 'whitepage' || body?.siteVariant === 'whitepage' || body.cart?.product === 'escova-whitepage') {
+    siteVariant = 'whitepage';
+  }
+  if (body?.client) body.client.email = normalizeBuyerEmail(body.client.email);
   const earlyInvalid = validateBuyer(body, siteVariant, env.PRODUCT_PRICES);
   const currentPrice = priceFor(env.PRODUCT_PRICES, siteVariant === 'forja' ? 'forja:' + body.cart?.sku : body.cart?.product || 'escova');
   if (earlyInvalid && (!currentPrice?.version || !earlyInvalid.startsWith('Valor do pedido'))) return json({ message: earlyInvalid, code: 'invalid_document' }, 400);
   const invalidShipping = validateShipping(body.shipping);
   if (invalidShipping) return json({ message: invalidShipping, code: 'invalid_address' }, 400);
   const forja = siteVariant === 'forja' ? forjaCart(body.cart, priceFor(env.PRODUCT_PRICES, 'forja:' + body.cart?.sku)) : null;
-  const checkoutId = String(body.checkoutId || '');
-  if (!/^[a-f0-9-]{20,50}$/i.test(checkoutId)) return json({ message: 'Identificador de checkout inválido.' }, 400);
+  const checkoutId = String(body.checkoutId || body.checkout_id || crypto.randomUUID());
   const previous = await db(env, 'gokoco_orders', `?checkout_id=eq.${encodeURIComponent(checkoutId)}&select=*&limit=1`);
   if (previous[0] && (orderStore(previous[0]) !== (siteVariant === 'forja' ? 'forja' : 'gokoco') || (siteVariant === 'forja' && previous[0].tracking?.product_id !== body.cart?.sku))) return json({ message: 'Este checkout pertence a outro produto. Inicie uma nova compra.' }, 409);
   // Libera pedidos presos: uma tentativa que morreu em "creating" (>2min, sem
@@ -222,7 +224,7 @@ async function createPix(request, env, ctx, siteVariant = 'gokoco') {
       const send = deliverPendingPurchase(env, db, old.id).catch((error) => console.error('[purchase/pending]', old.id, error?.message || error));
       if (ctx?.waitUntil) ctx.waitUntil(send); else await send;
     }
-    return json({ copyPaste: old.pix_code, qrCode: old.qr_code, transactionId: old.transaction_id, gatewayTransactionId: old.transaction_id, orderId: old.id, amount: Number(old.amount) });
+    return json({ copyPaste: old.pix_code, pixCode: old.pix_code, qrCode: old.qr_code, transactionId: old.transaction_id, gatewayTransactionId: old.transaction_id, orderId: old.id, amount: Number(old.amount) });
   }
   if (previous[0] && previous[0].status !== 'failed') return json({ message: 'A cobrança anterior está em processamento. Aguarde um momento.' }, 409);
   const invalid = validateBuyer(body, siteVariant, env.PRODUCT_PRICES);
@@ -314,7 +316,7 @@ async function createPix(request, env, ctx, siteVariant = 'gokoco') {
     const count = Number(await env.PIX_RATELIMIT.get(ipKey) || 0);
     await env.PIX_RATELIMIT.put(ipKey, String(count + 1), { expirationTtl: 3600 });
   }
-  return json({ copyPaste: payment.pixCode, qrCode: qr, transactionId: payment.transactionId, gatewayTransactionId: payment.transactionId, orderId: id, amount: order.amount });
+  return json({ copyPaste: payment.pixCode, pixCode: payment.pixCode, qrCode: qr, transactionId: payment.transactionId, gatewayTransactionId: payment.transactionId, orderId: id, amount: order.amount });
 }
 
 async function createMarketPix(request, env, ctx) {

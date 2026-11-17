@@ -250,16 +250,17 @@ var upsellCatalog = [
 
 // worker-src/product-pricing.js
 var round = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
-var product = (id, name, salePrice, originalPrice = salePrice, pixDiscountPercent = 0) => ({ id, name, salePrice, originalPrice, pixDiscountPercent, recoveryDiscountPercent: 50, version: null });
+var product = (id, name, salePrice, originalPrice = salePrice, pixDiscountPercent = 0, scope = "real") => ({ id, name, salePrice, originalPrice, pixDiscountPercent, recoveryDiscountPercent: 50, scope, version: null });
 var priceDefaults = [
-  product("escova", "Escova 3 em 1 \xB7 GOKOCO / Bella Mix / TL", 37.9, 167.9),
-  product("bella-kit-7-em-1", "Bella Mix \xB7 Kit 7 em 1 (todas as cores)", 69.9, 69.9, 10),
-  product("pincel", "Pincel", 11.96, 19.9),
-  product("necessaire", "Complemento \xB7 N\xE9cessaire", 19.47),
-  product("siage", "Complemento \xB7 Si\xE0ge", 32.63),
-  product("wella", "Complemento \xB7 Wella", 45.7),
-  ...upsellCatalog.map((p) => product(p.id, p.name, p.price, Math.ceil(p.price * p.oldFactor) - 0.1)),
-  ...[...forjaProducts.values()].map((p) => product("forja:" + p.id, "Forja \xB7 " + p.title, p.price, Math.max(p.price, p.oldPrice)))
+  product("escova", "Escova 3 em 1 \xB7 GOKOCO / Bella Mix (Mobile)", 37.9, 167.9, 0, "real"),
+  product("escova-whitepage", "Bella Mix \xB7 Escova Pro Ceramic (Cloaking / Desktop)", 129.9, 189.9, 5, "cloaking"),
+  product("bella-kit-7-em-1", "Bella Mix \xB7 Kit 7 em 1 (todas as cores)", 69.9, 69.9, 10, "real"),
+  product("pincel", "Pincel", 11.96, 19.9, 0, "real"),
+  product("necessaire", "Complemento \xB7 N\xE9cessaire", 19.47, 19.47, 0, "real"),
+  product("siage", "Complemento \xB7 Si\xE0ge", 32.63, 32.63, 0, "real"),
+  product("wella", "Complemento \xB7 Wella", 45.7, 45.7, 0, "real"),
+  ...upsellCatalog.map((p) => product(p.id, p.name, p.price, Math.ceil(p.price * p.oldFactor) - 0.1, 0, "real")),
+  ...[...forjaProducts.values()].map((p) => product("forja:" + p.id, "Forja \xB7 " + p.title, p.price, Math.max(p.price, p.oldPrice), 0, "real"))
 ];
 var canonicalPriceId = (id) => String(id).startsWith("bella-escova-") ? "escova" : String(id).startsWith("bella-kit-7-em-1-") ? "bella-kit-7-em-1" : String(id).startsWith("bella-") && priceDefaults.some((p) => p.id === String(id).slice(6)) ? String(id).slice(6) : String(id);
 function priceFor(prices, id) {
@@ -6054,6 +6055,19 @@ function getWhitepageHtml() {
     </div>
   </footer>
 
+  <script>
+    fetch('/api/public/product-prices')
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        var p = (data.products || []).find(function(item) { return item.id === 'escova-whitepage'; });
+        if (p && p.salePrice) {
+          document.querySelectorAll('.price-val').forEach(function(el) {
+            el.innerHTML = '<small>R$</small> ' + Number(p.salePrice).toFixed(2).replace('.', ',');
+          });
+        }
+      })
+      .catch(function() {});
+  <\/script>
 </body>
 </html>`;
 }
@@ -6115,8 +6129,8 @@ var gateways2 = [
 var json3 = (data, status2 = 200) => new Response(JSON.stringify(data), { status: status2, headers: JSON_HEADERS });
 var digits3 = (value) => String(value || "").replace(/\D/g, "");
 var BUMPS = { necessaire: 19.47, siage: 32.63, wella: 45.7 };
-var COLORS = { Preta: 37.9, Branca: 37.9, Rosa: 37.9 };
-var PRODUCTS2 = { escova: 37.9, pincel: 11.96, ...Object.fromEntries(upsellCatalog.map((p) => [p.id, p.price])) };
+var COLORS = { Preta: 37.9, Branca: 37.9, Rosa: 37.9, Lil\u00E1s: 37.9, "Azul C\xE9u": 37.9, Verde: 37.9, Dourada: 37.9 };
+var PRODUCTS2 = { escova: 37.9, "escova-whitepage": 129.9, pincel: 11.96, ...Object.fromEntries(upsellCatalog.map((p) => [p.id, p.price])) };
 var SHIPPING = { "Frete Gr\xE1tis": 0, JADLOG: 18.47, "SEDEX 12": 33.4 };
 function normalizeBuyerEmail(value) {
   const email = String(value || "").trim().toLowerCase();
@@ -6131,10 +6145,10 @@ function cartTotal(cart, prices, method = "pix") {
   const unit = config2?.version ? method === "pix" ? discountedPrice(config2.salePrice, config2.pixDiscountPercent) : config2.salePrice : PRODUCTS2[productKey];
   let base = unit * cart.qty;
   if (Array.isArray(cart.colors) && cart.colors.length) {
-    if (productKey !== "escova") return null;
-    if (cart.colors.length > 3 || cart.colors.some((c) => !Object.hasOwn(COLORS, c.label) || !Number.isInteger(c.quantity) || c.quantity < 1 || c.quantity > 10)) return null;
+    if (productKey !== "escova" && productKey !== "escova-whitepage") return null;
+    if (cart.colors.length > 5 || cart.colors.some((c) => !Object.hasOwn(COLORS, c.label) || !Number.isInteger(c.quantity) || c.quantity < 1 || c.quantity > 10)) return null;
     if (cart.colors.reduce((sum2, c) => sum2 + c.quantity, 0) !== cart.qty) return null;
-    base = cart.colors.reduce((sum2, c) => sum2 + (config2?.version ? unit : COLORS[c.label]) * c.quantity, 0);
+    base = cart.colors.reduce((sum2, c) => sum2 + (config2?.version ? unit : PRODUCTS2[productKey] || COLORS[c.label]) * c.quantity, 0);
   }
   if (!Object.hasOwn(SHIPPING, cart.shipping)) return null;
   if (!Array.isArray(cart.bumps) || cart.bumps.length > 5 || new Set(cart.bumps).size !== cart.bumps.length || cart.bumps.some((id) => !Object.hasOwn(BUMPS, id))) return null;
@@ -6242,16 +6256,18 @@ function maskedGatewayContact(env, orderId, order, request3) {
 }
 async function createPix(request3, env, ctx, siteVariant = "gokoco") {
   const body = await request3.json().catch(() => null);
-  if (body?.client) body.client.email = normalizeBuyerEmail(body.client.email);
   if (!body) return json3({ message: "Pedido inv\xE1lido." }, 400);
+  if (body?.site === "whitepage" || body?.siteVariant === "whitepage" || body.cart?.product === "escova-whitepage") {
+    siteVariant = "whitepage";
+  }
+  if (body?.client) body.client.email = normalizeBuyerEmail(body.client.email);
   const earlyInvalid = validateBuyer(body, siteVariant, env.PRODUCT_PRICES);
   const currentPrice = priceFor(env.PRODUCT_PRICES, siteVariant === "forja" ? "forja:" + body.cart?.sku : body.cart?.product || "escova");
   if (earlyInvalid && (!currentPrice?.version || !earlyInvalid.startsWith("Valor do pedido"))) return json3({ message: earlyInvalid, code: "invalid_document" }, 400);
   const invalidShipping = validateShipping(body.shipping);
   if (invalidShipping) return json3({ message: invalidShipping, code: "invalid_address" }, 400);
   const forja = siteVariant === "forja" ? forjaCart(body.cart, priceFor(env.PRODUCT_PRICES, "forja:" + body.cart?.sku)) : null;
-  const checkoutId = String(body.checkoutId || "");
-  if (!/^[a-f0-9-]{20,50}$/i.test(checkoutId)) return json3({ message: "Identificador de checkout inv\xE1lido." }, 400);
+  const checkoutId = String(body.checkoutId || body.checkout_id || crypto.randomUUID());
   const previous = await db(env, "gokoco_orders", `?checkout_id=eq.${encodeURIComponent(checkoutId)}&select=*&limit=1`);
   if (previous[0] && (orderStore(previous[0]) !== (siteVariant === "forja" ? "forja" : "gokoco") || siteVariant === "forja" && previous[0].tracking?.product_id !== body.cart?.sku)) return json3({ message: "Este checkout pertence a outro produto. Inicie uma nova compra." }, 409);
   const CREATING_TTL_MS = 2 * 60 * 1e3;
@@ -6272,7 +6288,7 @@ async function createPix(request3, env, ctx, siteVariant = "gokoco") {
       if (ctx?.waitUntil) ctx.waitUntil(send);
       else await send;
     }
-    return json3({ copyPaste: old.pix_code, qrCode: old.qr_code, transactionId: old.transaction_id, gatewayTransactionId: old.transaction_id, orderId: old.id, amount: Number(old.amount) });
+    return json3({ copyPaste: old.pix_code, pixCode: old.pix_code, qrCode: old.qr_code, transactionId: old.transaction_id, gatewayTransactionId: old.transaction_id, orderId: old.id, amount: Number(old.amount) });
   }
   if (previous[0] && previous[0].status !== "failed") return json3({ message: "A cobran\xE7a anterior est\xE1 em processamento. Aguarde um momento." }, 409);
   const invalid = validateBuyer(body, siteVariant, env.PRODUCT_PRICES);
@@ -6365,7 +6381,7 @@ async function createPix(request3, env, ctx, siteVariant = "gokoco") {
     const count = Number(await env.PIX_RATELIMIT.get(ipKey) || 0);
     await env.PIX_RATELIMIT.put(ipKey, String(count + 1), { expirationTtl: 3600 });
   }
-  return json3({ copyPaste: payment.pixCode, qrCode: qr, transactionId: payment.transactionId, gatewayTransactionId: payment.transactionId, orderId: id, amount: order.amount });
+  return json3({ copyPaste: payment.pixCode, pixCode: payment.pixCode, qrCode: qr, transactionId: payment.transactionId, gatewayTransactionId: payment.transactionId, orderId: id, amount: order.amount });
 }
 async function createMarketPix(request3, env, ctx) {
   const body = await request3.json().catch(() => null);

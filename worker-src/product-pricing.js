@@ -2,16 +2,17 @@ import { forjaProducts } from './forja-catalog.js';
 import { upsellCatalog } from './upsell-catalog.js';
 
 const round = value => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
-const product = (id, name, salePrice, originalPrice = salePrice, pixDiscountPercent = 0) => ({ id, name, salePrice, originalPrice, pixDiscountPercent, recoveryDiscountPercent: 50, version: null });
+const product = (id, name, salePrice, originalPrice = salePrice, pixDiscountPercent = 0, scope = 'real') => ({ id, name, salePrice, originalPrice, pixDiscountPercent, recoveryDiscountPercent: 50, scope, version: null });
 export const priceDefaults = [
-  product('escova', 'Escova 3 em 1 · GOKOCO / Bella Mix / TL', 37.9, 167.9),
-  product('bella-kit-7-em-1', 'Bella Mix · Kit 7 em 1 (todas as cores)', 69.9, 69.9, 10),
-  product('pincel', 'Pincel', 11.96, 19.9),
-  product('necessaire', 'Complemento · Nécessaire', 19.47),
-  product('siage', 'Complemento · Siàge', 32.63),
-  product('wella', 'Complemento · Wella', 45.7),
-  ...upsellCatalog.map(p => product(p.id, p.name, p.price, Math.ceil(p.price * p.oldFactor) - 0.1)),
-  ...[...forjaProducts.values()].map(p => product('forja:' + p.id, 'Forja · ' + p.title, p.price, Math.max(p.price, p.oldPrice))),
+  product('escova', 'Escova 3 em 1 · GOKOCO / Bella Mix (Mobile)', 37.9, 167.9, 0, 'real'),
+  product('escova-whitepage', 'Bella Mix · Escova Pro Ceramic (Cloaking / Desktop)', 129.9, 189.9, 5, 'cloaking'),
+  product('bella-kit-7-em-1', 'Bella Mix · Kit 7 em 1 (todas as cores)', 69.9, 69.9, 10, 'real'),
+  product('pincel', 'Pincel', 11.96, 19.9, 0, 'real'),
+  product('necessaire', 'Complemento · Nécessaire', 19.47, 19.47, 0, 'real'),
+  product('siage', 'Complemento · Siàge', 32.63, 32.63, 0, 'real'),
+  product('wella', 'Complemento · Wella', 45.7, 45.7, 0, 'real'),
+  ...upsellCatalog.map(p => product(p.id, p.name, p.price, Math.ceil(p.price * p.oldFactor) - 0.1, 0, 'real')),
+  ...[...forjaProducts.values()].map(p => product('forja:' + p.id, 'Forja · ' + p.title, p.price, Math.max(p.price, p.oldPrice), 0, 'real')),
 ];
 export const canonicalPriceId = id => String(id).startsWith('bella-escova-') ? 'escova' : String(id).startsWith('bella-kit-7-em-1-') ? 'bella-kit-7-em-1' : String(id).startsWith('bella-') && priceDefaults.some(p => p.id === String(id).slice(6)) ? String(id).slice(6) : String(id);
 export function priceFor(prices, id) {

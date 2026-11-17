@@ -35,7 +35,7 @@ const shippingStages = [
 
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const siteBadge = (variant) => {
-  const site = variant === 'forja' ? ['forja', 'FORJA'] : variant === 'tl' ? ['tl', 'TL'] : variant === 'video' ? ['video', 'VÍDEO'] : ['gokoco', 'TikTok'];
+  const site = variant === 'forja' ? ['forja', 'FORJA'] : variant === 'whitepage' ? ['whitepage', 'CLOAKING'] : variant === 'tl' ? ['tl', 'TL'] : variant === 'video' ? ['video', 'VÍDEO'] : ['gokoco', 'TikTok'];
   return `<span class="site-badge site-badge-${site[0]}" aria-label="Origem da venda: ${site[1]}">${site[1]}</span>`;
 };
 const bellaStatus = { checkout_iniciado: 'creating', pix_gerado: 'pending', pago: 'paid', reembolsado: 'refunded', expirado: 'expired', falha: 'failed', cartao_recusado: 'failed' };
@@ -149,7 +149,9 @@ function matchingOrders(feeDates = selectedStatus === 'taxa') {
   const now = new Date();
   return orders.filter((order) => {
     if (selectedProduct.startsWith('forja:')) { if (order.siteVariant !== 'forja' || order.productId !== selectedProduct.slice(6)) return false; }
-    else if (selectedProduct !== 'todas' && (order.siteVariant === 'forja' ? 'forja' : 'gokoco') !== selectedProduct) return false;
+    else if (selectedProduct === 'whitepage' || selectedProduct === 'escova-whitepage') { if (order.siteVariant !== 'whitepage') return false; }
+    else if (selectedProduct === 'gokoco') { if (order.siteVariant !== 'gokoco' && order.siteVariant !== 'tl' && order.siteVariant !== 'video') return false; }
+    else if (selectedProduct !== 'todas' && (order.siteVariant === 'forja' ? 'forja' : order.siteVariant === 'whitepage' ? 'whitepage' : 'gokoco') !== selectedProduct) return false;
     const d = new Date(feeDates && order.reshipping ? (order.reshipping.confirmed_at || order.reshipping.created_at || order.created_at) : order.created_at);
     const days = (now.getTime() - d.getTime()) / 86400000;
     let periodMatch = true;
@@ -204,6 +206,7 @@ function renderStats() {
   $('site-gokoco').textContent = siteOrders.filter((order) => (order.siteVariant || 'gokoco') === 'gokoco').length;
   $('site-tl').textContent = siteOrders.filter((order) => order.siteVariant === 'tl').length;
   $('site-video').textContent = siteOrders.filter((order) => order.siteVariant === 'video').length;
+  if ($('site-whitepage')) $('site-whitepage').textContent = siteOrders.filter((order) => order.siteVariant === 'whitepage').length;
   $('site-forja').textContent = siteOrders.filter((order) => order.siteVariant === 'forja').length;
 }
 

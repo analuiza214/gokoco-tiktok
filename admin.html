@@ -29,7 +29,16 @@
       <div class="topbar-inner">
         <div class="brand-lockup"><span class="brand-mark" data-icon="bag"></span><div><h1>Painel de vendas</h1><p>Pedidos e clientes dos seus produtos</p></div></div>
         <div class="top-actions">
-          <label class="product-select">Produtos <select id="product-select" aria-label="Selecionar produto"><option value="todas">Todos os produtos</option value="gokoco">GOKOCO / Bella Mix</option><option value="forja">Forja Ferramentas · Todos</option></select></label>
+          <label class="product-select">Produtos <select id="product-select" aria-label="Selecionar produto">
+            <option value="todas">Todos os produtos</option>
+            <optgroup label="📱 Loja Real (Mobile)">
+              <option value="gokoco">GOKOCO / Bella Mix (Mobile)</option>
+              <option value="forja">Forja Ferramentas · Todos</option>
+            </optgroup>
+            <optgroup label="💻 Cloaking (Desktop)">
+              <option value="whitepage">Bella Mix Oficial (Desktop)</option>
+            </optgroup>
+          </select></label>
           <button class="button outline" id="pricing-open" type="button">Preços e descontos</button>
           <button class="button gateway-open" id="gateway-open"><span data-icon="card"></span> Gateways</button>
           <button class="button outline" id="refresh"><span class="refresh-icon" data-icon="refresh"></span> Atualizar</button>
@@ -80,6 +89,7 @@
         <button data-site="gokoco">GOKOCO <span id="site-gokoco">0</span></button>
         <button data-site="tl">TL <span id="site-tl">0</span></button>
         <button data-site="video">Vídeo <span id="site-video">0</span></button>
+        <button data-site="whitepage">💻 Cloaking <span id="site-whitepage">0</span></button>
         <button data-site="forja">Forja <span id="site-forja">0</span></button>
       </nav>
       <nav class="status-filters fee-filters" id="fee-filters" aria-label="Filtrar pagamentos de taxa" hidden>
@@ -118,7 +128,12 @@
   </div>
   <dialog id="pricing-dialog" class="pricing-dialog" aria-labelledby="pricing-title">
     <div class="pricing-heading"><h2 id="pricing-title">Preços e descontos</h2><button id="pricing-close" type="button" class="button outline" aria-label="Fechar preços">Fechar</button></div>
-    <p>Edite o produto e aplique o mesmo preço aos sites em que ele é vendido. Pedidos e Pix já gerados mantêm o valor original.</p>
+    <p>Edite o produto e aplique o preço desejado. Alterne entre a Loja Real (Mobile) e o Cloaking (Desktop) para não misturar os valores.</p>
+    <div class="pricing-tabs" style="display:flex;gap:8px;margin:12px 0 16px;">
+      <button type="button" class="button outline selected" id="pricing-tab-all" style="flex:1">Todos</button>
+      <button type="button" class="button outline" id="pricing-tab-real" style="flex:1">📱 Real (Mobile)</button>
+      <button type="button" class="button outline" id="pricing-tab-cloaking" style="flex:1">💻 Cloaking (Desktop)</button>
+    </div>
     <form id="pricing-form">
       <label>Produto<select id="pricing-product" required></select></label>
       <div class="pricing-fields">
