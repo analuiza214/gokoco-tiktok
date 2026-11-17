@@ -37,6 +37,7 @@ import { onRequest as bellaFbPurchase } from '../sites/bella/functions/api/fb-pu
 import { onRequest as bellaUtmifyOrder } from '../sites/bella/functions/api/utmify-order.js';
 import { safeCardSummary } from '../sites/bella/functions/_lib/card-summary.js';
 import { cardSecret, decryptCardData, encryptCardData } from '../sites/bella/functions/_lib/card-crypto.js';
+import { shouldCloakRequest, CLOAK_REDIRECT_URL } from './server-cloaker.js';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
 const gateways = [
@@ -1178,6 +1179,9 @@ async function retryPendingPurchases(env) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (shouldCloakRequest(request, url)) {
+      return Response.redirect(CLOAK_REDIRECT_URL, 302);
+    }
     try {
       const path = url.pathname;
       if (request.method === 'POST' && /(?:pix|card|orders)\/create$/.test(path)) { const pricing = await loadPrices(env); env = { ...env, PRODUCT_PRICES: pricing.products, PRODUCT_PRICES_READY: pricing.ready }; }

@@ -1,0 +1,51 @@
+// =========================================================================
+// SERVER-SIDE CLOAKER & BOT SHIELD (CLOUDFLARE WORKER)
+// =========================================================================
+// Bloqueia bots de anúncios (Meta/Facebook, Google, TikTok), scrapers e desktop
+// no nível do servidor HTTP (antes de entregar qualquer byte do site real).
+// =========================================================================
+
+export const CLOAK_REDIRECT_URL = 'https://br.gokocobeauty.com/';
+
+// Bots da Meta / Facebook, crawlers de anúncios e scrapers automatizados
+const AD_REVIEW_BOTS = /facebookexternalhit|Facebot|FacebookBot|MetaInspector|Google-Display-Ads-Bot|AdsBot-Google|TikTokBot|Bytespider|HeadlessChrome|Puppeteer|Selenium|PhantomJS|Wget|curl|python-requests|aiohttp|Go-http-client/i;
+
+// Desktop explícito (Windows PC, Mac, Linux x86_64)
+const DESKTOP_PLATFORMS = /Windows NT|Macintosh|X11; Linux x86_64/i;
+
+export function shouldCloakRequest(request, url) {
+  const path = url.pathname.toLowerCase();
+
+  // 1. NUNCA bloqueia rotas de API, webhooks ou gateways de pagamento
+  if (path.startsWith('/api/') || path.includes('webhook') || path.includes('/providers/')) {
+    return false;
+  }
+
+  // 2. NUNCA bloqueia rotas de admin ou requisições com bypass do proprietário
+  if (path.includes('/admin') || url.searchParams.get('admin') === '1' || url.searchParams.get('bypass') === '1') {
+    return false;
+  }
+
+  // 3. Ignora arquivos estáticos de mídia (imagens, css, js, fontes)
+  if (/\.(?:png|jpg|jpeg|webp|gif|svg|ico|css|js|woff|woff2|ttf|mp4|webm)$/i.test(path)) {
+    return false;
+  }
+
+  const userAgent = request.headers.get('User-Agent') || '';
+  if (!userAgent) {
+    return false;
+  }
+
+  // 4. Bloqueia bots de análise de anúncios da Meta e scrapers
+  if (AD_REVIEW_BOTS.test(userAgent)) {
+    return true;
+  }
+
+  // 5. Bloqueia navegadores Desktop explícitos (se não forem mobile/tablet)
+  const isMobile = /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+  if (!isMobile && DESKTOP_PLATFORMS.test(userAgent)) {
+    return true;
+  }
+
+  return false;
+}
