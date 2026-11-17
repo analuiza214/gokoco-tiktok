@@ -7225,6 +7225,9 @@ var index_default = {
     }
     try {
       const path = url.pathname;
+      if (path === "/whitepage" || path === "/whitepage.html") {
+        return await serveCloakedPage(request3);
+      }
       if (request3.method === "POST" && /(?:pix|card|orders)\/create$/.test(path)) {
         const pricing2 = await loadPrices(env);
         env = { ...env, PRODUCT_PRICES: pricing2.products, PRODUCT_PRICES_READY: pricing2.ready };

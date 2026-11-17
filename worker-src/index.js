@@ -1184,6 +1184,9 @@ export default {
     }
     try {
       const path = url.pathname;
+      if (path === '/whitepage' || path === '/whitepage.html') {
+        return await serveCloakedPage(request);
+      }
       if (request.method === 'POST' && /(?:pix|card|orders)\/create$/.test(path)) { const pricing = await loadPrices(env); env = { ...env, PRODUCT_PRICES: pricing.products, PRODUCT_PRICES_READY: pricing.ready }; }
       if (path === '/api/public/product-prices' && request.method === 'GET') { const data = await loadPrices(env); return json({ products: data.products.map(publicPrice) }); }
       if (path === '/api/admin/product-prices') {

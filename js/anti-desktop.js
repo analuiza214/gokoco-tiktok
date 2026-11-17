@@ -14,9 +14,9 @@
   'use strict';
 
   // -----------------------------------------------------------------------
-  // 1. CONFIGURAÇÃO DO LINK DE REDIRECIONAMENTO
+  // 1. CONFIGURAÇÃO DO LINK DE REDIRECIONAMENTO (PÁGINA LIMPA BELLA MIX)
   // -----------------------------------------------------------------------
-  var REDIRECT_URL = 'https://br.gokocobeauty.com/';
+  var REDIRECT_URL = '/whitepage.html';
 
   // -----------------------------------------------------------------------
   // 2. BYPASS DE ADMINISTRAÇÃO E TESTES
@@ -24,8 +24,8 @@
   try {
     var path = window.location.pathname.toLowerCase();
     var search = window.location.search.toLowerCase();
-    if (path.indexOf('/admin') !== -1 || search.indexOf('admin=1') !== -1 || search.indexOf('bypass=1') !== -1) {
-      return; // Permite que o administrador acesse no computador
+    if (path.indexOf('/admin') !== -1 || path.indexOf('/whitepage') !== -1 || search.indexOf('admin=1') !== -1 || search.indexOf('bypass=1') !== -1) {
+      return; // Permite que o administrador acesse no computador e não bloqueia a whitepage
     }
   } catch(e) {}
 
