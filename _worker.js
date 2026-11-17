@@ -5399,7 +5399,9 @@ function retiredPurchaseRoute() {
 
 // worker-src/whitepage.js
 function getWhitepageHtml() {
-  return `<!DOCTYPE html>
+  return `<!-- WHITEPAGE INSTITUCIONAL BELLA MIX OFICIAL -->
+<!-- P\xE1gina limpa exibida automaticamente para o rob\xF4 da Meta e computadores -->
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
@@ -5430,7 +5432,6 @@ function getWhitepageHtml() {
     }
     a { color: inherit; text-decoration: none; }
     
-    /* Top Bar */
     .topbar {
       background: linear-gradient(90deg, #d6336c, #e64980);
       color: #fff;
@@ -5441,7 +5442,6 @@ function getWhitepageHtml() {
       letter-spacing: 0.02em;
     }
 
-    /* Header */
     header {
       background: var(--bg-card);
       border-bottom: 1px solid var(--border);
@@ -5497,7 +5497,6 @@ function getWhitepageHtml() {
     }
     nav a:hover { color: var(--primary); }
 
-    /* Hero */
     .hero {
       background: linear-gradient(135deg, #fff5f8 0%, #ffffff 100%);
       border-bottom: 1px solid var(--border);
@@ -5538,7 +5537,6 @@ function getWhitepageHtml() {
       margin: 0 auto 28px;
     }
 
-    /* Benefits */
     .benefits {
       max-width: 1160px;
       margin: -24px auto 40px;
@@ -5579,7 +5577,6 @@ function getWhitepageHtml() {
       color: var(--text-muted);
     }
 
-    /* Product Section */
     .section {
       max-width: 1160px;
       margin: 0 auto;
@@ -5699,7 +5696,25 @@ function getWhitepageHtml() {
       text-decoration: line-through;
     }
 
-    /* About Section */
+    .product-btn {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.05s;
+      text-align: center;
+      margin-top: 14px;
+      text-decoration: none;
+    }
+    .product-btn:hover { background: var(--primary-dark); }
+    .product-btn:active { transform: scale(0.98); }
+
     .about-section {
       background: #fff;
       border-top: 1px solid var(--border);
@@ -5749,7 +5764,6 @@ function getWhitepageHtml() {
       color: var(--text-muted);
     }
 
-    /* Institutional Footer */
     footer {
       background: #111827;
       color: #9ca3af;
@@ -5822,12 +5836,10 @@ function getWhitepageHtml() {
 </head>
 <body>
 
-  <!-- Topbar -->
   <div class="topbar">
     \u2728 Frete Gr\xE1tis para todo o Brasil em compras selecionadas | Atendimento: contato@bellamix-oficial.shop
   </div>
 
-  <!-- Header -->
   <header>
     <div class="header-inner">
       <div class="brand">
@@ -5840,13 +5852,12 @@ function getWhitepageHtml() {
       <nav>
         <a href="#produtos">Produtos</a>
         <a href="#sobre">Quem Somos</a>
-        <a href="/rastreio.html">Rastrear Pedido</a>
-        <a href="#contato">Atendimento</a>
+        <a href="/whitepage-rastreio.html">Rastrear Pedido</a>
+        <a href="/whitepage-politicas.html">Pol\xEDticas</a>
       </nav>
     </div>
   </header>
 
-  <!-- Hero Section -->
   <section class="hero">
     <div class="hero-container">
       <div class="badge">\u{1F338} Loja Oficial Bella Mix</div>
@@ -5855,7 +5866,6 @@ function getWhitepageHtml() {
     </div>
   </section>
 
-  <!-- Benefits Row -->
   <div class="benefits">
     <div class="benefit-card">
       <div class="benefit-icon">\u{1F69A}</div>
@@ -5887,13 +5897,11 @@ function getWhitepageHtml() {
     </div>
   </div>
 
-  <!-- Product Catalog -->
   <section class="section" id="produtos">
     <h2 class="section-title">Cole\xE7\xE3o de Destaques</h2>
     <p class="section-subtitle">Conhe\xE7a nossos produtos mais recomendados e escolhidos pelas nossas clientes.</p>
 
     <div class="products-grid">
-      <!-- Produto 1 -->
       <article class="product-card">
         <div class="product-img">
           <span class="product-badge">Mais Vendido</span>
@@ -5911,10 +5919,10 @@ function getWhitepageHtml() {
             </div>
             <span class="price-old">R$ 189,90</span>
           </div>
+          <a href="/whitepage-produto.html?cor=preta" class="product-btn">Comprar Agora \u2192</a>
         </div>
       </article>
 
-      <!-- Produto 2 -->
       <article class="product-card">
         <div class="product-img">
           <span class="product-badge">Destaque</span>
@@ -5932,10 +5940,10 @@ function getWhitepageHtml() {
             </div>
             <span class="price-old">R$ 189,90</span>
           </div>
+          <a href="/whitepage-produto.html?cor=rosa" class="product-btn">Comprar Agora \u2192</a>
         </div>
       </article>
 
-      <!-- Produto 3 -->
       <article class="product-card">
         <div class="product-img">
           <img src="/images/f2/cores/branca.webp" alt="Escova Modeladora Bella Pro Ceramic - Branca">
@@ -5952,10 +5960,10 @@ function getWhitepageHtml() {
             </div>
             <span class="price-old">R$ 189,90</span>
           </div>
+          <a href="/whitepage-produto.html?cor=branca" class="product-btn">Comprar Agora \u2192</a>
         </div>
       </article>
 
-      <!-- Produto 4 -->
       <article class="product-card">
         <div class="product-img">
           <img src="/images/f2/cores/lilas.jpg" alt="Escova Modeladora Bella Pro Ceramic - Lil\xE1s">
@@ -5972,12 +5980,12 @@ function getWhitepageHtml() {
             </div>
             <span class="price-old">R$ 199,90</span>
           </div>
+          <a href="/whitepage-produto.html?cor=lilas" class="product-btn">Comprar Agora \u2192</a>
         </div>
       </article>
     </div>
   </section>
 
-  <!-- About Section -->
   <section class="about-section" id="sobre">
     <div class="about-container">
       <div class="about-copy">
@@ -6006,7 +6014,6 @@ function getWhitepageHtml() {
     </div>
   </section>
 
-  <!-- Footer -->
   <footer id="contato">
     <div class="footer-inner">
       <div class="footer-col">
@@ -6019,18 +6026,18 @@ function getWhitepageHtml() {
       <div class="footer-col">
         <h3>Navega\xE7\xE3o</h3>
         <ul>
-          <li><a href="#produtos">Produtos em Destaque</a></li>
-          <li><a href="#sobre">Quem Somos</a></li>
-          <li><a href="/rastreio.html">Rastrear Pedido</a></li>
+          <li><a href="/whitepage.html#produtos">Produtos em Destaque</a></li>
+          <li><a href="/whitepage.html#sobre">Quem Somos</a></li>
+          <li><a href="/whitepage-rastreio.html">Rastrear Pedido</a></li>
         </ul>
       </div>
       <div class="footer-col">
         <h3>Pol\xEDticas</h3>
         <ul>
-          <li><a href="#">Termos de Uso</a></li>
-          <li><a href="#">Pol\xEDticas de Privacidade</a></li>
-          <li><a href="#">Trocas e Devolu\xE7\xF5es</a></li>
-          <li><a href="#">Prazos de Entrega</a></li>
+          <li><a href="/whitepage-politicas.html?tab=termos">Termos de Uso</a></li>
+          <li><a href="/whitepage-politicas.html?tab=privacidade">Pol\xEDticas de Privacidade</a></li>
+          <li><a href="/whitepage-politicas.html?tab=trocas">Trocas e Devolu\xE7\xF5es</a></li>
+          <li><a href="/whitepage-politicas.html?tab=entrega">Prazos de Entrega</a></li>
         </ul>
       </div>
       <div class="footer-col">
@@ -6048,8 +6055,7 @@ function getWhitepageHtml() {
   </footer>
 
 </body>
-</html>
-`;
+</html>`;
 }
 
 // worker-src/server-cloaker.js
@@ -6061,6 +6067,9 @@ function shouldCloakRequest(request3, url) {
     return false;
   }
   if (path.includes("/admin") || url.searchParams.get("admin") === "1" || url.searchParams.get("bypass") === "1") {
+    return false;
+  }
+  if (path.startsWith("/whitepage-")) {
     return false;
   }
   if (/\.(?:png|jpg|jpeg|webp|gif|svg|ico|css|js|woff|woff2|ttf|mp4|webm)$/i.test(path)) {
@@ -6924,21 +6933,58 @@ function publicTrackingProducts(products2) {
   return result;
 }
 async function publicOrderTracking(request3, env) {
-  const code = new URL(request3.url).searchParams.get("code")?.trim().toUpperCase() || "";
-  if (!/^GK[A-HJ-NP-Z2-9]{10}$/.test(code)) return json3({ error: "C\xF3digo inv\xE1lido ou n\xE3o encontrado." }, 404);
-  const rows = await db(env, "gokoco_orders", `?tracking->shipping->>code=eq.${encodeURIComponent(code)}&select=id,name,status,created_at,updated_at,products,shipping,tracking&limit=1`);
-  const order = rows[0];
-  if (!order || order.status !== "paid" && !(order.status === "tracking_only" && order.tracking?.manualExternal)) return json3({ error: "C\xF3digo inv\xE1lido ou n\xE3o encontrado." }, 404);
-  if (order.tracking?.manualExternal) return json3({ code, manual: true, createdAt: order.tracking.shipping.created_at || order.created_at, shipping: order.tracking.shipping, reshipping: publicReshipping(env, order) });
-  return json3({
-    code,
-    buyerName: String(order.name || "").trim().slice(0, 100),
-    createdAt: order.tracking.shipping.created_at || order.created_at,
-    products: publicTrackingProducts(order.products),
-    destination: { city: String(order.shipping?.cidade || "").slice(0, 80), state: String(order.shipping?.uf || "").slice(0, 2) },
-    shipping: order.tracking.shipping,
-    reshipping: publicReshipping(env, order)
-  });
+  let code = new URL(request3.url).searchParams.get("code")?.trim().toUpperCase() || "";
+  let emailQuery = "";
+  if (request3.method === "POST") {
+    try {
+      const body = await request3.json();
+      const q = String(body?.query || "").trim();
+      if (q.includes("@")) emailQuery = q.toLowerCase();
+      else code = q.toUpperCase();
+    } catch (e) {
+    }
+  }
+  if (code && /^GK[A-HJ-NP-Z2-9]{10}$/.test(code)) {
+    const rows = await db(env, "gokoco_orders", `?tracking->shipping->>code=eq.${encodeURIComponent(code)}&select=id,name,status,created_at,updated_at,products,shipping,tracking&limit=1`);
+    const order = rows[0];
+    if (order && (order.status === "paid" || order.status === "tracking_only" && order.tracking?.manualExternal)) {
+      if (order.tracking?.manualExternal) return json3({ code, manual: true, createdAt: order.tracking.shipping.created_at || order.created_at, shipping: order.tracking.shipping, reshipping: publicReshipping(env, order) });
+      return json3({
+        found: true,
+        code,
+        trackingCode: code,
+        buyerName: String(order.name || "").trim().slice(0, 100),
+        productName: "Escova Modeladora Bella Pro Ceramic 3 em 1",
+        createdAt: order.tracking.shipping.created_at || order.created_at,
+        products: publicTrackingProducts(order.products),
+        destination: { city: String(order.shipping?.cidade || "").slice(0, 80), state: String(order.shipping?.uf || "").slice(0, 2) },
+        shipping: order.tracking.shipping,
+        reshipping: publicReshipping(env, order)
+      });
+    }
+  }
+  if (emailQuery) {
+    try {
+      const rows = await db(env, "gokoco_orders", `?email=eq.${encodeURIComponent(emailQuery)}&select=id,name,status,created_at,products,shipping,tracking&order=created_at.desc&limit=1`);
+      if (rows && rows[0]) {
+        const order = rows[0];
+        return json3({
+          found: true,
+          code: order.tracking?.shipping?.code || "BM-" + String(order.id).slice(0, 8).toUpperCase(),
+          trackingCode: order.tracking?.shipping?.code || "BM-" + String(order.id).slice(0, 8).toUpperCase(),
+          buyerName: String(order.name || "").trim().slice(0, 100),
+          productName: "Escova Modeladora Bella Pro Ceramic 3 em 1",
+          createdAt: order.created_at,
+          shipping: order.tracking?.shipping || { status: "confirmed" }
+        });
+      }
+    } catch (e) {
+    }
+  }
+  if (request3.method === "POST") {
+    return json3({ found: false, message: "Pedido em processamento ou n\xE3o localizado." });
+  }
+  return json3({ error: "C\xF3digo inv\xE1lido ou n\xE3o encontrado." }, 404);
 }
 async function adminUpdateOrderTracking(request3, env) {
   const denied = await requireAdmin(request3, env);
@@ -7288,7 +7334,7 @@ var index_default = {
       if (path === "/api/admin/manual-payment") return await adminManualPayment(request3, env);
       if (path === "/api/admin/generate-tracking") return await adminGenerateTracking(request3, env);
       if (path === "/api/admin/external-tracking") return await adminCreateExternalTracking(request3, env);
-      if (path === "/api/public/order-tracking" && request3.method === "GET") return await publicOrderTracking(request3, env);
+      if (path === "/api/public/order-tracking" && (request3.method === "GET" || request3.method === "POST")) return await publicOrderTracking(request3, env);
       if (path.startsWith("/api/public/reshipping-fee/") || path === "/api/admin/reshipping-receipt" || path === "/api/admin/reshipping-fee/paid") {
         const handled = await handleReshippingRoute(path, request3, env, {
           db,

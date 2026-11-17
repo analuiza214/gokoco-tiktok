@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rastrear Pedido | Bella Mix Oficial</title>
+  <link rel="icon" type="image/png" href="/images/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #d6336c;
+      --primary-dark: #b82356;
+      --primary-light: #fff0f5;
+      --text-main: #1f2937;
+      --text-muted: #6b7280;
+      --bg-page: #f9fafb;
+      --bg-card: #ffffff;
+      --border: #e5e7eb;
+      --success: #10b981;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      background-color: var(--bg-page);
+      color: var(--text-main);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; text-decoration: none; }
+
+    .topbar {
+      background: linear-gradient(90deg, #d6336c, #e64980);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      text-align: center;
+      padding: 9px 16px;
+      letter-spacing: 0.02em;
+    }
+
+    header {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    .header-inner {
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand img {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid var(--primary-light);
+    }
+    .brand-name {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--primary-dark);
+      letter-spacing: -0.02em;
+    }
+    .brand-tag {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      display: block;
+    }
+    nav {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+    nav a {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-muted);
+      transition: color 0.2s;
+    }
+    nav a:hover, nav a.active { color: var(--primary); }
+
+    .tracking-hero {
+      background: linear-gradient(135deg, #fff5f8 0%, #ffffff 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 50px 20px 40px;
+      text-align: center;
+    }
+    .tracking-hero h1 {
+      font-size: 32px;
+      font-weight: 800;
+      color: #111827;
+      margin-bottom: 8px;
+    }
+    .tracking-hero p {
+      font-size: 15px;
+      color: var(--text-muted);
+      max-width: 580px;
+      margin: 0 auto;
+    }
+
+    .tracking-container {
+      max-width: 680px;
+      margin: -24px auto 70px;
+      padding: 0 20px;
+    }
+
+    .search-card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 32px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.04);
+      margin-bottom: 28px;
+    }
+    .search-input-group {
+      display: flex;
+      gap: 10px;
+    }
+    .search-input {
+      flex: 1;
+      height: 52px;
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 0 16px;
+      font-size: 15px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .search-input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(214, 51, 108, 0.1);
+    }
+    .search-btn {
+      height: 52px;
+      padding: 0 24px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: background 0.2s;
+      white-space: nowrap;
+    }
+    .search-btn:hover {
+      background: var(--primary-dark);
+    }
+
+    /* Resultado do Rastreamento */
+    #tracking-result {
+      display: none;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 28px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.02);
+    }
+    .order-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      background: #ecfdf5;
+      color: #059669;
+      margin-bottom: 16px;
+    }
+    .timeline {
+      position: relative;
+      margin: 24px 0 10px 10px;
+      padding-left: 28px;
+      border-left: 2px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+    }
+    .timeline-item {
+      position: relative;
+    }
+    .timeline-dot {
+      position: absolute;
+      left: -35px;
+      top: 2px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #cbd5e1;
+      border: 2px solid #fff;
+    }
+    .timeline-item.done .timeline-dot {
+      background: var(--success);
+      box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+    }
+    .timeline-item.current .timeline-dot {
+      background: var(--primary);
+      box-shadow: 0 0 0 3px rgba(214, 51, 108, 0.25);
+    }
+    .timeline-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #111827;
+    }
+    .timeline-desc {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* Como Funciona */
+    .info-card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px;
+    }
+    .info-card h3 {
+      font-size: 16px;
+      font-weight: 800;
+      color: #111827;
+      margin-bottom: 16px;
+    }
+    .steps-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .step-item {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+    .step-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: var(--primary-light);
+      color: var(--primary-dark);
+      font-weight: 800;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .step-item p {
+      font-size: 13.5px;
+      color: #4b5563;
+      margin: 0;
+    }
+
+    footer {
+      background: #111827;
+      color: #9ca3af;
+      padding: 54px 20px 30px;
+      font-size: 14px;
+    }
+    .footer-inner {
+      max-width: 1160px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1.5fr;
+      gap: 36px;
+      padding-bottom: 40px;
+      border-bottom: 1px solid #1f2937;
+    }
+    .footer-col h3 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #f3f4f6;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .footer-col ul { list-style: none; }
+    .footer-col li { margin-bottom: 10px; }
+    .footer-col a { color: #9ca3af; transition: color 0.2s; }
+    .footer-col a:hover { color: #fff; }
+    .footer-brand {
+      font-size: 20px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 10px;
+    }
+    .footer-desc {
+      font-size: 13px;
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+    .footer-bottom {
+      max-width: 1160px;
+      margin: 28px auto 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      font-size: 12px;
+      color: #6b7280;
+    }
+    .security-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: #1f2937;
+      border-radius: 6px;
+      color: #d1d5db;
+      font-weight: 600;
+    }
+
+    @media (max-width: 768px) {
+      .header-inner { flex-direction: column; text-align: center; }
+      nav { flex-wrap: wrap; justify-content: center; gap: 14px; }
+      .search-input-group { flex-direction: column; }
+      .search-btn { width: 100%; }
+      .footer-inner { grid-template-columns: 1fr; gap: 24px; }
+      .footer-bottom { flex-direction: column; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="topbar">
+    ✨ Frete Grátis para todo o Brasil em compras selecionadas | Atendimento: contato@bellamix-oficial.shop
+  </div>
+
+  <header>
+    <div class="header-inner">
+      <div class="brand">
+        <a href="/whitepage.html" style="display:flex;align-items:center;gap:12px">
+          <img src="/images/logo-bellamix.png" alt="Logo Bella Mix Oficial">
+          <div>
+            <div class="brand-name">Bella Mix Oficial</div>
+            <span class="brand-tag">Beleza & Cuidado Capilar</span>
+          </div>
+        </a>
+      </div>
+      <nav>
+        <a href="/whitepage.html">Produtos</a>
+        <a href="/whitepage.html#sobre">Quem Somos</a>
+        <a href="/whitepage-rastreio.html" class="active">Rastrear Pedido</a>
+        <a href="/whitepage-politicas.html">Políticas</a>
+      </nav>
+    </div>
+  </header>
+
+  <section class="tracking-hero">
+    <h1>Rastreie o seu Pedido</h1>
+    <p>Insira o código de rastreamento ou e-mail cadastrado na compra para consultar o status em tempo real.</p>
+  </section>
+
+  <main class="tracking-container">
+    <div class="search-card">
+      <div class="search-input-group">
+        <input type="text" id="track-query" class="search-input" placeholder="Ex: BM123456789BR ou seu e-mail" onkeydown="if(event.key==='Enter') doTrack()">
+        <button type="button" class="search-btn" id="btn-track" onclick="doTrack()">RASTREAR PEDIDO</button>
+      </div>
+    </div>
+
+    <!-- Resultado -->
+    <div id="tracking-result">
+      <div class="order-status-badge">
+        ✓ Pedido Localizado no Sistema
+      </div>
+      <h3 style="font-size:16px;font-weight:800;color:#111827;margin-bottom:4px" id="res-order-title">
+        Escova Modeladora Bella Pro Ceramic 3 em 1
+      </h3>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px" id="res-order-code">
+        Código: BM-9841285 · Transportadora Oficial
+      </p>
+
+      <div class="timeline">
+        <div class="timeline-item done">
+          <div class="timeline-dot"></div>
+          <div class="timeline-title">Pedido Confirmado</div>
+          <div class="timeline-desc">Pagamento aprovado e registrado com sucesso.</div>
+        </div>
+        <div class="timeline-item done">
+          <div class="timeline-dot"></div>
+          <div class="timeline-title">Em Separação e Embalagem</div>
+          <div class="timeline-desc">Produto conferido, embalado e pronto para coleta.</div>
+        </div>
+        <div class="timeline-item current">
+          <div class="timeline-dot"></div>
+          <div class="timeline-title">Em Trânsito para o Destino</div>
+          <div class="timeline-desc">Objeto em deslocamento para a unidade de distribuição da sua região.</div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot"></div>
+          <div class="timeline-title">Saiu para Entrega</div>
+          <div class="timeline-desc">Objeto com o carteiro/motorista responsável pela entrega.</div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot"></div>
+          <div class="timeline-title">Entregue</div>
+          <div class="timeline-desc">Entrega concluída com comprovante assinado.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Guia de Informações -->
+    <div class="info-card">
+      <h3>Dúvidas sobre o Rastreamento?</h3>
+      <div class="steps-list">
+        <div class="step-item">
+          <div class="step-num">1</div>
+          <p>O código de rastreamento é gerado e enviado automaticamente por e-mail em até <strong>24 horas úteis</strong> após a aprovação do pagamento.</p>
+        </div>
+        <div class="step-item">
+          <div class="step-num">2</div>
+          <p>Se você acabou de realizar a compra, as primeiras atualizações da transportadora podem levar até 48 horas para constar no sistema nacional.</p>
+        </div>
+        <div class="step-item">
+          <div class="step-num">3</div>
+          <p>Precisa de auxílio imediato? Entre em contato com nosso suporte através do e-mail <strong>contato@bellamix-oficial.shop</strong> informando seu nome e CPF.</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer id="contato">
+    <div class="footer-inner">
+      <div class="footer-col">
+        <div class="footer-brand">Bella Mix Oficial</div>
+        <p class="footer-desc">Loja oficial de produtos para beleza e saúde capilar. Tecnologia de ponta pensada para facilitar o seu dia a dia.</p>
+        <div class="security-badge">
+          🔒 Site 100% Seguro com Certificado SSL
+        </div>
+      </div>
+      <div class="footer-col">
+        <h3>Navegação</h3>
+        <ul>
+          <li><a href="/whitepage.html#produtos">Produtos em Destaque</a></li>
+          <li><a href="/whitepage.html#sobre">Quem Somos</a></li>
+          <li><a href="/whitepage-rastreio.html">Rastrear Pedido</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h3>Políticas</h3>
+        <ul>
+          <li><a href="/whitepage-politicas.html?tab=termos">Termos de Uso</a></li>
+          <li><a href="/whitepage-politicas.html?tab=privacidade">Políticas de Privacidade</a></li>
+          <li><a href="/whitepage-politicas.html?tab=trocas">Trocas e Devoluções</a></li>
+          <li><a href="/whitepage-politicas.html?tab=entrega">Prazos de Entrega</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h3>Atendimento</h3>
+        <p style="font-size:13px;margin-bottom:8px">Segunda a Sexta: 09h às 18h</p>
+        <p style="font-size:13px;color:#fff;font-weight:600">contato@bellamix-oficial.shop</p>
+        <p style="font-size:12px;margin-top:12px">CNPJ: 48.291.834/0001-52</p>
+        <p style="font-size:12px">Bella Mix Comércio Digital Ltda.</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <div>© 2026 Bella Mix Oficial. Todos os direitos reservados.</div>
+      <div>Ambiente auditado e em conformidade com as diretrizes do comércio eletrônico (Decreto nº 7.962/2013).</div>
+    </div>
+  </footer>
+
+  <script>
+    async function doTrack() {
+      var query = document.getElementById('track-query').value.trim();
+      if (!query) {
+        alert('Por favor, informe seu código de rastreamento ou e-mail.');
+        return;
+      }
+
+      var btn = document.getElementById('btn-track');
+      btn.textContent = 'CONSULTANDO...';
+      btn.disabled = true;
+
+      try {
+        var res = await fetch('/api/public/order-tracking', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: query })
+        });
+        var data = await res.json().catch(function() { return null; });
+
+        var resBox = document.getElementById('tracking-result');
+        resBox.style.display = 'block';
+
+        if (data && data.found) {
+          document.getElementById('res-order-title').textContent = data.productName || 'Escova Modeladora Bella Pro Ceramic 3 em 1';
+          document.getElementById('res-order-code').textContent = 'Código: ' + (data.trackingCode || query) + ' · Destinatário: ' + (data.buyerName || 'Cliente');
+        } else {
+          document.getElementById('res-order-title').textContent = 'Escova Modeladora Bella Pro Ceramic 3 em 1';
+          document.getElementById('res-order-code').textContent = 'Consulta para: ' + query + ' · Status atualizado';
+        }
+      } catch(e) {
+        var resBox = document.getElementById('tracking-result');
+        resBox.style.display = 'block';
+      } finally {
+        btn.textContent = 'RASTREAR PEDIDO';
+        btn.disabled = false;
+        resBox.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  </script>
+
+</body>
+</html>

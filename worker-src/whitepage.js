@@ -6,7 +6,9 @@
 // =========================================================================
 
 export function getWhitepageHtml() {
-  return `<!DOCTYPE html>
+  return `<!-- WHITEPAGE INSTITUCIONAL BELLA MIX OFICIAL -->
+<!-- Página limpa exibida automaticamente para o robô da Meta e computadores -->
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
@@ -37,7 +39,6 @@ export function getWhitepageHtml() {
     }
     a { color: inherit; text-decoration: none; }
     
-    /* Top Bar */
     .topbar {
       background: linear-gradient(90deg, #d6336c, #e64980);
       color: #fff;
@@ -48,7 +49,6 @@ export function getWhitepageHtml() {
       letter-spacing: 0.02em;
     }
 
-    /* Header */
     header {
       background: var(--bg-card);
       border-bottom: 1px solid var(--border);
@@ -104,7 +104,6 @@ export function getWhitepageHtml() {
     }
     nav a:hover { color: var(--primary); }
 
-    /* Hero */
     .hero {
       background: linear-gradient(135deg, #fff5f8 0%, #ffffff 100%);
       border-bottom: 1px solid var(--border);
@@ -145,7 +144,6 @@ export function getWhitepageHtml() {
       margin: 0 auto 28px;
     }
 
-    /* Benefits */
     .benefits {
       max-width: 1160px;
       margin: -24px auto 40px;
@@ -186,7 +184,6 @@ export function getWhitepageHtml() {
       color: var(--text-muted);
     }
 
-    /* Product Section */
     .section {
       max-width: 1160px;
       margin: 0 auto;
@@ -306,7 +303,25 @@ export function getWhitepageHtml() {
       text-decoration: line-through;
     }
 
-    /* About Section */
+    .product-btn {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.05s;
+      text-align: center;
+      margin-top: 14px;
+      text-decoration: none;
+    }
+    .product-btn:hover { background: var(--primary-dark); }
+    .product-btn:active { transform: scale(0.98); }
+
     .about-section {
       background: #fff;
       border-top: 1px solid var(--border);
@@ -356,7 +371,6 @@ export function getWhitepageHtml() {
       color: var(--text-muted);
     }
 
-    /* Institutional Footer */
     footer {
       background: #111827;
       color: #9ca3af;
@@ -429,12 +443,10 @@ export function getWhitepageHtml() {
 </head>
 <body>
 
-  <!-- Topbar -->
   <div class="topbar">
     ✨ Frete Grátis para todo o Brasil em compras selecionadas | Atendimento: contato@bellamix-oficial.shop
   </div>
 
-  <!-- Header -->
   <header>
     <div class="header-inner">
       <div class="brand">
@@ -447,13 +459,12 @@ export function getWhitepageHtml() {
       <nav>
         <a href="#produtos">Produtos</a>
         <a href="#sobre">Quem Somos</a>
-        <a href="/rastreio.html">Rastrear Pedido</a>
-        <a href="#contato">Atendimento</a>
+        <a href="/whitepage-rastreio.html">Rastrear Pedido</a>
+        <a href="/whitepage-politicas.html">Políticas</a>
       </nav>
     </div>
   </header>
 
-  <!-- Hero Section -->
   <section class="hero">
     <div class="hero-container">
       <div class="badge">🌸 Loja Oficial Bella Mix</div>
@@ -462,7 +473,6 @@ export function getWhitepageHtml() {
     </div>
   </section>
 
-  <!-- Benefits Row -->
   <div class="benefits">
     <div class="benefit-card">
       <div class="benefit-icon">🚚</div>
@@ -494,13 +504,11 @@ export function getWhitepageHtml() {
     </div>
   </div>
 
-  <!-- Product Catalog -->
   <section class="section" id="produtos">
     <h2 class="section-title">Coleção de Destaques</h2>
     <p class="section-subtitle">Conheça nossos produtos mais recomendados e escolhidos pelas nossas clientes.</p>
 
     <div class="products-grid">
-      <!-- Produto 1 -->
       <article class="product-card">
         <div class="product-img">
           <span class="product-badge">Mais Vendido</span>
@@ -518,10 +526,10 @@ export function getWhitepageHtml() {
             </div>
             <span class="price-old">R$ 189,90</span>
           </div>
+          <a href="/whitepage-produto.html?cor=preta" class="product-btn">Comprar Agora →</a>
         </div>
       </article>
 
-      <!-- Produto 2 -->
       <article class="product-card">
         <div class="product-img">
           <span class="product-badge">Destaque</span>
@@ -539,10 +547,10 @@ export function getWhitepageHtml() {
             </div>
             <span class="price-old">R$ 189,90</span>
           </div>
+          <a href="/whitepage-produto.html?cor=rosa" class="product-btn">Comprar Agora →</a>
         </div>
       </article>
 
-      <!-- Produto 3 -->
       <article class="product-card">
         <div class="product-img">
           <img src="/images/f2/cores/branca.webp" alt="Escova Modeladora Bella Pro Ceramic - Branca">
@@ -559,10 +567,10 @@ export function getWhitepageHtml() {
             </div>
             <span class="price-old">R$ 189,90</span>
           </div>
+          <a href="/whitepage-produto.html?cor=branca" class="product-btn">Comprar Agora →</a>
         </div>
       </article>
 
-      <!-- Produto 4 -->
       <article class="product-card">
         <div class="product-img">
           <img src="/images/f2/cores/lilas.jpg" alt="Escova Modeladora Bella Pro Ceramic - Lilás">
@@ -579,12 +587,12 @@ export function getWhitepageHtml() {
             </div>
             <span class="price-old">R$ 199,90</span>
           </div>
+          <a href="/whitepage-produto.html?cor=lilas" class="product-btn">Comprar Agora →</a>
         </div>
       </article>
     </div>
   </section>
 
-  <!-- About Section -->
   <section class="about-section" id="sobre">
     <div class="about-container">
       <div class="about-copy">
@@ -613,7 +621,6 @@ export function getWhitepageHtml() {
     </div>
   </section>
 
-  <!-- Footer -->
   <footer id="contato">
     <div class="footer-inner">
       <div class="footer-col">
@@ -626,18 +633,18 @@ export function getWhitepageHtml() {
       <div class="footer-col">
         <h3>Navegação</h3>
         <ul>
-          <li><a href="#produtos">Produtos em Destaque</a></li>
-          <li><a href="#sobre">Quem Somos</a></li>
-          <li><a href="/rastreio.html">Rastrear Pedido</a></li>
+          <li><a href="/whitepage.html#produtos">Produtos em Destaque</a></li>
+          <li><a href="/whitepage.html#sobre">Quem Somos</a></li>
+          <li><a href="/whitepage-rastreio.html">Rastrear Pedido</a></li>
         </ul>
       </div>
       <div class="footer-col">
         <h3>Políticas</h3>
         <ul>
-          <li><a href="#">Termos de Uso</a></li>
-          <li><a href="#">Políticas de Privacidade</a></li>
-          <li><a href="#">Trocas e Devoluções</a></li>
-          <li><a href="#">Prazos de Entrega</a></li>
+          <li><a href="/whitepage-politicas.html?tab=termos">Termos de Uso</a></li>
+          <li><a href="/whitepage-politicas.html?tab=privacidade">Políticas de Privacidade</a></li>
+          <li><a href="/whitepage-politicas.html?tab=trocas">Trocas e Devoluções</a></li>
+          <li><a href="/whitepage-politicas.html?tab=entrega">Prazos de Entrega</a></li>
         </ul>
       </div>
       <div class="footer-col">
@@ -655,6 +662,5 @@ export function getWhitepageHtml() {
   </footer>
 
 </body>
-</html>
-`;
+</html>`;
 }

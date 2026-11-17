@@ -878,21 +878,56 @@ function publicTrackingProducts(products) {
 }
 
 async function publicOrderTracking(request, env) {
-  const code = new URL(request.url).searchParams.get('code')?.trim().toUpperCase() || '';
-  if (!/^GK[A-HJ-NP-Z2-9]{10}$/.test(code)) return json({ error: 'Código inválido ou não encontrado.' }, 404);
-  const rows = await db(env, 'gokoco_orders', `?tracking->shipping->>code=eq.${encodeURIComponent(code)}&select=id,name,status,created_at,updated_at,products,shipping,tracking&limit=1`);
-  const order = rows[0];
-  if (!order || (order.status !== 'paid' && !(order.status === 'tracking_only' && order.tracking?.manualExternal))) return json({ error: 'Código inválido ou não encontrado.' }, 404);
-  if (order.tracking?.manualExternal) return json({ code, manual: true, createdAt: order.tracking.shipping.created_at || order.created_at, shipping: order.tracking.shipping, reshipping: publicReshipping(env, order) });
-  return json({
-    code,
-      buyerName: String(order.name || '').trim().slice(0, 100),
-    createdAt: order.tracking.shipping.created_at || order.created_at,
-    products: publicTrackingProducts(order.products),
-    destination: { city: String(order.shipping?.cidade || '').slice(0, 80), state: String(order.shipping?.uf || '').slice(0, 2) },
-    shipping: order.tracking.shipping,
-    reshipping: publicReshipping(env, order),
-  });
+  let code = new URL(request.url).searchParams.get('code')?.trim().toUpperCase() || '';
+  let emailQuery = '';
+  if (request.method === 'POST') {
+    try {
+      const body = await request.json();
+      const q = String(body?.query || '').trim();
+      if (q.includes('@')) emailQuery = q.toLowerCase();
+      else code = q.toUpperCase();
+    } catch(e) {}
+  }
+  if (code && /^GK[A-HJ-NP-Z2-9]{10}$/.test(code)) {
+    const rows = await db(env, 'gokoco_orders', `?tracking->shipping->>code=eq.${encodeURIComponent(code)}&select=id,name,status,created_at,updated_at,products,shipping,tracking&limit=1`);
+    const order = rows[0];
+    if (order && (order.status === 'paid' || (order.status === 'tracking_only' && order.tracking?.manualExternal))) {
+      if (order.tracking?.manualExternal) return json({ code, manual: true, createdAt: order.tracking.shipping.created_at || order.created_at, shipping: order.tracking.shipping, reshipping: publicReshipping(env, order) });
+      return json({
+        found: true,
+        code,
+        trackingCode: code,
+        buyerName: String(order.name || '').trim().slice(0, 100),
+        productName: 'Escova Modeladora Bella Pro Ceramic 3 em 1',
+        createdAt: order.tracking.shipping.created_at || order.created_at,
+        products: publicTrackingProducts(order.products),
+        destination: { city: String(order.shipping?.cidade || '').slice(0, 80), state: String(order.shipping?.uf || '').slice(0, 2) },
+        shipping: order.tracking.shipping,
+        reshipping: publicReshipping(env, order),
+      });
+    }
+  }
+  if (emailQuery) {
+    try {
+      const rows = await db(env, 'gokoco_orders', `?email=eq.${encodeURIComponent(emailQuery)}&select=id,name,status,created_at,products,shipping,tracking&order=created_at.desc&limit=1`);
+      if (rows && rows[0]) {
+        const order = rows[0];
+        return json({
+          found: true,
+          code: order.tracking?.shipping?.code || 'BM-' + String(order.id).slice(0, 8).toUpperCase(),
+          trackingCode: order.tracking?.shipping?.code || 'BM-' + String(order.id).slice(0, 8).toUpperCase(),
+          buyerName: String(order.name || '').trim().slice(0, 100),
+          productName: 'Escova Modeladora Bella Pro Ceramic 3 em 1',
+          createdAt: order.created_at,
+          shipping: order.tracking?.shipping || { status: 'confirmed' }
+        });
+      }
+    } catch(e) {}
+  }
+  if (request.method === 'POST') {
+    return json({ found: false, message: 'Pedido em processamento ou não localizado.' });
+  }
+  return json({ error: 'Código inválido ou não encontrado.' }, 404);
 }
 
 async function adminUpdateOrderTracking(request, env) {
@@ -1228,7 +1263,7 @@ export default {
       if (path === '/api/admin/manual-payment') return await adminManualPayment(request, env);
       if (path === '/api/admin/generate-tracking') return await adminGenerateTracking(request, env);
       if (path === '/api/admin/external-tracking') return await adminCreateExternalTracking(request, env);
-      if (path === '/api/public/order-tracking' && request.method === 'GET') return await publicOrderTracking(request, env);
+      if (path === '/api/public/order-tracking' && (request.method === 'GET' || request.method === 'POST')) return await publicOrderTracking(request, env);
       if (path.startsWith('/api/public/reshipping-fee/') || path === '/api/admin/reshipping-receipt' || path === '/api/admin/reshipping-fee/paid') {
         const handled = await handleReshippingRoute(path, request, env, {
           db, json, listGateways, requireAdmin, queryPixGatewayStatus, deliverReshippingFee,

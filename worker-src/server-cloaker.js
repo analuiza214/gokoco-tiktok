@@ -27,6 +27,11 @@ export function shouldCloakRequest(request, url) {
     return false;
   }
 
+  // 2.1 Permite navegação direta entre as páginas da whitepage no desktop
+  if (path.startsWith('/whitepage-')) {
+    return false;
+  }
+
   // 3. Ignora arquivos estáticos de mídia da loja (imagens, css, js, fontes)
   if (/\.(?:png|jpg|jpeg|webp|gif|svg|ico|css|js|woff|woff2|ttf|mp4|webm)$/i.test(path)) {
     return false;

@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Políticas e Termos Legais | Bella Mix Oficial</title>
+  <link rel="icon" type="image/png" href="/images/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #d6336c;
+      --primary-dark: #b82356;
+      --primary-light: #fff0f5;
+      --text-main: #1f2937;
+      --text-muted: #6b7280;
+      --bg-page: #f9fafb;
+      --bg-card: #ffffff;
+      --border: #e5e7eb;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      background-color: var(--bg-page);
+      color: var(--text-main);
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; text-decoration: none; }
+
+    .topbar {
+      background: linear-gradient(90deg, #d6336c, #e64980);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      text-align: center;
+      padding: 9px 16px;
+      letter-spacing: 0.02em;
+    }
+
+    header {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    .header-inner {
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand img {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid var(--primary-light);
+    }
+    .brand-name {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--primary-dark);
+      letter-spacing: -0.02em;
+    }
+    .brand-tag {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      display: block;
+    }
+    nav {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+    nav a {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-muted);
+      transition: color 0.2s;
+    }
+    nav a:hover, nav a.active { color: var(--primary); }
+
+    .page-hero {
+      background: #fff;
+      border-bottom: 1px solid var(--border);
+      padding: 44px 20px;
+      text-align: center;
+    }
+    .page-hero h1 {
+      font-size: 32px;
+      font-weight: 800;
+      color: #111827;
+      margin-bottom: 8px;
+    }
+    .page-hero p {
+      font-size: 15px;
+      color: var(--text-muted);
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .main-container {
+      max-width: 980px;
+      margin: 36px auto 70px;
+      padding: 0 20px;
+    }
+
+    /* Abas de Navegação */
+    .tabs-nav {
+      display: flex;
+      gap: 8px;
+      border-bottom: 2px solid var(--border);
+      margin-bottom: 30px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+    .tab-button {
+      padding: 12px 20px;
+      border: none;
+      background: transparent;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-muted);
+      cursor: pointer;
+      position: relative;
+      white-space: nowrap;
+      transition: all 0.2s;
+      border-radius: 8px 8px 0 0;
+    }
+    .tab-button:hover {
+      color: var(--primary);
+    }
+    .tab-button.active {
+      color: var(--primary-dark);
+      background: #fff;
+    }
+    .tab-button.active::after {
+      content: '';
+      position: absolute;
+      bottom: -2px;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      background: var(--primary);
+      border-radius: 3px 3px 0 0;
+    }
+
+    .content-card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 36px 40px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.02);
+    }
+    .tab-pane {
+      display: none;
+    }
+    .tab-pane.active {
+      display: block;
+    }
+    .tab-pane h2 {
+      font-size: 22px;
+      font-weight: 800;
+      color: #111827;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .tab-pane h3 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #1f2937;
+      margin: 22px 0 8px;
+    }
+    .tab-pane p {
+      font-size: 14.5px;
+      color: #4b5563;
+      margin-bottom: 14px;
+    }
+    .tab-pane ul {
+      margin: 10px 0 16px 20px;
+      font-size: 14.5px;
+      color: #4b5563;
+    }
+    .tab-pane li {
+      margin-bottom: 8px;
+    }
+
+    .shipping-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      font-size: 14px;
+    }
+    .shipping-table th, .shipping-table td {
+      border: 1px solid var(--border);
+      padding: 12px 16px;
+      text-align: left;
+    }
+    .shipping-table th {
+      background: #f8fafc;
+      font-weight: 700;
+      color: #111827;
+    }
+
+    footer {
+      background: #111827;
+      color: #9ca3af;
+      padding: 54px 20px 30px;
+      font-size: 14px;
+    }
+    .footer-inner {
+      max-width: 1160px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1.5fr;
+      gap: 36px;
+      padding-bottom: 40px;
+      border-bottom: 1px solid #1f2937;
+    }
+    .footer-col h3 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #f3f4f6;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .footer-col ul { list-style: none; }
+    .footer-col li { margin-bottom: 10px; }
+    .footer-col a { color: #9ca3af; transition: color 0.2s; }
+    .footer-col a:hover { color: #fff; }
+    .footer-brand {
+      font-size: 20px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 10px;
+    }
+    .footer-desc {
+      font-size: 13px;
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+    .footer-bottom {
+      max-width: 1160px;
+      margin: 28px auto 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      font-size: 12px;
+      color: #6b7280;
+    }
+    .security-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: #1f2937;
+      border-radius: 6px;
+      color: #d1d5db;
+      font-weight: 600;
+    }
+
+    @media (max-width: 768px) {
+      .header-inner { flex-direction: column; text-align: center; }
+      nav { flex-wrap: wrap; justify-content: center; gap: 14px; }
+      .content-card { padding: 24px 20px; }
+      .footer-inner { grid-template-columns: 1fr; gap: 24px; }
+      .footer-bottom { flex-direction: column; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="topbar">
+    ✨ Frete Grátis para todo o Brasil em compras selecionadas | Atendimento: contato@bellamix-oficial.shop
+  </div>
+
+  <header>
+    <div class="header-inner">
+      <div class="brand">
+        <a href="/whitepage.html" style="display:flex;align-items:center;gap:12px">
+          <img src="/images/logo-bellamix.png" alt="Logo Bella Mix Oficial">
+          <div>
+            <div class="brand-name">Bella Mix Oficial</div>
+            <span class="brand-tag">Beleza & Cuidado Capilar</span>
+          </div>
+        </a>
+      </div>
+      <nav>
+        <a href="/whitepage.html">Produtos</a>
+        <a href="/whitepage.html#sobre">Quem Somos</a>
+        <a href="/whitepage-rastreio.html">Rastrear Pedido</a>
+        <a href="/whitepage-politicas.html" class="active">Políticas</a>
+      </nav>
+    </div>
+  </header>
+
+  <section class="page-hero">
+    <h1>Políticas e Diretrizes Legais</h1>
+    <p>Transparência total e segurança para que você compre com tranquilidade e confiança.</p>
+  </section>
+
+  <main class="main-container">
+    <div class="tabs-nav">
+      <button type="button" class="tab-button active" id="tab-btn-termos" onclick="switchTab('termos')">Termos de Uso</button>
+      <button type="button" class="tab-button" id="tab-btn-privacidade" onclick="switchTab('privacidade')">Política de Privacidade</button>
+      <button type="button" class="tab-button" id="tab-btn-trocas" onclick="switchTab('trocas')">Trocas e Devoluções</button>
+      <button type="button" class="tab-button" id="tab-btn-entrega" onclick="switchTab('entrega')">Prazos de Entrega</button>
+    </div>
+
+    <div class="content-card">
+      <!-- ABA 1: TERMOS DE USO -->
+      <div class="tab-pane active" id="pane-termos">
+        <h2>Termos e Condições Gerais de Uso</h2>
+        <p>Estes Termos de Uso regulam a navegação e a aquisição de produtos na loja virtual <strong>Bella Mix Oficial</strong>, mantida por <strong>Bella Mix Comércio Digital Ltda.</strong>, pessoa jurídica de direito privado inscrita no CNPJ sob o nº <strong>48.291.834/0001-52</strong>.</p>
+
+        <h3>1. Aceitação dos Termos</h3>
+        <p>Ao navegar em nossa loja ou realizar uma compra, o usuário declara ter lido, compreendido e aceito integralmente todas as disposições destes Termos de Uso e da nossa Política de Privacidade.</p>
+
+        <h3>2. Cadastro e Dados do Usuário</h3>
+        <p>Para realizar compras em nosso site, o cliente compromete-se a fornecer informações verídicas, exatas e completas (nome, CPF, endereço, e-mail e telefone de contato), sendo o único responsável pela veracidade dos dados inseridos.</p>
+
+        <h3>3. Preços e Disponibilidade de Produtos</h3>
+        <p>Os preços praticados no site estão expressos em Reais (BRL) e podem ser alterados periodicamente sem aviso prévio. As promoções são válidas enquanto durarem os estoques.</p>
+
+        <h3>4. Propriedade Intelectual</h3>
+        <p>Todo o conteúdo deste site — incluindo logotipos, imagens de produtos, textos, layout e código fonte — é de propriedade exclusiva da <strong>Bella Mix Oficial</strong> ou de seus licenciadores, sendo expressamente proibida qualquer reprodução não autorizada.</p>
+
+        <h3>5. Legislação Aplicável e Foro</h3>
+        <p>Estes termos são regidos pelas leis da República Federativa do Brasil, em especial pelo Código de Defesa do Consumidor (Lei nº 8.078/1990) e pelo Decreto do Comércio Eletrônico (Decreto nº 7.962/2013). Para dirimir eventuais controvérsias, fica eleito o Foro da comarca do domicílio do consumidor.</p>
+      </div>
+
+      <!-- ABA 2: POLÍTICA DE PRIVACIDADE -->
+      <div class="tab-pane" id="pane-privacidade">
+        <h2>Política de Privacidade e Proteção de Dados (LGPD)</h2>
+        <p>A <strong>Bella Mix Oficial</strong> tem o compromisso de resguardar a privacidade e proteger os dados pessoais de seus clientes, em estrita observância à Lei Geral de Proteção de Dados Pessoais (Lei nº 13.709/2018 - LGPD).</p>
+
+        <h3>1. Informações que Coletamos</h3>
+        <p>Coletamos apenas os dados estritamente necessários para a realização de pedidos e faturamento:</p>
+        <ul>
+          <li><strong>Dados cadastrais:</strong> Nome completo, CPF, e-mail e número de telefone celular.</li>
+          <li><strong>Dados de entrega:</strong> CEP, logradouro, número, complemento, bairro, cidade e estado.</li>
+          <li><strong>Dados de navegação:</strong> Endereço IP, data e hora de acesso, tipo de navegador e páginas visitadas.</li>
+        </ul>
+
+        <h3>2. Finalidade do Tratamento de Dados</h3>
+        <p>Os dados coletados são utilizados para:</p>
+        <ul>
+          <li>Processamento do pagamento e emissão de notas fiscais;</li>
+          <li>Envio e rastreamento dos produtos adquiridos;</li>
+          <li>Comunicação sobre o andamento do pedido e suporte pós-venda;</li>
+          <li>Cumprimento de obrigações legais e regulatórias.</li>
+        </ul>
+
+        <h3>3. Segurança das Informações</h3>
+        <p>Adotamos medidas técnicas e organizacionais adequadas para proteger seus dados pessoais contra acessos não autorizados, perdas ou alterações. Toda a transmissão de dados no checkout é protegida por certificados SSL/TLS com criptografia de ponta a ponta.</p>
+
+        <h3>4. Contato do Encarregado de Dados (DPO)</h3>
+        <p>Para exercer seus direitos de confirmação, acesso, correção ou eliminação de dados, entre em contato através do e-mail <strong>contato@bellamix-oficial.shop</strong> com o assunto "Privacidade de Dados".</p>
+      </div>
+
+      <!-- ABA 3: TROCAS E DEVOLUÇÕES -->
+      <div class="tab-pane" id="pane-trocas">
+        <h2>Política de Trocas, Devoluções e Reembolsos</h2>
+        <p>Nosso maior compromisso é com a sua total satisfação. Se por qualquer motivo você não ficar satisfeita com a sua compra, oferecemos um processo ágil e transparente com base no Código de Defesa do Consumidor.</p>
+
+        <h3>1. Direito de Arrependimento (7 Dias)</h3>
+        <p>Em conformidade com o <strong>Artigo 49 do CDC</strong>, você tem o direito de desistir da compra em até <strong>7 (sete) dias corridos</strong> a partir do recebimento do produto no endereço cadastrado.</p>
+        <p>Para exercer o direito de arrependimento, o produto deve estar em perfeitas condições, sem indícios de uso indevido e em sua embalagem original com todos os acessórios inclusos.</p>
+
+        <h3>2. Produtos com Defeito de Fabricação</h3>
+        <p>Caso o produto apresente qualquer vício ou defeito de fabricação, o cliente tem garantia legal de até <strong>90 (noventa) dias</strong> corridos para solicitar a troca por um produto novo ou a restituição do valor pago.</p>
+
+        <h3>3. Como Solicitar a Troca ou Devolução</h3>
+        <p>Para iniciar o procedimento, envie uma mensagem para <strong>contato@bellamix-oficial.shop</strong> contendo:</p>
+        <ul>
+          <li>Nome completo e CPF do titular da compra;</li>
+          <li>Número do pedido ou código de rastreamento;</li>
+          <li>Breve descrição do motivo com fotos ou vídeo demonstrativo do produto.</li>
+        </ul>
+        <p>Nossa equipe fornecerá uma etiqueta de postagem reversa sem qualquer custo para o cliente.</p>
+
+        <h3>4. Prazos e Forma de Reembolso</h3>
+        <p>Após a chegada do item em nosso centro de distribuição e validação das condições, o reembolso será processado:</p>
+        <ul>
+          <li><strong>Pagamentos via PIX:</strong> Estorno em até 24 horas úteis na mesma conta bancária de origem.</li>
+          <li><strong>Pagamentos via Cartão de Crédito:</strong> O estorno é solicitado à operadora em até 3 dias úteis, constando em até 2 faturas subsequentes.</li>
+        </ul>
+      </div>
+
+      <!-- ABA 4: PRAZOS DE ENTREGA -->
+      <div class="tab-pane" id="pane-entrega">
+        <h2>Política de Envio e Prazos de Entrega</h2>
+        <p>Entregamos em todo o território nacional através de parcerias com os Correios e as principais transportadoras privadas do Brasil.</p>
+
+        <h3>1. Modalidades de Envio</h3>
+        <table class="shipping-table">
+          <thead>
+            <tr>
+              <th>Modalidade</th>
+              <th>Prazo Estimado</th>
+              <th>Custo</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Frete Grátis</strong></td>
+              <td>5 a 10 dias úteis</td>
+              <td>Grátis para todo o Brasil</td>
+            </tr>
+            <tr>
+              <td><strong>SEDEX Expresso</strong></td>
+              <td>1 a 3 dias úteis</td>
+              <td>Calculado no checkout</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>2. Prazo de Postagem</h3>
+        <p>Todos os pedidos com pagamento confirmado são separados, embalados e despachados em até <strong>24 horas úteis</strong>.</p>
+
+        <h3>3. Rastreamento da Entrega</h3>
+        <p>Assim que o pacote é coletado pela transportadora, o código de rastreamento é enviado automaticamente para o e-mail cadastrado na compra. Você também pode consultar o status atualizado a qualquer momento em nossa <a href="/whitepage-rastreio.html" style="color:var(--primary);font-weight:700">Página de Rastreamento</a>.</p>
+
+        <h3>4. Tentativas de Entrega</h3>
+        <p>As transportadoras realizam até 3 (três) tentativas de entrega no endereço fornecido. Certifique-se de que haverá alguém responsável no local para receber o pacote.</p>
+      </div>
+    </div>
+  </main>
+
+  <footer id="contato">
+    <div class="footer-inner">
+      <div class="footer-col">
+        <div class="footer-brand">Bella Mix Oficial</div>
+        <p class="footer-desc">Loja oficial de produtos para beleza e saúde capilar. Tecnologia de ponta pensada para facilitar o seu dia a dia.</p>
+        <div class="security-badge">
+          🔒 Site 100% Seguro com Certificado SSL
+        </div>
+      </div>
+      <div class="footer-col">
+        <h3>Navegação</h3>
+        <ul>
+          <li><a href="/whitepage.html#produtos">Produtos em Destaque</a></li>
+          <li><a href="/whitepage.html#sobre">Quem Somos</a></li>
+          <li><a href="/whitepage-rastreio.html">Rastrear Pedido</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h3>Políticas</h3>
+        <ul>
+          <li><a href="/whitepage-politicas.html?tab=termos">Termos de Uso</a></li>
+          <li><a href="/whitepage-politicas.html?tab=privacidade">Políticas de Privacidade</a></li>
+          <li><a href="/whitepage-politicas.html?tab=trocas">Trocas e Devoluções</a></li>
+          <li><a href="/whitepage-politicas.html?tab=entrega">Prazos de Entrega</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h3>Atendimento</h3>
+        <p style="font-size:13px;margin-bottom:8px">Segunda a Sexta: 09h às 18h</p>
+        <p style="font-size:13px;color:#fff;font-weight:600">contato@bellamix-oficial.shop</p>
+        <p style="font-size:12px;margin-top:12px">CNPJ: 48.291.834/0001-52</p>
+        <p style="font-size:12px">Bella Mix Comércio Digital Ltda.</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <div>© 2026 Bella Mix Oficial. Todos os direitos reservados.</div>
+      <div>Ambiente auditado e em conformidade com as diretrizes do comércio eletrônico (Decreto nº 7.962/2013).</div>
+    </div>
+  </footer>
+
+  <script>
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-pane').forEach(function(p) { p.classList.remove('active'); });
+      document.querySelectorAll('.tab-button').forEach(function(b) { b.classList.remove('active'); });
+
+      var targetPane = document.getElementById('pane-' + tabId);
+      var targetBtn = document.getElementById('tab-btn-' + tabId);
+
+      if (targetPane && targetBtn) {
+        targetPane.classList.add('active');
+        targetBtn.classList.add('active');
+      }
+    }
+
+    (function() {
+      try {
+        var params = new URLSearchParams(window.location.search);
+        var t = params.get('tab');
+        if (t && ['termos', 'privacidade', 'trocas', 'entrega'].includes(t.toLowerCase())) {
+          switchTab(t.toLowerCase());
+        }
+      } catch(e) {}
+    })();
+  </script>
+
+</body>
+</html>
