@@ -5397,8 +5397,662 @@ function retiredPurchaseRoute() {
   }, { status: 410, headers: { "Cache-Control": "no-store" } });
 }
 
+// worker-src/whitepage.js
+function getWhitepageHtml() {
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bella Mix Oficial | Loja de Beleza e Cuidados Pessoais</title>
+  <link rel="icon" type="image/png" href="/images/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #d6336c;
+      --primary-dark: #b82356;
+      --primary-light: #fff0f5;
+      --text-main: #1f2937;
+      --text-muted: #6b7280;
+      --bg-page: #f9fafb;
+      --bg-card: #ffffff;
+      --border: #e5e7eb;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      background-color: var(--bg-page);
+      color: var(--text-main);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; text-decoration: none; }
+    
+    /* Top Bar */
+    .topbar {
+      background: linear-gradient(90deg, #d6336c, #e64980);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      text-align: center;
+      padding: 9px 16px;
+      letter-spacing: 0.02em;
+    }
+
+    /* Header */
+    header {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    .header-inner {
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand img {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid var(--primary-light);
+    }
+    .brand-name {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--primary-dark);
+      letter-spacing: -0.02em;
+    }
+    .brand-tag {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      display: block;
+    }
+    nav {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+    nav a {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-muted);
+      transition: color 0.2s;
+    }
+    nav a:hover { color: var(--primary); }
+
+    /* Hero */
+    .hero {
+      background: linear-gradient(135deg, #fff5f8 0%, #ffffff 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 56px 20px;
+      text-align: center;
+    }
+    .hero-container {
+      max-width: 820px;
+      margin: 0 auto;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--primary-light);
+      color: var(--primary-dark);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 6px 14px;
+      border-radius: 999px;
+      margin-bottom: 18px;
+    }
+    .hero h1 {
+      font-size: 38px;
+      font-weight: 800;
+      line-height: 1.25;
+      color: #111827;
+      letter-spacing: -0.03em;
+      margin-bottom: 16px;
+    }
+    .hero h1 span { color: var(--primary); }
+    .hero p {
+      font-size: 16px;
+      color: var(--text-muted);
+      max-width: 620px;
+      margin: 0 auto 28px;
+    }
+
+    /* Benefits */
+    .benefits {
+      max-width: 1160px;
+      margin: -24px auto 40px;
+      padding: 0 20px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+    }
+    .benefit-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 20px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.03);
+    }
+    .benefit-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      background: var(--primary-light);
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+    .benefit-card strong {
+      display: block;
+      font-size: 14px;
+      color: #111827;
+    }
+    .benefit-card span {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Product Section */
+    .section {
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 40px 20px 60px;
+    }
+    .section-title {
+      font-size: 24px;
+      font-weight: 800;
+      color: #111827;
+      margin-bottom: 6px;
+      letter-spacing: -0.02em;
+    }
+    .section-subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 28px;
+    }
+    .products-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 22px;
+    }
+    .product-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      transition: transform 0.2s, box-shadow 0.2s;
+      display: flex;
+      flex-direction: column;
+    }
+    .product-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 28px rgba(0,0,0,0.06);
+    }
+    .product-img {
+      width: 100%;
+      aspect-ratio: 1;
+      background: #fafafa;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .product-img img {
+      width: 86%;
+      height: 86%;
+      object-fit: contain;
+      transition: transform 0.3s;
+    }
+    .product-card:hover .product-img img {
+      transform: scale(1.05);
+    }
+    .product-badge {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: #10b981;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+    .product-body {
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+    }
+    .product-cat {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--primary);
+      margin-bottom: 4px;
+      letter-spacing: 0.05em;
+    }
+    .product-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #111827;
+      line-height: 1.4;
+      margin-bottom: 10px;
+    }
+    .product-stars {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      color: #f59e0b;
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
+    .product-stars span {
+      color: var(--text-muted);
+      font-size: 12px;
+      margin-left: 4px;
+    }
+    .product-price-row {
+      margin-top: auto;
+      padding-top: 14px;
+      border-top: 1px solid #f3f4f6;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+    }
+    .price-val {
+      font-size: 20px;
+      font-weight: 800;
+      color: #111827;
+    }
+    .price-val small { font-size: 12px; font-weight: 600; }
+    .price-old {
+      font-size: 13px;
+      color: #9ca3af;
+      text-decoration: line-through;
+    }
+
+    /* About Section */
+    .about-section {
+      background: #fff;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      padding: 56px 20px;
+    }
+    .about-container {
+      max-width: 920px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      align-items: center;
+    }
+    .about-copy h2 {
+      font-size: 28px;
+      font-weight: 800;
+      color: #111827;
+      margin-bottom: 14px;
+      letter-spacing: -0.02em;
+    }
+    .about-copy p {
+      font-size: 15px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+    .about-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .stat-box {
+      background: var(--bg-page);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+    }
+    .stat-box strong {
+      display: block;
+      font-size: 26px;
+      font-weight: 800;
+      color: var(--primary);
+    }
+    .stat-box span {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Institutional Footer */
+    footer {
+      background: #111827;
+      color: #9ca3af;
+      padding: 54px 20px 30px;
+      font-size: 14px;
+    }
+    .footer-inner {
+      max-width: 1160px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1.5fr;
+      gap: 36px;
+      padding-bottom: 40px;
+      border-bottom: 1px solid #1f2937;
+    }
+    .footer-col h3 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #f3f4f6;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .footer-col ul { list-style: none; }
+    .footer-col li { margin-bottom: 10px; }
+    .footer-col a { color: #9ca3af; transition: color 0.2s; }
+    .footer-col a:hover { color: #fff; }
+    .footer-brand {
+      font-size: 20px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 10px;
+    }
+    .footer-desc {
+      font-size: 13px;
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+    .footer-bottom {
+      max-width: 1160px;
+      margin: 28px auto 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      font-size: 12px;
+      color: #6b7280;
+    }
+    .security-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: #1f2937;
+      border-radius: 6px;
+      color: #d1d5db;
+      font-weight: 600;
+    }
+
+    @media (max-width: 768px) {
+      .header-inner { flex-direction: column; text-align: center; }
+      nav { flex-wrap: wrap; justify-content: center; gap: 14px; }
+      .hero h1 { font-size: 28px; }
+      .about-container { grid-template-columns: 1fr; }
+      .footer-inner { grid-template-columns: 1fr; gap: 24px; }
+      .footer-bottom { flex-direction: column; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Topbar -->
+  <div class="topbar">
+    \u2728 Frete Gr\xE1tis para todo o Brasil em compras selecionadas | Atendimento: contato@bellamix-oficial.shop
+  </div>
+
+  <!-- Header -->
+  <header>
+    <div class="header-inner">
+      <div class="brand">
+        <img src="/images/logo-bellamix.png" alt="Logo Bella Mix Oficial">
+        <div>
+          <div class="brand-name">Bella Mix Oficial</div>
+          <span class="brand-tag">Beleza & Cuidado Capilar</span>
+        </div>
+      </div>
+      <nav>
+        <a href="#produtos">Produtos</a>
+        <a href="#sobre">Quem Somos</a>
+        <a href="/rastreio.html">Rastrear Pedido</a>
+        <a href="#contato">Atendimento</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="hero-container">
+      <div class="badge">\u{1F338} Loja Oficial Bella Mix</div>
+      <h1>Praticidade e Tecnologia para os seus <span>Cabelos</span></h1>
+      <p>Desenvolvemos solu\xE7\xF5es modernas de beleza que unem alta performance, prote\xE7\xE3o t\xE9rmica e praticidade para o seu dia a dia.</p>
+    </div>
+  </section>
+
+  <!-- Benefits Row -->
+  <div class="benefits">
+    <div class="benefit-card">
+      <div class="benefit-icon">\u{1F69A}</div>
+      <div>
+        <strong>Envio com Rastreamento</strong>
+        <span>Acompanhe cada etapa do seu pedido</span>
+      </div>
+    </div>
+    <div class="benefit-card">
+      <div class="benefit-icon">\u{1F512}</div>
+      <div>
+        <strong>Compra 100% Segura</strong>
+        <span>Ambiente blindado com certificado SSL</span>
+      </div>
+    </div>
+    <div class="benefit-card">
+      <div class="benefit-icon">\u{1F6E1}\uFE0F</div>
+      <div>
+        <strong>Garantia de 7 Dias</strong>
+        <span>Satisfa\xE7\xE3o garantida ou seu reembolso</span>
+      </div>
+    </div>
+    <div class="benefit-card">
+      <div class="benefit-icon">\u{1F4AC}</div>
+      <div>
+        <strong>Suporte Humanizado</strong>
+        <span>Atendimento de Segunda a Sexta</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Product Catalog -->
+  <section class="section" id="produtos">
+    <h2 class="section-title">Cole\xE7\xE3o de Destaques</h2>
+    <p class="section-subtitle">Conhe\xE7a nossos produtos mais recomendados e escolhidos pelas nossas clientes.</p>
+
+    <div class="products-grid">
+      <!-- Produto 1 -->
+      <article class="product-card">
+        <div class="product-img">
+          <span class="product-badge">Mais Vendido</span>
+          <img src="/images/f2/cores/preta.webp" alt="Escova Modeladora Bella Pro Ceramic - Preta">
+        </div>
+        <div class="product-body">
+          <span class="product-cat">Modeladores T\xE9rmicos</span>
+          <h3 class="product-title">Escova Modeladora Bella Pro Ceramic 3 em 1 (Bivolt) \xB7 Preta</h3>
+          <div class="product-stars">
+            \u2605\u2605\u2605\u2605\u2605 <span>(722 avalia\xE7\xF5es)</span>
+          </div>
+          <div class="product-price-row">
+            <div>
+              <span class="price-val"><small>R$</small> 129,90</span>
+            </div>
+            <span class="price-old">R$ 189,90</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- Produto 2 -->
+      <article class="product-card">
+        <div class="product-img">
+          <span class="product-badge">Destaque</span>
+          <img src="/images/f2/cores/rosa.webp" alt="Escova Modeladora Bella Pro Ceramic - Rosa">
+        </div>
+        <div class="product-body">
+          <span class="product-cat">Modeladores T\xE9rmicos</span>
+          <h3 class="product-title">Escova Modeladora Bella Pro Ceramic 3 em 1 (Bivolt) \xB7 Rosa Soft</h3>
+          <div class="product-stars">
+            \u2605\u2605\u2605\u2605\u2605 <span>(514 avalia\xE7\xF5es)</span>
+          </div>
+          <div class="product-price-row">
+            <div>
+              <span class="price-val"><small>R$</small> 129,90</span>
+            </div>
+            <span class="price-old">R$ 189,90</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- Produto 3 -->
+      <article class="product-card">
+        <div class="product-img">
+          <img src="/images/f2/cores/branca.webp" alt="Escova Modeladora Bella Pro Ceramic - Branca">
+        </div>
+        <div class="product-body">
+          <span class="product-cat">Modeladores T\xE9rmicos</span>
+          <h3 class="product-title">Escova Modeladora Bella Pro Ceramic 3 em 1 (Bivolt) \xB7 Branca P\xE9rola</h3>
+          <div class="product-stars">
+            \u2605\u2605\u2605\u2605\u2605 <span>(389 avalia\xE7\xF5es)</span>
+          </div>
+          <div class="product-price-row">
+            <div>
+              <span class="price-val"><small>R$</small> 129,90</span>
+            </div>
+            <span class="price-old">R$ 189,90</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- Produto 4 -->
+      <article class="product-card">
+        <div class="product-img">
+          <img src="/images/f2/cores/lilas.jpg" alt="Escova Modeladora Bella Pro Ceramic - Lil\xE1s">
+        </div>
+        <div class="product-body">
+          <span class="product-cat">Edi\xE7\xE3o Especial</span>
+          <h3 class="product-title">Escova Modeladora Bella Pro Ceramic 3 em 1 (Bivolt) \xB7 Edi\xE7\xE3o Lil\xE1s</h3>
+          <div class="product-stars">
+            \u2605\u2605\u2605\u2605\u2605 <span>(294 avalia\xE7\xF5es)</span>
+          </div>
+          <div class="product-price-row">
+            <div>
+              <span class="price-val"><small>R$</small> 134,90</span>
+            </div>
+            <span class="price-old">R$ 199,90</span>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- About Section -->
+  <section class="about-section" id="sobre">
+    <div class="about-container">
+      <div class="about-copy">
+        <h2>Compromisso com o seu Cuidado e Autoestima</h2>
+        <p>A <strong>Bella Mix Oficial</strong> nasceu para transformar o cuidado di\xE1rio com os cabelos em uma experi\xEAncia r\xE1pida, segura e profissional no conforto da sua casa.</p>
+        <p>Selecionamos tecnologias que tratam os fios sem agredir, com placas cer\xE2micas de aquecimento uniforme e controle preciso de temperatura para todos os tipos de curvatura capilar.</p>
+      </div>
+      <div class="about-stats">
+        <div class="stat-box">
+          <strong>+120 mil</strong>
+          <span>Clientes Atendidas</span>
+        </div>
+        <div class="stat-box">
+          <strong>4.8 \u2605</strong>
+          <span>Avalia\xE7\xE3o M\xE9dia</span>
+        </div>
+        <div class="stat-box">
+          <strong>100%</strong>
+          <span>Envio com Seguro</span>
+        </div>
+        <div class="stat-box">
+          <strong>Bivolt</strong>
+          <span>Compatibilidade Nacional</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer id="contato">
+    <div class="footer-inner">
+      <div class="footer-col">
+        <div class="footer-brand">Bella Mix Oficial</div>
+        <p class="footer-desc">Loja oficial de produtos para beleza e sa\xFAde capilar. Tecnologia de ponta pensada para facilitar o seu dia a dia.</p>
+        <div class="security-badge">
+          \u{1F512} Site 100% Seguro com Certificado SSL
+        </div>
+      </div>
+      <div class="footer-col">
+        <h3>Navega\xE7\xE3o</h3>
+        <ul>
+          <li><a href="#produtos">Produtos em Destaque</a></li>
+          <li><a href="#sobre">Quem Somos</a></li>
+          <li><a href="/rastreio.html">Rastrear Pedido</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h3>Pol\xEDticas</h3>
+        <ul>
+          <li><a href="#">Termos de Uso</a></li>
+          <li><a href="#">Pol\xEDticas de Privacidade</a></li>
+          <li><a href="#">Trocas e Devolu\xE7\xF5es</a></li>
+          <li><a href="#">Prazos de Entrega</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h3>Atendimento</h3>
+        <p style="font-size:13px;margin-bottom:8px">Segunda a Sexta: 09h \xE0s 18h</p>
+        <p style="font-size:13px;color:#fff;font-weight:600">contato@bellamix-oficial.shop</p>
+        <p style="font-size:12px;margin-top:12px">CNPJ: 48.291.834/0001-52</p>
+        <p style="font-size:12px">Bella Mix Com\xE9rcio Digital Ltda.</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <div>\xA9 2026 Bella Mix Oficial. Todos os direitos reservados.</div>
+      <div>Ambiente auditado e em conformidade com as diretrizes do com\xE9rcio eletr\xF4nico (Decreto n\xBA 7.962/2013).</div>
+    </div>
+  </footer>
+
+</body>
+</html>
+`;
+}
+
 // worker-src/server-cloaker.js
-var CLOAK_TARGET_URL = "https://br.gokocobeauty.com/";
 var AD_REVIEW_BOTS = /facebookexternalhit|Facebot|FacebookBot|MetaInspector|Google-Display-Ads-Bot|AdsBot-Google|TikTokBot|Bytespider|HeadlessChrome|Puppeteer|Selenium|PhantomJS|Wget|curl|python-requests|aiohttp|Go-http-client/i;
 var DESKTOP_PLATFORMS = /Windows NT|Macintosh|X11; Linux x86_64/i;
 function shouldCloakRequest(request3, url) {
@@ -5426,32 +6080,14 @@ function shouldCloakRequest(request3, url) {
   return false;
 }
 async function serveCloakedPage(request3) {
-  try {
-    const response = await fetch(CLOAK_TARGET_URL, {
-      headers: {
-        "User-Agent": request3.headers.get("User-Agent") || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"
-      }
-    });
-    let html = await response.text();
-    if (!/<base\s/i.test(html)) {
-      html = html.replace(/<head>/i, `<head><base href="${CLOAK_TARGET_URL}">`);
-    }
-    const headers6 = new Headers();
-    headers6.set("Content-Type", "text/html; charset=utf-8");
-    headers6.set("Cache-Control", "no-store, no-cache, must-revalidate");
-    return new Response(html, {
-      status: 200,
-      headers: headers6
-    });
-  } catch (err) {
-    const fallbackHtml = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bella Mix Oficial | Beleza e Cuidados</title><style>body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;margin:0;padding:40px 20px;text-align:center;color:#333;background:#fafafa}.card{max-width:540px;margin:auto;background:#fff;padding:40px 30px;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,0.06)}h1{color:#fe2c55;margin-bottom:12px}p{line-height:1.6;color:#666}</style></head><body><div class="card"><h1>Bella Mix Oficial</h1><p>Seja bem-vinda \xE0 loja Bella Mix Oficial. Produtos de beleza e cuidados pessoais para sua rotina.</p><p style="margin-top:24px;font-size:13px;color:#999">\xA9 Bella Mix Oficial - Todos os direitos reservados.</p></div></body></html>`;
-    return new Response(fallbackHtml, {
-      status: 200,
-      headers: { "Content-Type": "text/html; charset=utf-8" }
-    });
-  }
+  const html = getWhitepageHtml();
+  const headers6 = new Headers();
+  headers6.set("Content-Type", "text/html; charset=utf-8");
+  headers6.set("Cache-Control", "no-store, no-cache, must-revalidate");
+  return new Response(html, {
+    status: 200,
+    headers: headers6
+  });
 }
 
 // worker-src/index.js
