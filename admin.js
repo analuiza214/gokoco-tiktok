@@ -312,11 +312,35 @@ async function load() {
       $('page-error').hidden = false;
     }
     const [gatewayData, orderData, manualData, bellaData, productData] = await Promise.all([api('gateways'), api('orders'), api('external-tracking'), api('bella-orders').catch((error) => ({ error })), api('products')]);
-    const select = $('product-select');
-    select.querySelector('optgroup')?.remove();
-    const group = document.createElement('optgroup'); group.label = 'Produtos Forja';
-    for (const product of productData.products || []) { const option = document.createElement('option'); option.value = product.id; option.textContent = product.name; group.append(option); }
-    select.append(group); select.value = selectedProduct;
+    const subLabel = $('subproduct-label');
+    const subSelect = $('subproduct-select');
+    if (subSelect) {
+      subSelect.replaceChildren();
+      const allOpt = document.createElement('option');
+      allOpt.value = 'forja';
+      allOpt.textContent = 'Todos os itens da Forja';
+      subSelect.append(allOpt);
+      for (const product of productData.products || []) {
+        const option = document.createElement('option');
+        option.value = product.id;
+        option.textContent = product.name;
+        subSelect.append(option);
+      }
+      if (selectedProduct.startsWith('forja:')) {
+        subSelect.value = selectedProduct;
+        if (subLabel) subLabel.hidden = false;
+        $('product-select').value = 'forja';
+      } else if (selectedProduct === 'forja') {
+        subSelect.value = 'forja';
+        if (subLabel) subLabel.hidden = false;
+        $('product-select').value = 'forja';
+      } else {
+        if (subLabel) subLabel.hidden = true;
+        $('product-select').value = selectedProduct;
+      }
+    } else {
+      $('product-select').value = selectedProduct;
+    }
     gateways = gatewayData.gateways || [];
     gokocoOrders = orderData.orders || [];
     bellaOrders = (bellaData.orders || []).filter((order) => order.siteVariant === 'video');
@@ -619,5 +643,29 @@ if (token) api('verify').then((data) => data.valid ? showPanel() : showLogin()).
 window.setInterval(() => { if (!integrationCheck && token && !$('shell').hidden) load(); }, 60_000);
 
 
-$('product-select').value = selectedProduct;
-$('product-select').addEventListener('change', (event) => { selectedProduct = event.target.value; sessionStorage.setItem('admin_selected_product', selectedProduct); selectedSite = 'todas'; page = 1; $('site-filters').querySelectorAll('button').forEach(item => item.classList.toggle('selected', item.dataset.site === 'todas')); renderOrders(); });
+$('product-select').value = selectedProduct.startsWith('forja:') ? 'forja' : selectedProduct;
+$('product-select').addEventListener('change', (event) => {
+  const val = event.target.value;
+  const subLabel = $('subproduct-label');
+  if (val === 'forja') {
+    if (subLabel) subLabel.hidden = false;
+    selectedProduct = $('subproduct-select')?.value || 'forja';
+  } else {
+    if (subLabel) subLabel.hidden = true;
+    selectedProduct = val;
+  }
+  sessionStorage.setItem('admin_selected_product', selectedProduct);
+  selectedSite = 'todas';
+  page = 1;
+  $('site-filters').querySelectorAll('button').forEach(item => item.classList.toggle('selected', item.dataset.site === 'todas'));
+  renderOrders();
+});
+
+if ($('subproduct-select')) {
+  $('subproduct-select').addEventListener('change', (event) => {
+    selectedProduct = event.target.value;
+    sessionStorage.setItem('admin_selected_product', selectedProduct);
+    page = 1;
+    renderOrders();
+  });
+}
