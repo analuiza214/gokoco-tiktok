@@ -1589,7 +1589,7 @@ async function mirrorVerdefy(env, order, kind = "paid", opts = {}, query = query
     if (!paidAt || !Number.isFinite(Date.parse(paidAt))) throw Error("Data confirmada de pagamento ausente.");
     payload = { ...common, status: "paid", confirmedByProvider: !adminConfirmed, confirmationSource: adminConfirmed ? "admin" : "provider", createdAt: order.created_at, paidAt };
   }
-  const r = await send("https://verdefy-sales.loja-oficial.workers.dev/v1/sales", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + verdefyToken(env) }, body: JSON.stringify(payload), signal: AbortSignal.timeout(12e3) });
+  const r = await send("https://verdefy.loja-oficial.workers.dev/v1/sales", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + verdefyToken(env) }, body: JSON.stringify(payload), signal: AbortSignal.timeout(12e3) });
   if (!r.ok) throw Error("Verdefy HTTP " + r.status);
   const receipt = await r.json();
   if (receipt.ok !== true) throw Error("Recebimento n\xE3o confirmado.");
@@ -2038,7 +2038,7 @@ async function integrationReadiness(request3, env) {
   }
   if (env.VERDEFY_SALES_TOKEN) {
     try {
-      const r = await (env.VERDEFY_SALES?.fetch.bind(env.VERDEFY_SALES) || fetch)("https://verdefy-sales.loja-oficial.workers.dev/v1/connection", { headers: { Authorization: "Bearer " + verdefyToken(env) }, signal: AbortSignal.timeout(12e3) });
+      const r = await (env.VERDEFY_SALES?.fetch.bind(env.VERDEFY_SALES) || fetch)("https://verdefy.loja-oficial.workers.dev/v1/connection", { headers: { Authorization: "Bearer " + verdefyToken(env) }, signal: AbortSignal.timeout(12e3) });
       receiver.status = r.status;
       const d = await r.json();
       receiver = { status: r.status, tokenFormat: /^vfy_[a-f0-9]{64}$/.test(verdefyToken(env)) ? "generated" : "legacy_or_invalid", authorized: r.ok && d.ok === true, sourceMatches: d.source === String(env.VERDEFY_SALES_SOURCE || "gokoco").trim() };

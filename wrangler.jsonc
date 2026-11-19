@@ -31,7 +31,7 @@
   "services": [
     {
       "binding": "VERDEFY_SALES",
-      "service": "verdefy-sales"
+      "service": "verdefy"
     },
     {
       "binding": "PAYMENT_RECONCILER",
