@@ -533,12 +533,20 @@ async function siteAsset(request, env) {
 
   // Nova página duplicada da Oferta Limpa no mesmo domínio (depois da barra: /oferta)
   if (normalizedPath === '/oferta') {
-    url.pathname = '/oferta.html';
-    return await env.ASSETS.fetch(new Request(url, request));
+    if (!['GET', 'HEAD'].includes(request.method)) return new Response('Method not allowed', { status: 405 });
+    url.pathname = '/oferta.txt';
+    const asset = await env.ASSETS.fetch(new Request(url, request));
+    const headers = new Headers(asset.headers);
+    headers.set('Content-Type', 'text/html; charset=utf-8');
+    return new Response(asset.body, { status: asset.status, headers });
   }
   if (normalizedPath === '/pagamento-oferta') {
-    url.pathname = '/pagamento-oferta.html';
-    return await env.ASSETS.fetch(new Request(url, request));
+    if (!['GET', 'HEAD'].includes(request.method)) return new Response('Method not allowed', { status: 405 });
+    url.pathname = '/pagamento-oferta.txt';
+    const asset = await env.ASSETS.fetch(new Request(url, request));
+    const headers = new Headers(asset.headers);
+    headers.set('Content-Type', 'text/html; charset=utf-8');
+    return new Response(asset.body, { status: asset.status, headers });
   }
   const catalogRoutes = {};
   for (const [prefix, theme] of [['', 'original'], ['/tl', 'tl'], ['/video', 'bella']]) {

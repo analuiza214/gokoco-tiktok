@@ -13,6 +13,8 @@ fs.rmSync(output, { recursive: true, force: true });
 fs.mkdirSync(output, { recursive: true });
 fs.writeFileSync(path.join(output, '.assetsignore'), '_worker.js\n');
 for (const file of files) fs.copyFileSync(path.join(root, file), path.join(output, file));
+fs.copyFileSync(path.join(output, 'oferta.html'), path.join(output, 'oferta.txt'));
+fs.copyFileSync(path.join(output, 'pagamento-oferta.html'), path.join(output, 'pagamento-oferta.txt'));
 for (const directory of directories) {
   const source = path.join(root, directory);
   if (fs.existsSync(source)) fs.cpSync(source, path.join(output, directory), { recursive: true });

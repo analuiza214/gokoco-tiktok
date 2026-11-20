@@ -6589,12 +6589,20 @@ async function siteAsset(request3, env) {
   const url = new URL(request3.url);
   const normalizedPath = url.pathname.replace(/\/$/, "").replace(/\.html$/, "");
   if (normalizedPath === "/oferta") {
-    url.pathname = "/oferta.html";
-    return await env.ASSETS.fetch(new Request(url, request3));
+    if (!["GET", "HEAD"].includes(request3.method)) return new Response("Method not allowed", { status: 405 });
+    url.pathname = "/oferta.txt";
+    const asset2 = await env.ASSETS.fetch(new Request(url, request3));
+    const headers7 = new Headers(asset2.headers);
+    headers7.set("Content-Type", "text/html; charset=utf-8");
+    return new Response(asset2.body, { status: asset2.status, headers: headers7 });
   }
   if (normalizedPath === "/pagamento-oferta") {
-    url.pathname = "/pagamento-oferta.html";
-    return await env.ASSETS.fetch(new Request(url, request3));
+    if (!["GET", "HEAD"].includes(request3.method)) return new Response("Method not allowed", { status: 405 });
+    url.pathname = "/pagamento-oferta.txt";
+    const asset2 = await env.ASSETS.fetch(new Request(url, request3));
+    const headers7 = new Headers(asset2.headers);
+    headers7.set("Content-Type", "text/html; charset=utf-8");
+    return new Response(asset2.body, { status: asset2.status, headers: headers7 });
   }
   const catalogRoutes = {};
   for (const [prefix, theme] of [["", "original"], ["/tl", "tl"], ["/video", "bella"]]) {
