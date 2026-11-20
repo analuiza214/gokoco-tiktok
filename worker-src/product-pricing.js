@@ -82,7 +82,7 @@ export function pagePriceId(pathname) {
   if (tail === '/pagamento-pincel' || tail === '/upsell1') return 'pincel';
   const upsell = upsellCatalog.find(p => tail === '/upsell' + p.step || tail === '/pagamento-' + p.id);
   if (upsell) return upsell.id;
-  return ['/', '/index', '/pagamento'].includes(tail) && !route.startsWith('/video') ? 'escova' : null;
+  return ['/', '/index', '/pagamento', '/oferta', '/pagamento-oferta'].includes(tail) && !route.startsWith('/video') ? 'escova' : null;
 }
 
 // Muda somente valores monetários conhecidos, sem alterar números em estilos ou SVGs.

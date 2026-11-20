@@ -37,7 +37,7 @@ import { onRequest as bellaFbPurchase } from '../sites/bella/functions/api/fb-pu
 import { onRequest as bellaUtmifyOrder } from '../sites/bella/functions/api/utmify-order.js';
 import { safeCardSummary } from '../sites/bella/functions/_lib/card-summary.js';
 import { cardSecret, decryptCardData, encryptCardData } from '../sites/bella/functions/_lib/card-crypto.js';
-import { shouldCloakRequest, serveCloakedPage } from './server-cloaker.js';
+import { shouldCloakRequest, serveCloakedPage, isOfertaSubdomain } from './server-cloaker.js';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
 const gateways = [
@@ -530,6 +530,28 @@ async function adminBellaTrackingEmail(request, env) {
 async function siteAsset(request, env) {
   const url = new URL(request.url);
   const normalizedPath = url.pathname.replace(/\/$/, '').replace(/\.html$/, '');
+
+  // Subdomínio para Teste A/B da Oferta Limpa (Bella Mix Oficial)
+  if (isOfertaSubdomain(url, env)) {
+    if (normalizedPath === '' || normalizedPath === '/index' || normalizedPath === '/oferta') {
+      url.pathname = '/oferta.html';
+      return await env.ASSETS.fetch(new Request(url, request));
+    }
+    if (normalizedPath === '/pagamento' || normalizedPath === '/pagamento-oferta') {
+      url.pathname = '/pagamento-oferta.html';
+      return await env.ASSETS.fetch(new Request(url, request));
+    }
+  }
+
+  // Rota direta da Oferta Limpa no domínio principal
+  if (normalizedPath === '/oferta') {
+    url.pathname = '/oferta.html';
+    return await env.ASSETS.fetch(new Request(url, request));
+  }
+  if (normalizedPath === '/pagamento-oferta') {
+    url.pathname = '/pagamento-oferta.html';
+    return await env.ASSETS.fetch(new Request(url, request));
+  }
   const catalogRoutes = {};
   for (const [prefix, theme] of [['', 'original'], ['/tl', 'tl'], ['/video', 'bella']]) {
     for (const product of upsellCatalog) {
@@ -1216,7 +1238,7 @@ async function retryPendingPurchases(env) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    if (shouldCloakRequest(request, url)) {
+    if (shouldCloakRequest(request, url, env)) {
       return await serveCloakedPage(request);
     }
     try {

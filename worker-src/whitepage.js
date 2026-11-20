@@ -6,8 +6,7 @@
 // =========================================================================
 
 export function getWhitepageHtml() {
-  return `<!-- WHITEPAGE INSTITUCIONAL BELLA MIX OFICIAL -->
-<!-- Página limpa exibida automaticamente para o robô da Meta e computadores -->
+  return `<!-- BELLA MIX OFICIAL -->
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
