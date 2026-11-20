@@ -52,7 +52,7 @@ export async function mirrorVerdefy(env, order, kind = 'paid', opts = {}, query 
     if(!adminConfirmed&&!order.transaction_id)return {state:'ineligible'};
     const verified=adminConfirmed?null:await query(env,order.transaction_id,order.gateway);
     if(!adminConfirmed&&(!verified.isPaid||verified.isRefunded))throw Error('Pagamento não confirmado pelo gateway.');
-    const paidAt=adminConfirmed?manual.paidAt:(verified.paidAt||order.tracking?._payment?.paid_at||order.tracking?._purchase?.paid_at);
+    const paidAt=adminConfirmed?manual.paidAt:([verified.paidAt,order.tracking?._payment?.paid_at,order.tracking?._purchase?.paid_at,opts.paidAt,order.tracking?.shipping?.created_at].find(value=>Number.isFinite(Date.parse(value))));
     if (!paidAt || !Number.isFinite(Date.parse(paidAt))) throw Error('Data confirmada de pagamento ausente.');
     payload = {...common,status:'paid',confirmedByProvider:!adminConfirmed,confirmationSource:adminConfirmed?'admin':'provider',createdAt:order.created_at,paidAt};
   }
@@ -80,8 +80,8 @@ export async function deliverVerdefy(env, db, orderId, mirror = mirrorVerdefy, k
     const swap=async (before,after)=>db(env,'gokoco_orders',`?id=eq.${encodeURIComponent(order.id)}${filter}&tracking=${before==null?'is.null':'eq.'+encodeURIComponent(JSON.stringify(before))}&select=*`,'PATCH',{tracking:after});
     if (!(await swap(order.tracking,tracking))?.[0]) continue;
     let result;
-    try { result=await mirror(env,order,kind,{pixAt:pending.pix_at}); if(result.state==='ineligible')result.retry_at=new Date(Date.now()+86400000).toISOString(); }
-    catch { result={state:'failed',retry_at:new Date(Date.now()+Math.min(3600000,60000*2**Math.min(pending.attempts,6))).toISOString(),error:'Falha na confirmação ou envio ao Verdefy.',...(pending.pix_at?{pix_at:pending.pix_at}:{})}; }
+    try { result=await mirror(env,order,kind,{pixAt:pending.pix_at,paidAt:opts.paidAt}); if(result.state==='ineligible')result.retry_at=new Date(Date.now()+86400000).toISOString(); }
+    catch { result={state:'failed',retry_at:new Date(Date.now()+Math.min(3600000,15000*2**Math.min(pending.attempts-1,8))).toISOString(),error:'Falha na confirmação ou envio ao Verdefy.',...(pending.pix_at?{pix_at:pending.pix_at}:{})}; }
     // Releitura evita sobrescrever a atualização de outro fluxo.
     for(let save=0;save<3;save++) {
       const latest=(await db(env,'gokoco_orders',`?id=eq.${encodeURIComponent(order.id)}${filter}&select=*&limit=1`))?.[0];
@@ -115,3 +115,4 @@ export async function retryVerdefy(env,db) {
   }
   return summary;
 }
+

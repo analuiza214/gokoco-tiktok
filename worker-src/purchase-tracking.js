@@ -179,7 +179,7 @@ async function swapTracking(db, env, order, tracking) {
 }
 
 export async function deliverPaidPurchase(env, db, orderId, paidAt) {
-  const mirror=await deliverVerdefy(env,db,orderId).catch(()=>({state:"failed"}));
+  const mirror=await deliverVerdefy(env,db,orderId,undefined,'paid',{paidAt}).catch(()=>({state:"failed"}));
   const destination = purchaseDestination(env);
   if (!destination) return { state: 'not_configured' };
   if (destination === 'verdefy') return {...mirror,destination,event_id:'pix_'+orderId};
@@ -249,3 +249,4 @@ export async function deliverReshippingFee(env, db, orderId) {
   await db(env, 'gokoco_orders', `?id=eq.${encodeURIComponent(orderId)}&tracking=eq.${encodeURIComponent(JSON.stringify(order.tracking || {}))}&select=id`, 'PATCH', { tracking });
   return { state: 'sent' };
 }
+
