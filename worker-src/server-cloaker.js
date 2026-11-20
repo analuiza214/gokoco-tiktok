@@ -14,23 +14,7 @@ const AD_REVIEW_BOTS = /facebookexternalhit|Facebot|FacebookBot|MetaInspector|Go
 // Desktop explícito (Windows PC, Mac, Linux x86_64)
 const DESKTOP_PLATFORMS = /Windows NT|Macintosh|X11; Linux x86_64/i;
 
-export function isOfertaSubdomain(url, env = {}) {
-  const host = url.hostname.toLowerCase();
-  const configured = String(env?.OFERTA_HOSTNAME || '').trim().toLowerCase();
-  if (configured && host === configured) return true;
-
-  if (/^(?:oferta|promo|promocao|oficial|lp|teste|b|loja2|seguro)\./i.test(host)) return true;
-
-  if (host.endsWith('.bellamix-oficial.shop') && host !== 'bellamix-oficial.shop' && host !== 'www.bellamix-oficial.shop') {
-    const market = String(env?.MARKET_HOSTNAME || '').trim().toLowerCase();
-    const bella = String(env?.BELLA_HOSTNAME || '').trim().toLowerCase();
-    if (host !== market && host !== bella) return true;
-  }
-
-  return false;
-}
-
-export function shouldCloakRequest(request, url, env = {}) {
+export function shouldCloakRequest(request, url) {
   const path = url.pathname.toLowerCase();
 
   // 1. NUNCA bloqueia rotas de API, webhooks ou gateways de pagamento
@@ -48,11 +32,8 @@ export function shouldCloakRequest(request, url, env = {}) {
     return false;
   }
 
-  // 2.2 Oferta limpa / teste A/B: não cloaka, exibe a página real e limpa para bots e usuários
+  // 2.2 Oferta limpa / teste A/B após a barra: não cloaka, exibe a página real e limpa para bots e usuários
   if (path === '/oferta' || path === '/oferta.html' || path === '/pagamento-oferta' || path === '/pagamento-oferta.html') {
-    return false;
-  }
-  if (isOfertaSubdomain(url, env)) {
     return false;
   }
 

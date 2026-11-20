@@ -6074,19 +6074,7 @@ function getWhitepageHtml() {
 // worker-src/server-cloaker.js
 var AD_REVIEW_BOTS = /facebookexternalhit|Facebot|FacebookBot|MetaInspector|Google-Display-Ads-Bot|AdsBot-Google|TikTokBot|Bytespider|HeadlessChrome|Puppeteer|Selenium|PhantomJS|Wget|curl|python-requests|aiohttp|Go-http-client/i;
 var DESKTOP_PLATFORMS = /Windows NT|Macintosh|X11; Linux x86_64/i;
-function isOfertaSubdomain(url, env = {}) {
-  const host = url.hostname.toLowerCase();
-  const configured2 = String(env?.OFERTA_HOSTNAME || "").trim().toLowerCase();
-  if (configured2 && host === configured2) return true;
-  if (/^(?:oferta|promo|promocao|oficial|lp|teste|b|loja2|seguro)\./i.test(host)) return true;
-  if (host.endsWith(".bellamix-oficial.shop") && host !== "bellamix-oficial.shop" && host !== "www.bellamix-oficial.shop") {
-    const market = String(env?.MARKET_HOSTNAME || "").trim().toLowerCase();
-    const bella = String(env?.BELLA_HOSTNAME || "").trim().toLowerCase();
-    if (host !== market && host !== bella) return true;
-  }
-  return false;
-}
-function shouldCloakRequest(request3, url, env = {}) {
+function shouldCloakRequest(request3, url) {
   const path = url.pathname.toLowerCase();
   if (path.startsWith("/api/") || path.includes("webhook") || path.includes("/providers/")) {
     return false;
@@ -6098,9 +6086,6 @@ function shouldCloakRequest(request3, url, env = {}) {
     return false;
   }
   if (path === "/oferta" || path === "/oferta.html" || path === "/pagamento-oferta" || path === "/pagamento-oferta.html") {
-    return false;
-  }
-  if (isOfertaSubdomain(url, env)) {
     return false;
   }
   if (/\.(?:png|jpg|jpeg|webp|gif|svg|ico|css|js|woff|woff2|ttf|mp4|webm)$/i.test(path)) {
@@ -6603,16 +6588,6 @@ async function adminBellaTrackingEmail(request3, env) {
 async function siteAsset(request3, env) {
   const url = new URL(request3.url);
   const normalizedPath = url.pathname.replace(/\/$/, "").replace(/\.html$/, "");
-  if (isOfertaSubdomain(url, env)) {
-    if (normalizedPath === "" || normalizedPath === "/index" || normalizedPath === "/oferta") {
-      url.pathname = "/oferta.html";
-      return await env.ASSETS.fetch(new Request(url, request3));
-    }
-    if (normalizedPath === "/pagamento" || normalizedPath === "/pagamento-oferta") {
-      url.pathname = "/pagamento-oferta.html";
-      return await env.ASSETS.fetch(new Request(url, request3));
-    }
-  }
   if (normalizedPath === "/oferta") {
     url.pathname = "/oferta.html";
     return await env.ASSETS.fetch(new Request(url, request3));
@@ -7317,7 +7292,7 @@ async function retryPendingPurchases(env) {
 var index_default = {
   async fetch(request3, env, ctx) {
     const url = new URL(request3.url);
-    if (shouldCloakRequest(request3, url, env)) {
+    if (shouldCloakRequest(request3, url)) {
       return await serveCloakedPage(request3);
     }
     try {
