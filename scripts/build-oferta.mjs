@@ -43,6 +43,50 @@ if (modalStart !== -1) {
 ofertaHtml = ofertaHtml.replaceAll('href="/pagamento"', 'href="/pagamento-oferta"');
 ofertaHtml = ofertaHtml.replaceAll("window.lvUrl('/pagamento'):'/pagamento'", "window.lvUrl('/pagamento-oferta'):'/pagamento-oferta'");
 
+// Redução de fricção: Cor Preta pré-definida e botão sempre ativo
+ofertaHtml = ofertaHtml.replace(
+  '<button type="button" id="lv-color-cta" disabled style="width:100%;border:0;border-radius:10px;padding:12px;font-weight:800;font-size:16px;color:#fff;background:#d5d6d9;line-height:1.2">Selecione uma cor<span style="display:block;font-size:11.5px;font-weight:600;opacity:.9;margin-top:2px">Envio grátis</span></button>',
+  '<button type="button" id="lv-color-cta" style="width:100%;border:0;border-radius:10px;padding:12px;font-weight:800;font-size:16px;color:#fff;background:#fe2c55;line-height:1.2">Comprar agora (1 item)<span style="display:block;font-size:11.5px;font-weight:600;opacity:.9;margin-top:2px">Envio grátis</span></button>'
+);
+
+// Iniciar com cor preta selecionada
+ofertaHtml = ofertaHtml.replace(
+  'var QT=OPTS.map(function(){return 0;});',
+  'var QT=OPTS.map(function(_, i){return i===0 ? 1 : 0;});'
+);
+
+// Atualizar função update para manter botão vivo se desmarcar tudo
+const oldUpdateElse = `    }else{
+      selLbl.innerHTML='Selecione: <strong style="color:#161823">uma ou mais cores</strong>';
+      priceEl.textContent=fmt(PRICE);
+      cta.disabled=true;
+      cta.style.background='#d5d6d9';
+      cta.innerHTML='Selecione uma cor<span style="display:block;font-size:11.5px;font-weight:600;opacity:.9;margin-top:2px">Envio grátis</span>';
+    }`;
+
+const newUpdateElse = `    }else{
+      thumb.src=OPTS[0].i;
+      selLbl.innerHTML='Padrão: <strong style="color:#161823">Preta (1 item)'+(voltage?' · '+voltage:'')+'</strong>';
+      priceEl.textContent=fmt(PRICE);
+      cta.disabled=false;
+      cta.style.background='#fe2c55';
+      cta.innerHTML='Comprar agora (1 item)<span style="display:block;font-size:11.5px;font-weight:600;opacity:.9;margin-top:2px">Envio grátis</span>';
+    }`;
+
+ofertaHtml = ofertaHtml.replace(oldUpdateElse, newUpdateElse);
+
+// Executar update() logo na inicialização para renderizar a seleção inicial
+ofertaHtml = ofertaHtml.replace(
+  '  render();\n  function open()',
+  '  update();\n  function open()'
+);
+
+// Fallback no clique do CTA para garantir preta caso nada esteja marcado
+ofertaHtml = ofertaHtml.replace(
+  "cta.addEventListener('click',function(){\n    var c=chosen(); if(!c.length||!voltage)return;",
+  "cta.addEventListener('click',function(){\n    var c=chosen(); if(!c.length){ QT[0]=1; c=chosen(); } if(!voltage) voltage='Bivolt';"
+);
+
 fs.writeFileSync(path.join(root, 'oferta.html'), ofertaHtml, 'utf8');
 console.log('oferta.html criado com sucesso!');
 
@@ -54,7 +98,7 @@ pagHtml = pagHtml.replace('/images/favicon-tiktok.png?v=1', '/images/favicon.png
 
 // Metatags
 pagHtml = pagHtml.replace(
-  /<meta property="og:title" content="Lovable App"\/><meta property="og:description" content="Project Mirror replicates a web application, enabling users to view and interact with its content."\/><meta property="og:type" content="website"\/><meta name="twitter:card" content="summary_large_image"\/><meta name="twitter:title" content="Lovable App"\/><meta name="description" content="Project Mirror replicates a web application, enabling users to view and interact with its content."\/><meta name="twitter:description" content="Project Mirror replicates a web application, enabling users to view and interact with its content."\/>/,
+  '<meta property="og:title" content="Lovable App"/><meta property="og:description" content="Project Mirror replicates a web application, enabling users to view and interact with its content."/><meta property="og:type" content="website"/><meta name="twitter:card" content="summary_large_image"/><meta name="twitter:title" content="Lovable App"/><meta name="description" content="Project Mirror replicates a web application, enabling users to view and interact with its content."/><meta name="twitter:description" content="Project Mirror replicates a web application, enabling users to view and interact with its content."/>',
   '<meta property="og:title" content="Pagamento Seguro | Bella Mix Oficial"/><meta property="og:description" content="Finalização de pedido segura com criptografia SSL na Bella Mix Oficial."/><meta property="og:type" content="website"/><meta name="twitter:card" content="summary_large_image"/><meta name="twitter:title" content="Pagamento Seguro | Bella Mix Oficial"/><meta name="description" content="Finalização de pedido segura com criptografia SSL na Bella Mix Oficial."/><meta name="twitter:description" content="Finalização de pedido segura com criptografia SSL na Bella Mix Oficial;"/>'
 );
 
