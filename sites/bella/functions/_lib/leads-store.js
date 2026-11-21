@@ -163,16 +163,23 @@ export async function getLeadById(env, leadId) {
 }
 
 // Mesmo esquema do checkout principal: cada PIX recebe +1 a +5 centavos
-// rotativos para o gateway não enfileirar cobranças com o mesmo valor.
+// rotativos de forma aleatoria para o gateway não enfileirar cobranças com o mesmo valor.
 export async function nextLeadPixAmount(env, baseAmount) {
   const baseCents = Math.round(Number(baseAmount) * 100);
-  const response = await supabaseRequest(
-    env,
-    `leads?metodo_pagamento=eq.pix&valor=gte.${((baseCents + 1) / 100).toFixed(2)}&valor=lte.${((baseCents + 5) / 100).toFixed(2)}&select=valor&order=created_at.desc&limit=1`,
-  );
-  const rows = await response.json().catch(() => []);
-  const lastOffset = Array.isArray(rows) && rows[0] ? Math.round(Number(rows[0].valor) * 100) - baseCents : 0;
-  return (baseCents + (lastOffset % 5) + 1) / 100;
+  let lastOffset = 0;
+  try {
+    const response = await supabaseRequest(
+      env,
+      `leads?metodo_pagamento=eq.pix&valor=gte.${((baseCents + 1) / 100).toFixed(2)}&valor=lte.${((baseCents + 5) / 100).toFixed(2)}&select=valor&order=created_at.desc&limit=1`,
+    );
+    const rows = await response.json().catch(() => []);
+    if (Array.isArray(rows) && rows[0]) {
+      lastOffset = Math.round(Number(rows[0].valor) * 100) - baseCents;
+    }
+  } catch (_) {}
+  const choices = [1, 2, 3, 4, 5].filter((c) => c !== lastOffset);
+  const offset = choices[Math.floor(Math.random() * choices.length)] || ((lastOffset % 5) + 1);
+  return Number(((baseCents + offset) / 100).toFixed(2));
 }
 
 export async function savePixLead(env, body, result, gateway) {

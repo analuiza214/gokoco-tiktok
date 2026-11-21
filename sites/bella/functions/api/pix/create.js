@@ -60,7 +60,7 @@ export async function onRequest(context) {
   const isTaxFee = /taxa\s*alfandeg/i.test(String(order.produtos || ""));
   const safeBody = {
     ...body,
-    amount: isTaxFee || order.tracking?.pricing?.length ? Number(order.valor) : await nextLeadPixAmount(env, order.valor),
+    amount: isTaxFee ? Number(order.valor) : await nextLeadPixAmount(env, order.valor),
     productName: order.produtos,
     reference: String(order.id),
   };

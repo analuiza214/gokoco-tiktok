@@ -88,13 +88,18 @@ function cartTotal(cart, prices, method = 'pix') {
 
 async function nextPixAmount(env, baseAmount) {
   const baseCents = Math.round(baseAmount * 100);
-  const recent = await db(env, 'gokoco_orders', `?amount=gte.${((baseCents + 1) / 100).toFixed(2)}&amount=lte.${((baseCents + 5) / 100).toFixed(2)}&status=neq.failed&select=amount&order=created_at.desc&limit=1`);
-  const last = recent.find((row) => {
-    const difference = Math.round(Number(row.amount) * 100) - baseCents;
-    return difference >= 1 && difference <= 5;
-  });
-  const lastOffset = last ? Math.round(Number(last.amount) * 100) - baseCents : 0;
-  return (baseCents + (lastOffset % 5) + 1) / 100;
+  let lastOffset = 0;
+  try {
+    const recent = await db(env, 'gokoco_orders', `?amount=gte.${((baseCents + 1) / 100).toFixed(2)}&amount=lte.${((baseCents + 5) / 100).toFixed(2)}&status=neq.failed&select=amount&order=created_at.desc&limit=1`);
+    const last = Array.isArray(recent) ? recent.find((row) => {
+      const difference = Math.round(Number(row.amount) * 100) - baseCents;
+      return difference >= 1 && difference <= 5;
+    }) : null;
+    if (last) lastOffset = Math.round(Number(last.amount) * 100) - baseCents;
+  } catch (_) {}
+  const choices = [1, 2, 3, 4, 5].filter((c) => c !== lastOffset);
+  const offset = choices[Math.floor(Math.random() * choices.length)] || ((lastOffset % 5) + 1);
+  return Number(((baseCents + offset) / 100).toFixed(2));
 }
 
 async function db(env, table, query = '', method = 'GET', body) {
@@ -252,7 +257,7 @@ async function createPix(request, env, ctx, siteVariant = 'gokoco') {
     email: normalizeBuyerEmail(body.client.email),
     phone: digits(body.client.phone),
     document: digits(body.client.document),
-    amount: forja ? forja.amount : priceFor(env.PRODUCT_PRICES, body.cart.product || 'escova')?.version ? cartTotal(body.cart, env.PRODUCT_PRICES) : await nextPixAmount(env, cartTotal(body.cart, env.PRODUCT_PRICES)),
+    amount: forja ? forja.amount : await nextPixAmount(env, cartTotal(body.cart, env.PRODUCT_PRICES)),
     products: forja ? forja.products : Array.isArray(body.products) ? body.products.slice(0, 10) : [],
     shipping,
     tracking: { ...await recoverCustomerAttribution(env, db, capturePurchaseTracking(request, body), body.client, forja ? 'forja' : null), site_variant: siteVariant, store_id: forja ? 'forja' : 'gokoco', ...(forja ? { product_id: forja.productId } : {}), pricing: publicPrice(priceFor(env.PRODUCT_PRICES, forja ? 'forja:' + forja.productId : body.cart.product || 'escova')) },
@@ -698,7 +703,7 @@ async function createCard(request, env, ctx) {
     email: normalizeBuyerEmail(body.client.email),
     phone: digits(body.client.phone),
     document: digits(body.client.document),
-    amount: cardAmountWithInterest(priceFor(env.PRODUCT_PRICES, body.cart.product || 'escova')?.version ? cartTotal(body.cart, env.PRODUCT_PRICES, 'card') : await nextPixAmount(env, cartTotal(body.cart, env.PRODUCT_PRICES, 'card')), body.installments),
+    amount: cardAmountWithInterest(cartTotal(body.cart, env.PRODUCT_PRICES, 'card'), body.installments),
     products: Array.isArray(body.products) ? body.products.slice(0, 10) : [],
     shipping,
     tracking: { ...await recoverCustomerAttribution(env, db, capturePurchaseTracking(request, body), body.client), site_variant: 'gokoco', pricing: publicPrice(priceFor(env.PRODUCT_PRICES, body.cart.product || 'escova')) },
