@@ -1,5 +1,9 @@
 # Integração Verdefy — preparação da troca — 07/11/2026
 
+## Rastreador nos domínios próprios — 21/11/2026
+
+`bellamix-oficial.shop` e `gokoco-tiktok.online` carregam o mesmo script de atribuição das páginas GOKOCO. O catálogo Bella Mix, a página de produto e o checkout enviam os eventos do mesmo rastreador e o checkout inclui a atribuição no pedido. O backend continua usando a origem `gokoco` e confirma o pagamento pelo gateway antes de encaminhar o evento. A lista de origens HTTPS é conferida no Verdefy.
+
 Domínio principal confirmado: https://gokoco-tiktok.loja-oficial.workers.dev. Utmify continua ativa; PURCHASE_DELIVERY_MODE não foi alterado em produção e o destino central permanece pausado.
 
 Modo explícitoverdefy preparado sem fallbackUtmify/Meta direto. Captura independente nos visuaisprincipal/tl/video; itens reais validados no servidor; identidade de eventos estável e filaVerdefy independente. Vídeo só espelha Pix após geração e reconfirma pagamento no gateway. Nenhum Purchase histórico é reenviado.

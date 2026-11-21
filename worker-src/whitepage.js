@@ -10,6 +10,7 @@ export function getWhitepageHtml() {
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+  <script src="/js/purchase-attribution.js?v=verdefy-4"></script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Bella Mix Oficial | Loja de Beleza e Cuidados Pessoais</title>
